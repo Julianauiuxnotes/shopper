@@ -1,0 +1,1043 @@
+import CameraIcon from '@/assets/images/figma/icon-camera.svg';
+import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
+import CaretDownIcon from '@/assets/images/figma/icon-caret-down.svg';
+import PrinterIcon from '@/assets/images/figma/icon-printer.svg';
+import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { Input } from '@/components/ui/input';
+import { Text } from '@/components/ui/text';
+import { computeItemTotals, useEvents } from '@/lib/events-store';
+import { formatIDR } from '@/lib/format';
+import { useSettings } from '@/lib/settings-store';
+import { cn } from '@/lib/utils';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as React from 'react';
+import { Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+
+// Same options/labels as Tambah Pesanan's own Fee Jastip type toggle
+// (app/tambah-pesanan.tsx) — the confirm sheet's Fee Jastip field is
+// built to match that screen exactly, not just visually.
+const FEE_TYPE_OPTIONS = [
+  ['percent', 'Pakai %'],
+  ['flat', 'Pakai IDR'],
+] as const;
+
+function parseNumber(s: string) {
+  const n = Number(s.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+type ConfirmDraft = {
+  namaProduk: string;
+  jumlah: string;
+  harga: string;
+  feeType: 'percent' | 'flat';
+  feeValue: string;
+};
+
+// Figma node 118:14 "Detil pesanan / KONFIRMASI PESANAN SUDAH DIBELI".
+// Reached by tapping an order row in Event Detail's order lists. Shows
+// the real order from the shared store (lib/events-store.tsx), not the
+// mockup's sample data (Nadine / Jl. Sriwijaya / Nivea B1G1 etc).
+//
+// Each item's pill button is a plain action label — "Sudah dibeli"
+// always, not a toggle reflecting state (the Figma mockup itself shows
+// this exact label on items regardless of their checked state, node
+// 105:4790) — tapping it opens a slide-in confirmation sheet (node
+// 105:4790's own bottom panel, "Konfirmasi barang sudah dibeli")
+// instead of flipping `dibeli` directly. The checkbox next to the item
+// name stays permanently empty/unchecked — Figma renders it unfilled in
+// BOTH the not-yet-bought (105:4790) and already-bought (105:5015)
+// states, so it's a static visual marker in the design, not a live
+// `dibeli` indicator. The sheet's Nama produk/Jumlah/Harga/Fee Jastip
+// are all editable, autofilled from the item's current values via
+// `confirmDraft` state (not written to the store on every keystroke
+// like Nama/Alamat/No. Whatsapp below — these only commit on "Tandai
+// sudah beli", since a half-typed Harga would otherwise briefly corrupt
+// the order's totals). Fee Jastip specifically mirrors Tambah Pesanan's
+// own field exactly: a "Pakai %"/"Pakai IDR" anchored dropdown trigger
+// (measured via `Pressable.measure()`, rendered through a `Modal` so it
+// layers above the BottomSheet) next to an editable value Input — same
+// `FEE_TYPE_OPTIONS`/interaction, not a decorative read-only look.
+// "Tandai sudah beli" calls `updateOrderItem`, which recomputes this
+// item's subtotal/fee delta and applies it to both the order's own
+// totals AND the event's revenue/profit aggregates, so editing here
+// can't silently desync them. Also lets the jastiper attach a "Foto
+// struk" (receipt photo, optional, same expo-image-picker pattern as
+// Buka Event Jastip's event photo) before confirming, which also sets
+// `dibeli: true`. Per Figma node 105:5015, once an item is confirmed
+// WITH a photo, its row swaps the pill for the photo thumbnail + a
+// "Cetak penanda" (print marker) button — a TODO stub for now, since no
+// printer integration exists in this app. An item confirmed WITHOUT a
+// photo keeps showing the "Sudah dibeli" pill — always the same plain
+// outline style regardless of `dibeli`, matching every Figma reference
+// pulled for this screen, which never shows it filled in any state —
+// still tappable, to let the jastiper reopen and add a photo later.
+// "+Tambah" (Figma node
+// 174:429, "Tambah list pesanan") opens a second, separate sheet that
+// adds a brand new item to the order via `addOrderItem` — same
+// aggregate-sync principle as `updateOrderItem`, previously a known
+// gap, now resolved.
+//
+// Nama/Alamat/No. Whatsapp are editable (were read-only Text before) —
+// saved straight to the store on every change, same immediate-update
+// pattern this screen already uses for Metode pengiriman/Status
+// pembayaran, rather than introducing a separate draft-state + Simpan
+// button just for these three fields.
+export default function OrderDetailScreen() {
+  const router = useRouter();
+  const { getEvent, getOrder, updateOrder, updateOrderItem, addOrderItem } = useEvents();
+  const { userProfile } = useSettings();
+  const { eventId, orderId } = useLocalSearchParams<{ eventId?: string; orderId?: string }>();
+  const event = eventId ? getEvent(eventId) : undefined;
+  const order = eventId && orderId ? getOrder(eventId, orderId) : undefined;
+
+  if (!event || !order) {
+    return (
+      <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
+        <Text className="font-inter-bold text-[16px] text-neutral-900">
+          Pesanan tidak ditemukan
+        </Text>
+        <Pressable onPress={() => router.replace('/dashboard')}>
+          <Text className="font-inter-semibold text-[14px] text-orange-500">
+            Kembali ke Dashboard
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const [confirmingItemId, setConfirmingItemId] = React.useState<string | null>(null);
+  const [confirmDraft, setConfirmDraft] = React.useState<ConfirmDraft | null>(null);
+  const [fotoStrukDraft, setFotoStrukDraft] = React.useState<string | null>(null);
+  const feeTriggerRef = React.useRef<React.ElementRef<typeof Pressable> | null>(null);
+  const [feeDropdownAnchor, setFeeDropdownAnchor] = React.useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  function openConfirm(itemId: string) {
+    const item = order!.items.find((it) => it.id === itemId);
+    if (!item) return;
+    setConfirmDraft({
+      namaProduk: item.namaProduk,
+      jumlah: String(item.jumlah),
+      harga: String(item.harga),
+      feeType: item.feeType,
+      feeValue: String(item.feeValue),
+    });
+    setFotoStrukDraft(item.fotoStruk);
+    setConfirmingItemId(itemId);
+  }
+
+  function updateConfirmDraft(patch: Partial<ConfirmDraft>) {
+    setConfirmDraft((d) => (d ? { ...d, ...patch } : d));
+  }
+
+  function openFeeDropdown() {
+    feeTriggerRef.current?.measure((_fx, _fy, width, height, pageX, pageY) => {
+      setFeeDropdownAnchor({ x: pageX, y: pageY, width, height });
+    });
+  }
+
+  const isConfirmValid =
+    !!confirmDraft &&
+    confirmDraft.namaProduk.trim().length > 0 &&
+    parseNumber(confirmDraft.jumlah) > 0 &&
+    parseNumber(confirmDraft.harga) > 0;
+
+  async function handlePickFotoStruk() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Izin dibutuhkan', 'Aktifkan akses foto di pengaturan untuk memilih foto struk.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType)) {
+      Alert.alert('Format tidak didukung', 'Pilih foto berformat JPG, JPEG, atau PNG.');
+      return;
+    }
+
+    setFotoStrukDraft(asset.uri);
+  }
+
+  function handleBuatPesanan(close: () => void) {
+    if (!confirmingItemId || !confirmDraft || !isConfirmValid) return;
+    updateOrderItem(event!.id, order!.id, confirmingItemId, {
+      namaProduk: confirmDraft.namaProduk.trim(),
+      jumlah: parseNumber(confirmDraft.jumlah),
+      harga: parseNumber(confirmDraft.harga),
+      feeType: confirmDraft.feeType,
+      feeValue: parseNumber(confirmDraft.feeValue),
+      dibeli: true,
+      fotoStruk: fotoStrukDraft,
+    });
+    close();
+  }
+
+  // "Tambah list pesanan" (Figma node 174:429) — adds a NEW item to this
+  // already-submitted order, separate state/handlers from the confirm
+  // sheet above (editing an existing item) even though both share the
+  // same `ConfirmDraft` shape and Fee Jastip dropdown mechanics, since
+  // they can't be open at the same time but ARE conceptually different
+  // actions (add vs. edit). Resolves the long-standing "+Tambah" TODO:
+  // `addOrderItem` (lib/events-store.tsx) applies the new item's
+  // subtotal/fee onto both the order's and the event's aggregates, same
+  // principle as `updateOrderItem`.
+  const [addingItem, setAddingItem] = React.useState(false);
+  const [addItemDraft, setAddItemDraft] = React.useState<ConfirmDraft>({
+    namaProduk: '',
+    jumlah: '',
+    harga: '',
+    feeType: 'percent',
+    feeValue: '',
+  });
+  const [addFotoStrukDraft, setAddFotoStrukDraft] = React.useState<string | null>(null);
+  const addFeeTriggerRef = React.useRef<React.ElementRef<typeof Pressable> | null>(null);
+  const [addFeeDropdownAnchor, setAddFeeDropdownAnchor] = React.useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  function openAddItem() {
+    setAddItemDraft({ namaProduk: '', jumlah: '', harga: '', feeType: 'percent', feeValue: '' });
+    setAddFotoStrukDraft(null);
+    setAddingItem(true);
+  }
+
+  function updateAddItemDraft(patch: Partial<ConfirmDraft>) {
+    setAddItemDraft((d) => ({ ...d, ...patch }));
+  }
+
+  function openAddFeeDropdown() {
+    addFeeTriggerRef.current?.measure((_fx, _fy, width, height, pageX, pageY) => {
+      setAddFeeDropdownAnchor({ x: pageX, y: pageY, width, height });
+    });
+  }
+
+  const isAddItemValid =
+    addItemDraft.namaProduk.trim().length > 0 &&
+    parseNumber(addItemDraft.jumlah) > 0 &&
+    parseNumber(addItemDraft.harga) > 0;
+
+  async function handlePickAddFotoStruk() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Izin dibutuhkan', 'Aktifkan akses foto di pengaturan untuk memilih foto struk.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType)) {
+      Alert.alert('Format tidak didukung', 'Pilih foto berformat JPG, JPEG, atau PNG.');
+      return;
+    }
+
+    setAddFotoStrukDraft(asset.uri);
+  }
+
+  function handleAddItem(close: () => void, dibeli: boolean) {
+    if (!isAddItemValid) return;
+    addOrderItem(event!.id, order!.id, {
+      namaProduk: addItemDraft.namaProduk.trim(),
+      jumlah: parseNumber(addItemDraft.jumlah),
+      harga: parseNumber(addItemDraft.harga),
+      feeType: addItemDraft.feeType,
+      feeValue: parseNumber(addItemDraft.feeValue),
+      dibeli,
+      fotoStruk: addFotoStrukDraft,
+    });
+    close();
+  }
+
+  function handleCetakPenanda(itemId: string) {
+    // Figma node 105:5015's "Cetak penanda" button — opens the
+    // print-preview screen (Figma section 176:726, app/cetak-penanda.tsx)
+    // for this specific item.
+    router.push({
+      pathname: '/cetak-penanda',
+      params: { eventId: event!.id, orderId: order!.id, itemId },
+    });
+  }
+
+  // Tapping a photo thumbnail opens it full-size in this Modal rather
+  // than navigating anywhere, since it's just a closer look at data
+  // already on this screen. `previewPhoto` holds the tapped item's
+  // fotoStruk URI (null = closed).
+  const [previewPhoto, setPreviewPhoto] = React.useState<string | null>(null);
+
+  async function handleDownloadPhoto() {
+    if (!previewPhoto) return;
+    if (Platform.OS === 'web') {
+      // On web the picked photo is already a browser-addressable
+      // blob:/data: URI — a plain anchor download triggers the
+      // browser's own save dialog, no extra permission needed.
+      const a = document.createElement('a');
+      a.href = previewPhoto;
+      a.download = 'foto-struk.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
+    // Dynamic import, not a top-level one: expo-media-library's default
+    // export calls requireNativeModule() at module-evaluation time with
+    // no web fallback, which crashes the whole web bundle on load if
+    // imported statically. Deferring to here — reached only on native,
+    // since the web branch above already returned — means it's never
+    // evaluated at all on web.
+    const MediaLibrary = await import('expo-media-library');
+    const permission = await MediaLibrary.requestPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Izin dibutuhkan', 'Aktifkan akses galeri untuk menyimpan foto struk.');
+      return;
+    }
+    try {
+      await MediaLibrary.saveToLibraryAsync(previewPhoto);
+      Alert.alert('Berhasil', 'Foto struk tersimpan ke galeri.');
+    } catch {
+      Alert.alert('Gagal', 'Foto struk tidak berhasil disimpan.');
+    }
+  }
+
+  function setNama(nama: string) {
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, nama }));
+  }
+
+  function setAlamat(alamat: string) {
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, alamat }));
+  }
+
+  function setWhatsapp(whatsapp: string) {
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, whatsapp }));
+  }
+
+  function setMetodePengiriman(metode: 'instant' | 'ekspedisi') {
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, metodePengiriman: metode }));
+  }
+
+  function setStatusPembayaran(status: 'lunas' | 'belum') {
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, statusPembayaran: status }));
+  }
+
+  // What the customer actually owes: goods cost (order.totalPembayaran)
+  // plus the jastip fee (order.profit) — same correction applied to
+  // Tambah Pesanan's own confirmation message, since "Total pembayaran"
+  // alone is really just the goods cost (see lib/events-store.tsx).
+  const totalTagihan = order.totalPembayaran + order.profit;
+
+  async function handleKirimTotalPembayaran() {
+    // Opens WhatsApp with the confirmation message pre-filled to the
+    // order's own No. Whatsapp (the customer) — the jastiper still taps
+    // send themselves. Same message format as Tambah Pesanan's own
+    // "Konfirmasi dan kirim total pembayaran" button.
+    const namaJastip = userProfile.namaJastip || 'Jastip by Juli';
+    const itemsList = order!.items.map((it) => `${it.namaProduk}, ${it.jumlah}`).join(', ');
+    const message =
+      `Hi! ini pesan konfirmasi dari ${namaJastip}. Kami sudah catat pesananmu ya. ` +
+      `Pesananmu ada ${order!.items.length} items dengan total pembayaran IDR ` +
+      `${totalTagihan.toLocaleString('id-ID')}. ` +
+      `Item pesananmu : ${itemsList}.`;
+    const phoneDigits = order!.whatsapp.replace(/\D/g, '');
+    const waUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
+    try {
+      await Linking.openURL(waUrl);
+    } catch {
+      // no WhatsApp / can't open the link — nothing else to do here.
+    }
+  }
+
+  return (
+    <>
+      <View className="flex-1 bg-white">
+        <View className="flex-row items-center gap-[5px] px-[20px] pt-[20px]">
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <CaretCircleLeftIcon width={24} height={24} />
+          </Pressable>
+          <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">Detil pesanan</Text>
+        </View>
+
+        <ScrollView contentContainerClassName="gap-[16px] px-[20px] pb-[40px] pt-[20px]">
+          <View className="gap-[0px]">
+            <Text className="font-inter text-[10px] text-neutral-800">Nomor order</Text>
+            <Text className="font-inter-bold text-[14px] text-black">{order.orderNumber}</Text>
+          </View>
+
+          <View className="gap-[4px]">
+            <Text className="font-inter text-[10px] text-neutral-800">Nama</Text>
+            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Input
+                value={order.nama}
+                onChangeText={setNama}
+                placeholderTextColor="#9ca3af"
+                className="h-auto border-0 bg-transparent p-0 text-[12px] text-black shadow-none"
+              />
+            </View>
+          </View>
+
+          <View className="gap-[4px]">
+            <Text className="font-inter text-[10px] text-neutral-800">Alamat</Text>
+            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Input
+                value={order.alamat}
+                onChangeText={setAlamat}
+                placeholderTextColor="#9ca3af"
+                multiline
+                textAlignVertical="top"
+                className="h-auto border-0 bg-transparent p-0 text-[12px] text-black shadow-none"
+              />
+            </View>
+          </View>
+
+          <View className="gap-[4px]">
+            <Text className="font-inter text-[10px] text-neutral-800">No. Whatsapp</Text>
+            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Input
+                value={order.whatsapp}
+                onChangeText={setWhatsapp}
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+                className="h-auto border-0 bg-transparent p-0 text-[12px] text-black shadow-none"
+              />
+            </View>
+          </View>
+
+          <View className="gap-[10px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">Metode pengiriman</Text>
+            <View className="flex-row gap-[10px]">
+              {(
+                [
+                  ['instant', 'Instant'],
+                  ['ekspedisi', 'Via Expedisi'],
+                ] as const
+              ).map(([value, label]) => {
+                const selected = order.metodePengiriman === value;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => setMetodePengiriman(value)}
+                    className={cn(
+                      'items-center justify-center rounded-[4px] border px-[10px] py-[6px]',
+                      selected ? 'border-orange-500 bg-orange-500' : 'border-[#5d5d5d] bg-white'
+                    )}>
+                    <Text
+                      className={cn(
+                        'font-inter text-[10px]',
+                        selected ? 'text-white' : 'text-[#5d5d5d]'
+                      )}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="gap-[13px]">
+            <Text className="font-inter-bold text-[14px] text-neutral-800">List pesanan</Text>
+            <View className="gap-[11px]">
+              {order.items.map((item, index) => {
+                const { fee } = computeItemTotals(item);
+                return (
+                  <View
+                    key={item.id}
+                    className={cn(
+                      'gap-[8px]',
+                      index > 0 && 'border-t border-neutral-300 pt-[11px]'
+                    )}>
+                    <View className="flex-row items-end justify-between gap-[8px]">
+                      <View className="flex-1 gap-[8px]">
+                        <View className="flex-row items-center gap-[5px]">
+                          {/* Always empty/unchecked — Figma shows this
+                            same unfilled box in BOTH the not-yet-bought
+                            node (105:4790) and the already-bought node
+                            (105:5015, item 1 has a receipt photo and item
+                            2 has the "Sudah dibeli" badge, yet both still
+                            render an empty checkbox) — it's a static
+                            visual marker in the design, not a live
+                            dibeli indicator, so it's never filled here. */}
+                          <View className="size-[10px] rounded-[2px] border border-[#5d5d5d]" />
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {item.namaProduk}
+                          </Text>
+                        </View>
+                        <Text className="font-inter text-[12px] text-neutral-800">
+                          {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
+                          {formatIDR(fee)}
+                        </Text>
+                        {/* Figma node 105:5015: once an item is confirmed
+                          WITH a receipt photo attached, its row shows the
+                          photo thumbnail here instead of nothing. Tapping
+                          it opens the full-size preview Modal below. */}
+                        {item.dibeli && item.fotoStruk ? (
+                          <Pressable onPress={() => setPreviewPhoto(item.fotoStruk)}>
+                            <Image
+                              source={{ uri: item.fotoStruk }}
+                              resizeMode="cover"
+                              className="size-[45px] rounded-[4px]"
+                            />
+                          </Pressable>
+                        ) : null}
+                      </View>
+                      {item.dibeli && item.fotoStruk ? (
+                        <View className="gap-[6px]">
+                          {/* Once a photo is attached, the "Sudah dibeli"
+                            pill (this branch's own normal entry point
+                            back into the confirm/edit sheet) is replaced
+                            by the thumbnail + Cetak penanda — without
+                            this, there'd be no way left to reopen that
+                            item's details. "Edit" restores that entry
+                            point, reusing the exact same sheet/draft
+                            (openConfirm), not a separate form. */}
+                          <Pressable
+                            onPress={() => openConfirm(item.id)}
+                            className="items-center justify-center rounded-[4px] border border-orange-500 px-[10px] py-[4px]">
+                            <Text className="font-inter text-[10px] text-orange-500">Edit</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleCetakPenanda(item.id)}
+                            className="flex-row items-center justify-center gap-[4px] rounded-[4px] border border-[#5d5d5d] px-[10px] py-[4px]">
+                            <PrinterIcon width={18} height={18} />
+                            <Text className="font-inter text-[10px] text-black">Cetak penanda</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <Pressable
+                          onPress={() => openConfirm(item.id)}
+                          className="items-center justify-center rounded-[4px] border border-[#5d5d5d] bg-white px-[10px] py-[6px]">
+                          <Text className="font-inter text-[10px] text-black">Sudah dibeli</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Pressable
+              onPress={openAddItem}
+              className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+              <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+            </Pressable>
+          </View>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter-bold text-[10px] text-neutral-800">Total pembelanjaan</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              {formatIDR(order.totalPembayaran)}
+            </Text>
+          </View>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter-bold text-[10px] text-neutral-800">Profit</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              {formatIDR(order.profit)}
+            </Text>
+          </View>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter-bold text-[10px] text-neutral-800">
+              Total tagihan ke pelanggan
+            </Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              {formatIDR(totalTagihan)}
+            </Text>
+          </View>
+
+          <View className="gap-[10px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">Status pembayaran</Text>
+            <View className="flex-row gap-[10px]">
+              {(
+                [
+                  ['lunas', 'Lunas'],
+                  ['belum', 'Belum bayar'],
+                ] as const
+              ).map(([value, label]) => {
+                const selected = order.statusPembayaran === value;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => setStatusPembayaran(value)}
+                    className={cn(
+                      'items-center justify-center rounded-[4px] border px-[10px] py-[6px]',
+                      selected ? 'border-orange-500 bg-orange-500' : 'border-[#5d5d5d] bg-white'
+                    )}>
+                    <Text
+                      className={cn(
+                        'font-inter text-[10px]',
+                        selected ? 'text-white' : 'text-[#5d5d5d]'
+                      )}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleKirimTotalPembayaran}
+            className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
+            <Text className="font-inter-semibold text-[14px] text-white">
+              Kirim total pembayaran
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+
+      {confirmDraft ? (
+        <BottomSheet
+          onClose={() => {
+            setConfirmingItemId(null);
+            setConfirmDraft(null);
+          }}
+          sheetClassName="bg-orange-100">
+          {(close) => (
+            <ScrollView
+              contentContainerClassName="gap-[24px] px-[31px] pb-[32px] pt-[24.5px]"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
+                <CaretCircleLeftIcon width={24} height={24} />
+                <Text className="font-inter-semibold text-[16px] text-black">
+                  Konfirmasi barang sudah dibeli
+                </Text>
+              </Pressable>
+
+              <View className="gap-[16px]">
+                <View className="gap-[4px]">
+                  <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                  <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                    <Input
+                      value={confirmDraft.namaProduk}
+                      onChangeText={(v) => updateConfirmDraft({ namaProduk: v })}
+                      placeholderTextColor="#9ca3af"
+                      className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                    />
+                  </View>
+                </View>
+
+                <View className="flex-row items-start gap-[8px]">
+                  <View className="w-[47px] gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
+                    <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Input
+                        value={confirmDraft.jumlah}
+                        onChangeText={(v) => updateConfirmDraft({ jumlah: v })}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                        className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
+                  </View>
+                  <View className="w-[92px] gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga</Text>
+                    <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                      <Input
+                        value={confirmDraft.harga}
+                        onChangeText={(v) => updateConfirmDraft({ harga: v })}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                        className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
+                  </View>
+                  {/* Same field, same interaction, as Tambah Pesanan's own
+                    Fee Jastip: an anchored "Pakai %"/"Pakai IDR" dropdown
+                    trigger (Pressable.measure() + a Modal rendered below,
+                    not a decorative caret) next to an editable value
+                    Input — not Figma's read-only two-box look from the
+                    first pass at this sheet. */}
+                  <View className="flex-1 gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
+                    <View className="flex-row gap-[4px]">
+                      <Pressable
+                        ref={feeTriggerRef}
+                        onPress={openFeeDropdown}
+                        className={cn(
+                          'flex-row items-center gap-[4px] rounded-[8px] border bg-white p-[10px]',
+                          feeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
+                        )}>
+                        <Text className="font-inter text-[12px] text-neutral-800">
+                          {confirmDraft.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR'}
+                        </Text>
+                        <View
+                          style={{
+                            transform: [{ rotate: feeDropdownAnchor ? '180deg' : '0deg' }],
+                          }}>
+                          <CaretDownIcon width={15} height={15} />
+                        </View>
+                      </Pressable>
+                      <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Input
+                          value={confirmDraft.feeValue}
+                          onChangeText={(v) => updateConfirmDraft({ feeValue: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View className="gap-[4px]">
+                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">Foto struk</Text>
+                  {fotoStrukDraft ? (
+                    <View className="gap-[8px]">
+                      <Pressable
+                        onPress={handlePickFotoStruk}
+                        className="h-[91px] w-full overflow-hidden rounded-[8px] border border-dashed border-neutral-400">
+                        <Image
+                          source={{ uri: fotoStrukDraft }}
+                          resizeMode="cover"
+                          className="h-full w-full"
+                        />
+                      </Pressable>
+                      <Pressable
+                        onPress={handlePickFotoStruk}
+                        className="h-[34px] w-[190px] items-center justify-center rounded-[8px] border border-orange-500">
+                        <Text className="font-inter-semibold text-[14px] text-orange-500">
+                          Ganti foto struk
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={handlePickFotoStruk}
+                      className="w-[160px] flex-row items-center gap-[2px] rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                      <CameraIcon width={18} height={18} />
+                      <Text className="font-inter text-[12px] text-orange-500">
+                        Tambah foto struk
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => handleBuatPesanan(close)}
+                disabled={!isConfirmValid}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !isConfirmValid }}
+                className={cn(
+                  'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                  isConfirmValid ? 'bg-orange-500' : 'bg-orange-200'
+                )}>
+                <Text
+                  className={cn(
+                    'font-inter-semibold text-[14px]',
+                    isConfirmValid ? 'text-white' : 'text-orange-300'
+                  )}>
+                  Tandai sudah beli
+                </Text>
+              </Pressable>
+            </ScrollView>
+          )}
+        </BottomSheet>
+      ) : null}
+
+      {/* Anchored dropdown for Fee Jastip — identical mechanics to Tambah
+        Pesanan's own: Modal supplies overlay stacking + tap-outside
+        dismiss only, the panel itself is positioned via the trigger's
+        measured coordinates so it renders directly below it. */}
+      <Modal
+        visible={feeDropdownAnchor !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFeeDropdownAnchor(null)}>
+        <Pressable className="flex-1" onPress={() => setFeeDropdownAnchor(null)}>
+          {feeDropdownAnchor ? (
+            <View
+              className="absolute overflow-hidden rounded-[8px] border border-neutral-400 bg-white shadow-md"
+              style={{
+                top: feeDropdownAnchor.y + feeDropdownAnchor.height + 4,
+                left: feeDropdownAnchor.x,
+                width: Math.max(feeDropdownAnchor.width, 110),
+              }}>
+              {FEE_TYPE_OPTIONS.map(([value, label], index) => (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    updateConfirmDraft({ feeType: value });
+                    setFeeDropdownAnchor(null);
+                  }}
+                  className={cn('px-[12px] py-[10px]', index > 0 && 'border-t border-neutral-300')}>
+                  <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </Pressable>
+      </Modal>
+
+      {/* "Tambah list pesanan" — Figma node 174:429. Adds a brand new
+        item to this order, distinct from the confirm sheet above (which
+        edits an existing item). Same field layout/Fee Jastip mechanics,
+        but two save actions instead of one: "Simpan" adds the item as
+        not-yet-bought, "Tandai sudah dibeli" adds it already marked
+        bought — letting the jastiper log an item they just purchased on
+        the spot in one step instead of adding then separately
+        confirming it. */}
+      {addingItem ? (
+        <BottomSheet onClose={() => setAddingItem(false)} sheetClassName="bg-orange-100">
+          {(close) => (
+            <ScrollView
+              contentContainerClassName="gap-[24px] px-[31px] pb-[32px] pt-[24.5px]"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
+                <CaretCircleLeftIcon width={24} height={24} />
+                <Text className="font-inter-semibold text-[16px] text-black">
+                  Tambah list pesanan
+                </Text>
+              </Pressable>
+
+              <View className="gap-[16px]">
+                <View className="gap-[4px]">
+                  <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                  <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                    <Input
+                      value={addItemDraft.namaProduk}
+                      onChangeText={(v) => updateAddItemDraft({ namaProduk: v })}
+                      placeholder="Nama produk"
+                      placeholderTextColor="#9ca3af"
+                      className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                    />
+                  </View>
+                </View>
+
+                <View className="flex-row items-start gap-[8px]">
+                  <View className="w-[47px] gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
+                    <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Input
+                        value={addItemDraft.jumlah}
+                        onChangeText={(v) => updateAddItemDraft({ jumlah: v })}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                        className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
+                  </View>
+                  <View className="w-[92px] gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga</Text>
+                    <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                      <Input
+                        value={addItemDraft.harga}
+                        onChangeText={(v) => updateAddItemDraft({ harga: v })}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                        className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
+                  </View>
+                  <View className="flex-1 gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
+                    <View className="flex-row gap-[4px]">
+                      <Pressable
+                        ref={addFeeTriggerRef}
+                        onPress={openAddFeeDropdown}
+                        className={cn(
+                          'flex-row items-center gap-[4px] rounded-[8px] border bg-white p-[10px]',
+                          addFeeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
+                        )}>
+                        <Text className="font-inter text-[12px] text-neutral-800">
+                          {addItemDraft.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR'}
+                        </Text>
+                        <View
+                          style={{
+                            transform: [{ rotate: addFeeDropdownAnchor ? '180deg' : '0deg' }],
+                          }}>
+                          <CaretDownIcon width={15} height={15} />
+                        </View>
+                      </Pressable>
+                      <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Input
+                          value={addItemDraft.feeValue}
+                          onChangeText={(v) => updateAddItemDraft({ feeValue: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View className="gap-[4px]">
+                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">Foto struk</Text>
+                  {addFotoStrukDraft ? (
+                    <View className="gap-[8px]">
+                      <Pressable
+                        onPress={handlePickAddFotoStruk}
+                        className="h-[91px] w-full overflow-hidden rounded-[8px] border border-dashed border-neutral-400">
+                        <Image
+                          source={{ uri: addFotoStrukDraft }}
+                          resizeMode="cover"
+                          className="h-full w-full"
+                        />
+                      </Pressable>
+                      <Pressable
+                        onPress={handlePickAddFotoStruk}
+                        className="h-[34px] w-[190px] items-center justify-center rounded-[8px] border border-orange-500">
+                        <Text className="font-inter-semibold text-[14px] text-orange-500">
+                          Ganti foto struk
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={handlePickAddFotoStruk}
+                      className="w-[160px] flex-row items-center gap-[2px] rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                      <CameraIcon width={18} height={18} />
+                      <Text className="font-inter text-[12px] text-orange-500">
+                        Tambah foto struk
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              <View className="flex-row gap-[10px]">
+                <Pressable
+                  onPress={() => handleAddItem(close, false)}
+                  disabled={!isAddItemValid}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !isAddItemValid }}
+                  className={cn(
+                    'flex-1 items-center justify-center rounded-[12px] border px-[10px] py-[16px]',
+                    isAddItemValid
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-orange-200 bg-orange-50'
+                  )}>
+                  <Text
+                    className={cn(
+                      'font-inter-semibold text-[14px]',
+                      isAddItemValid ? 'text-orange-500' : 'text-orange-300'
+                    )}>
+                    Simpan
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleAddItem(close, true)}
+                  disabled={!isAddItemValid}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !isAddItemValid }}
+                  className={cn(
+                    'flex-1 items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                    isAddItemValid ? 'bg-orange-500' : 'bg-orange-200'
+                  )}>
+                  <Text
+                    className={cn(
+                      'font-inter-semibold text-[14px]',
+                      isAddItemValid ? 'text-white' : 'text-orange-300'
+                    )}>
+                    Tandai sudah dibeli
+                  </Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          )}
+        </BottomSheet>
+      ) : null}
+
+      <Modal
+        visible={addFeeDropdownAnchor !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddFeeDropdownAnchor(null)}>
+        <Pressable className="flex-1" onPress={() => setAddFeeDropdownAnchor(null)}>
+          {addFeeDropdownAnchor ? (
+            <View
+              className="absolute overflow-hidden rounded-[8px] border border-neutral-400 bg-white shadow-md"
+              style={{
+                top: addFeeDropdownAnchor.y + addFeeDropdownAnchor.height + 4,
+                left: addFeeDropdownAnchor.x,
+                width: Math.max(addFeeDropdownAnchor.width, 110),
+              }}>
+              {FEE_TYPE_OPTIONS.map(([value, label], index) => (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    updateAddItemDraft({ feeType: value });
+                    setAddFeeDropdownAnchor(null);
+                  }}
+                  className={cn('px-[12px] py-[10px]', index > 0 && 'border-t border-neutral-300')}>
+                  <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </Pressable>
+      </Modal>
+
+      {/* Full-size photo preview — tapping a "Sudah dibeli" item's
+        receipt thumbnail opens it here, centered over a dark backdrop,
+        with a download action. Not a BottomSheet (this is a plain
+        centered viewer, not a form), so a transparent Modal here is the
+        right tool, same as the Fee Jastip dropdowns above. */}
+      <Modal
+        visible={previewPhoto !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewPhoto(null)}>
+        <Pressable
+          className="flex-1 items-center justify-center bg-black/80 px-[24px]"
+          onPress={() => setPreviewPhoto(null)}>
+          {/* Nested Pressable with no onPress-bubbling to the backdrop —
+              React Native's responder system consumes the touch here,
+              same pattern as Buka Event Jastip's own calendar Modal. */}
+          <Pressable className="w-full max-w-[330px] gap-[16px]">
+            {previewPhoto ? (
+              <Image
+                source={{ uri: previewPhoto }}
+                resizeMode="contain"
+                className="aspect-square w-full rounded-[8px] bg-black"
+              />
+            ) : null}
+            <View className="flex-row items-center justify-center gap-[16px]">
+              <Pressable
+                onPress={handleDownloadPhoto}
+                className="flex-1 items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[14px]">
+                <Text className="font-inter-semibold text-[14px] text-white">Download</Text>
+              </Pressable>
+              <Pressable onPress={() => setPreviewPhoto(null)} hitSlop={8}>
+                <XCircleIcon width={32} height={32} />
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
