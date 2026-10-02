@@ -75,12 +75,14 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, [publikasiOpening, ready]);
 
   // Shared by the Pengaturan "Keluar" button and the dashboard drawer's
-  // own "Keluar" shortcut — only clears the signed-in identity, not
-  // adminWhatsapp/publikasiOpening (app-level config) or the events/orders
-  // store (business data, not tied to auth in this prototype).
-  function signOut() {
-    setUserProfile(BLANK_PROFILE);
-  }
+  // own "Keluar" shortcut. Deliberately does NOT clear userProfile: with
+  // no real backend yet, this local profile IS the only copy of the
+  // account's credentials (see sign-up.tsx's TODO) — wiping it here would
+  // permanently delete the account the user just signed up with, since
+  // login.tsx's email/password check has nothing else to compare
+  // against. A no-op placeholder for now; once Supabase auth is wired,
+  // this is where a real supabase.auth.signOut() call belongs.
+  function signOut() {}
 
   const value = React.useMemo(
     () => ({
