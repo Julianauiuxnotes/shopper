@@ -27,12 +27,24 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // instead, which has its own confirm-match flow.
 export default function SettingsScreen() {
   const router = useRouter();
-  const { userProfile, setUserProfile } = useSettings();
+  const { userProfile, setUserProfile, ready } = useSettings();
 
   const [namaDraft, setNamaDraft] = React.useState(userProfile.nama);
   const [namaJastipDraft, setNamaJastipDraft] = React.useState(userProfile.namaJastip);
   const [emailDraft, setEmailDraft] = React.useState(userProfile.email);
   const [justSaved, setJustSaved] = React.useState(false);
+
+  // `useState(userProfile.nama)` above only reads its initial value once,
+  // at this component's first render — if that happens before the
+  // store's persisted profile finishes loading (see lib/settings-store.tsx),
+  // these drafts would otherwise permanently lock in the pre-load empty
+  // strings. Re-syncs once, exactly when loading completes.
+  React.useEffect(() => {
+    if (!ready) return;
+    setNamaDraft(userProfile.nama);
+    setNamaJastipDraft(userProfile.namaJastip);
+    setEmailDraft(userProfile.email);
+  }, [ready]);
 
   const isValid =
     namaDraft.trim().length > 0 &&

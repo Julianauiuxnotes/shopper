@@ -44,10 +44,20 @@ const SAMPLE_EVENT = {
 // photo would appear" instead.
 export default function PengaturanPublikasiScreen() {
   const router = useRouter();
-  const { adminWhatsapp, setAdminWhatsapp, publikasiOpening, setPublikasiOpening } = useSettings();
+  const { adminWhatsapp, setAdminWhatsapp, publikasiOpening, setPublikasiOpening, ready } =
+    useSettings();
   const [whatsappDraft, setWhatsappDraft] = React.useState(adminWhatsapp);
   const [openingDraft, setOpeningDraft] = React.useState(publikasiOpening);
   const [justSaved, setJustSaved] = React.useState(false);
+
+  // See lib/settings-store.tsx's `ready` doc comment — `useState(adminWhatsapp)`
+  // above only captures its initial value once, at first render, so this
+  // re-syncs the drafts once the persisted values have actually loaded.
+  React.useEffect(() => {
+    if (!ready) return;
+    setWhatsappDraft(adminWhatsapp);
+    setOpeningDraft(publikasiOpening);
+  }, [ready]);
 
   const isValid = whatsappDraft.trim().length > 0;
   const isDirty = whatsappDraft !== adminWhatsapp || openingDraft !== publikasiOpening;

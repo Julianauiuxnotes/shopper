@@ -1,13 +1,28 @@
 import * as React from 'react';
+import { storage } from './storage';
 
-// In-memory only — resets on app restart. TODO: replace with Supabase
+// Persisted on-device via lib/storage.ts (AsyncStorage — localStorage on
+// web, native storage on iOS/Android), same "no backend needed" local
+// persistence as the separate Cashly project. TODO: migrate to Supabase
 // once the backend (fymscirqwnnlubepymgc.supabase.co) is
-// unpaused/reconnected. This is the single source of truth for created
-// jastip events (and now their orders), shared by the Dashboard (empty
-// vs filled state, "List event jastip", aggregate stats), the Buka Event
-// Jastip form (creates events), Event Detail (reads one by id, shows its
-// real Pesanan/Revenue/Profit and order lists), and Tambah Pesanan
-// (creates orders against an event).
+// unpaused/reconnected — this is still single-device storage, not
+// shared across a jastiper's own devices or with customers. This is the
+// single source of truth for created jastip events (and now their
+// orders), shared by the Dashboard (empty vs filled state, "List event
+// jastip", aggregate stats), the Buka Event Jastip form (creates
+// events), Event Detail (reads one by id, shows its real Pesanan/
+// Revenue/Profit and order lists), and Tambah Pesanan (creates orders
+// against an event).
+//
+// `tanggalDari`/`tanggalSampai` are real `Date` objects in memory but
+// JSON can't round-trip those — persisted as ISO strings and revived
+// back into `Date`s on load (see `reviveEvent` below). `fotoUri`/
+// `fotoStruk` (picked via expo-image-picker) are also persisted as
+// plain strings, but on web these are `blob:` URLs that only stay valid
+// for the tab/session that created them — after a reload, a persisted
+// photo's URI string survives but the image itself will fail to load
+// (same limitation web's Blob URLs always have, not specific to this
+// storage layer; native's `file://` URIs don't have this problem).
 
 export type OrderItem = {
   id: string;
@@ -102,6 +117,12 @@ function pad2(n: number) {
   return String(n).padStart(2, '0');
 }
 
+// JSON.parse doesn't revive Date strings on its own — reconstructs the
+// two date fields after loading a persisted event back from storage.
+function reviveEvent(e: JastipEvent): JastipEvent {
+  return { ...e, tanggalDari: new Date(e.tanggalDari), tanggalSampai: new Date(e.tanggalSampai) };
+}
+
 export function computeItemTotals(
   item: Pick<OrderItem, 'harga' | 'jumlah' | 'feeType' | 'feeValue'>
 ) {
@@ -117,11 +138,34 @@ export function computeItemTotals(
 // correct synchronously, even if called again before a re-render.
 function EventsProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = React.useState<JastipEvent[]>([]);
+  const [ready, setReady] = React.useState(false);
   const eventSeqRef = React.useRef(0);
   const orderSeqRef = React.useRef<Map<string, number>>(new Map());
 
+  // Load once on mount; `ready` then unblocks the save effect below so it
+  // can't fire on this initial (empty) state and clobber what was just
+  // loaded. Sequence counters are refs (not state), so they're persisted
+  // directly at their own mutation points in addEvent/addOrder instead
+  // of through a react effect.
+  React.useEffect(() => {
+    (async () => {
+      const savedEvents = await storage.get<JastipEvent[]>('events', []);
+      const savedEventSeq = await storage.get('eventSeq', 0);
+      const savedOrderSeq = await storage.get<Array<[string, number]>>('orderSeq', []);
+      setEvents(savedEvents.map(reviveEvent));
+      eventSeqRef.current = savedEventSeq;
+      orderSeqRef.current = new Map(savedOrderSeq);
+      setReady(true);
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    if (ready) storage.set('events', events);
+  }, [events, ready]);
+
   const addEvent = React.useCallback((input: NewEventInput): JastipEvent => {
     eventSeqRef.current += 1;
+    storage.set('eventSeq', eventSeqRef.current);
     const ddmm = `${pad2(input.tanggalDari.getDate())}${pad2(input.tanggalDari.getMonth() + 1)}`;
     const kodeEvent = `DRM-${ddmm}${String(eventSeqRef.current).padStart(3, '0')}`;
     const created: JastipEvent = {
@@ -145,6 +189,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
 
       const nextSeq = (orderSeqRef.current.get(eventId) ?? 0) + 1;
       orderSeqRef.current.set(eventId, nextSeq);
+      storage.set('orderSeq', Array.from(orderSeqRef.current.entries()));
       const orderNumber = `ORD-${String(nextSeq).padStart(4, '0')}`;
 
       let totalPembayaran = 0;
