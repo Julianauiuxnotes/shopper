@@ -5,13 +5,31 @@ import { type PropsWithChildren } from 'react';
 // web page during static rendering.
 // The contents of this function only run in Node.js environments and
 // do not have access to the DOM or browser APIs.
+// Files in /public are served from the site root, which on GitHub Pages
+// is the /shopper subpath (see app.config.js) — the same env var the CI
+// export sets, so these links resolve in both local dev and production.
+const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL ?? '';
+
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en" className="bg-background">
+    <html lang="id" className="bg-background">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+        />
+        <meta name="description" content="Kelola jastip tanpa ribet." />
+
+        {/* Installable web app: "Add to Home Screen" opens it full-screen
+            (no browser bars) with the brand colour on the status bar. */}
+        <link rel="manifest" href={`${BASE_URL}/manifest.json`} />
+        <meta name="theme-color" content="#e36200" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Shopper" />
+        <link rel="apple-touch-icon" href={`${BASE_URL}/icon-192.png`} />
 
         {/*
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.

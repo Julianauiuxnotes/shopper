@@ -1,6 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents } from '@/lib/events-store';
 import { formatDateRange, formatIDR, formatPrintTimestamp } from '@/lib/format';
@@ -25,10 +26,9 @@ import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 // Styled as a literal receipt (dashed `border-dashed` separators,
 // centered content, "Powered by" wordmark footer) since that's what
 // this screen literally is — a print preview for a physical marker/tag
-// the jastiper attaches to the purchased item. "Logo Jastiper" is kept
-// as Figma's own literal placeholder box (no business-logo upload
-// feature exists in this app yet, same "not implemented" honesty as
-// elsewhere). "[Nama Jastiper]" is Figma's placeholder-token notation
+// the jastiper attaches to the purchased item. "Logo Jastiper" shows the
+// logo uploaded in Pengaturan, or Figma's own placeholder box when none
+// is set (components/jastiper-logo.tsx). "[Nama Jastiper]" is Figma's placeholder-token notation
 // for "insert the real name here", not literal text — resolved to the
 // signed-up business name via the same `userProfile.namaJastip`
 // fallback pattern used for the WhatsApp messages elsewhere in the app.
@@ -92,9 +92,7 @@ export default function CetakPenandaScreen() {
 
         <View className="items-center gap-[16px]">
           <View className="items-center gap-[11px]">
-            <View className="h-[47px] w-[101px] items-center justify-center bg-neutral-300 p-[10px]">
-              <Text className="font-inter text-[10px] text-neutral-800">Logo Jastiper</Text>
-            </View>
+            <JastiperLogo />
             <Text className="font-inter text-[14px] text-neutral-800">
               {userProfile.namaJastip || 'Jastip by Juli'}
             </Text>

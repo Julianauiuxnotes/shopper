@@ -42,11 +42,28 @@ export type Order = {
   alamat: string;
   whatsapp: string;
   metodePengiriman: 'instant' | 'ekspedisi';
+  // Who pays the delivery fee and when. 'awal' = billed upfront, so
+  // `ongkir` is added to what the customer owes; 'saatPengiriman' = the
+  // customer pays the courier on delivery, so it stays out of the bill;
+  // 'gratis' = free ongkir, nothing is charged to the customer for it.
+  // Optional because orders saved before this field existed don't have it.
+  pembayaranOngkir?: 'awal' | 'saatPengiriman' | 'gratis' | null;
+  ongkir?: number; // IDR, only meaningful when pembayaranOngkir is 'awal'
   items: OrderItem[];
   totalPembayaran: number;
   profit: number;
   statusPembayaran: 'lunas' | 'belum';
 };
+
+/**
+ * What the customer owes for an order: goods + jastip fee, plus ongkir
+ * when it's billed upfront ("Bayar ongkir di awal"). Same figure as
+ * Order Detail's "Total tagihan ke pelanggan".
+ */
+export function getTotalTagihan(order: Order) {
+  const ongkir = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
+  return order.totalPembayaran + order.profit + ongkir;
+}
 
 export type JastipEvent = {
   id: string;

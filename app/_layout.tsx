@@ -3,15 +3,17 @@ import '@/global.css';
 import { EventsProvider } from '@/lib/events-store';
 import { SettingsProvider } from '@/lib/settings-store';
 import { NAV_THEME } from '@/lib/theme';
-import {
-  Inter_400Regular,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter';
-import { Poppins_400Regular } from '@expo-google-fonts/poppins';
+// Per-weight entry points, not the package root: importing from
+// '@expo-google-fonts/inter' drags every weight's .ttf (36 files, ~9 MB)
+// into the web export even though only these four are used.
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { Poppins_400Regular } from '@expo-google-fonts/poppins/400Regular';
 import { PortalHost } from '@rn-primitives/portal';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import Head from 'expo-router/head';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -47,6 +49,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+      {/* Web tab title. expo-router statically renders an empty <title>
+          ahead of the one in +html.tsx, so it has to be set through Head. */}
+      {Platform.OS === 'web' ? (
+        <Head>
+          <title>Shopper</title>
+        </Head>
+      ) : null}
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <EventsProvider>
         <SettingsProvider>
@@ -58,7 +67,7 @@ export default function RootLayout() {
             className={
               Platform.OS === 'web' ? 'mx-auto w-full max-w-[430px] flex-1 bg-white' : 'flex-1'
             }>
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false, title: 'Shopper' }} />
           </View>
         </SettingsProvider>
       </EventsProvider>

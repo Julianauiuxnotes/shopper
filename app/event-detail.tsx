@@ -1,7 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import ShareIcon from '@/assets/images/figma/icon-share.svg';
 import { Text } from '@/components/ui/text';
-import { type Order, useEvents } from '@/lib/events-store';
+import { getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
 import { formatDateRange, formatIDR } from '@/lib/format';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image, Pressable, ScrollView, Share, View } from 'react-native';
@@ -16,6 +16,10 @@ import { Image, Pressable, ScrollView, Share, View } from 'react-native';
 // one exists (set via expo-image-picker in buka-event-jastip.tsx), and
 // the whole block is omitted for events with no photo (it's optional),
 // rather than showing a fake placeholder.
+// Hidden for now (user request, 2026-10-05): the customer order form the
+// link points to isn't built yet. Flip to true to bring the section back.
+const SHOW_SHARE_LINK = false;
+
 export default function EventDetailScreen() {
   const router = useRouter();
   const { getEvent } = useEvents();
@@ -25,6 +29,9 @@ export default function EventDetailScreen() {
   const shareLink = event ? `https://www.shopper.app/jastiper-order-form/${event.kodeEvent}` : '';
   const lunasOrders = event?.orders.filter((o) => o.statusPembayaran === 'lunas') ?? [];
   const belumOrders = event?.orders.filter((o) => o.statusPembayaran === 'belum') ?? [];
+  // Receivable per status: what customers have paid vs. still owe.
+  const lunasTotal = lunasOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
+  const belumTotal = belumOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
 
   async function handleShare() {
     if (!shareLink) return;
@@ -65,21 +72,23 @@ export default function EventDetailScreen() {
           <Text className="font-inter-semibold text-[14px] text-black">{event.kodeEvent}</Text>
         </View>
 
-        <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
-          <Text className="font-inter-semibold text-[10px] text-neutral-50">
-            Share form order jastip link
-          </Text>
-          <View className="flex-row items-center gap-[10px]">
-            <View className="flex-1 rounded-[7px] bg-white p-[4px]">
-              <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
-                {shareLink}
-              </Text>
+        {SHOW_SHARE_LINK ? (
+          <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
+            <Text className="font-inter-semibold text-[10px] text-neutral-50">
+              Share form order jastip link
+            </Text>
+            <View className="flex-row items-center gap-[10px]">
+              <View className="flex-1 rounded-[7px] bg-white p-[4px]">
+                <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
+                  {shareLink}
+                </Text>
+              </View>
+              <Pressable onPress={handleShare} hitSlop={8}>
+                <ShareIcon width={25} height={25} />
+              </Pressable>
             </View>
-            <Pressable onPress={handleShare} hitSlop={8}>
-              <ShareIcon width={25} height={25} />
-            </Pressable>
           </View>
-        </View>
+        ) : null}
 
         {event.fotoUri ? (
           <Image
@@ -131,6 +140,9 @@ export default function EventDetailScreen() {
                 <Text className="font-inter-semibold text-[14px] text-neutral-800">
                   {lunasOrders.length}
                 </Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  {formatIDR(lunasTotal)}
+                </Text>
               </View>
               <View className="gap-[4px]">
                 <Text className="font-inter-semibold text-[12px] text-neutral-800">
@@ -138,6 +150,9 @@ export default function EventDetailScreen() {
                 </Text>
                 <Text className="font-inter-semibold text-[14px] text-neutral-800">
                   {belumOrders.length}
+                </Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  {formatIDR(belumTotal)}
                 </Text>
               </View>
             </View>

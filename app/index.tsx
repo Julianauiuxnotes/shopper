@@ -1,8 +1,9 @@
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
 import SplashDecoration from '@/assets/images/figma/splash-decoration.svg';
 import { Text } from '@/components/ui/text';
+import { useSettings } from '@/lib/settings-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import * as React from 'react';
 import { Image, type LayoutChangeEvent, Pressable, useWindowDimensions, View } from 'react-native';
 
@@ -37,10 +38,15 @@ export default function SplashScreen() {
     setSize({ width, height });
   }
 
-  const ready = size.width > 0 && size.height > 0;
+  const { keepLoggedIn, ready: settingsReady } = useSettings();
+
+  const ready = size.width > 0 && size.height > 0 && settingsReady;
+
+  // "Tetap masuk" was ticked at the last login — skip the welcome screen.
+  if (settingsReady && keepLoggedIn) return <Redirect href="/dashboard" />;
 
   return (
-    <View className="flex-1 bg-[#eaeaea]" style={{ height: windowHeight }} onLayout={handleLayout}>
+    <View className="flex-1 overflow-hidden bg-[#eaeaea]" style={{ height: windowHeight }} onLayout={handleLayout}>
       {ready ? (
         <>
           {/* Photo crop box — node 53:2611 "Rectangle 1": left -33px, top 82px,

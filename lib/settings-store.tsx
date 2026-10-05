@@ -20,12 +20,27 @@ type UserProfile = {
   namaJastip: string;
   email: string;
   password: string;
+  // The jastiper's own contact number, local digits only (the "+62" is
+  // a fixed prefix in the UI). Optional: set in Pengaturan, not asked at
+  // Sign Up, and missing from profiles saved before this field existed.
+  telepon?: string;
 };
 
 type SettingsContextValue = {
   userProfile: UserProfile;
   setUserProfile: (value: UserProfile) => void;
+  // Set by login.tsx's "Tetap masuk" checkbox. When true, the splash
+  // screen (app/index.tsx) skips straight to the dashboard on the next
+  // app open instead of asking for the password again.
+  keepLoggedIn: boolean;
+  signIn: (remember: boolean) => void;
   signOut: () => void;
+  // The jastiper's business logo, uploaded in Pengaturan and shown on
+  // printed output (components/jastiper-logo.tsx). Stored as a `data:`
+  // URI rather than the picker's own URI: on web that one is a `blob:`
+  // URL that dies with the tab, so it wouldn't survive a reload.
+  logoJastip: string | null;
+  setLogoJastip: (value: string | null) => void;
   adminWhatsapp: string;
   setAdminWhatsapp: (value: string) => void;
   publikasiOpening: string;
@@ -48,8 +63,10 @@ const BLANK_PROFILE: UserProfile = { nama: '', namaJastip: '', email: '', passwo
 
 function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = React.useState<UserProfile>(BLANK_PROFILE);
+  const [logoJastip, setLogoJastip] = React.useState<string | null>(null);
   const [adminWhatsapp, setAdminWhatsapp] = React.useState('');
   const [publikasiOpening, setPublikasiOpening] = React.useState('');
+  const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -60,6 +77,8 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
       setUserProfile(savedProfile);
       setAdminWhatsapp(savedWhatsapp);
       setPublikasiOpening(savedOpening);
+      setKeepLoggedIn(await storage.get('keepLoggedIn', false));
+      setLogoJastip(await storage.get<string | null>('logoJastip', null));
       setReady(true);
     })();
   }, []);
@@ -73,6 +92,16 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (ready) storage.set('publikasiOpening', publikasiOpening);
   }, [publikasiOpening, ready]);
+  React.useEffect(() => {
+    if (ready) storage.set('keepLoggedIn', keepLoggedIn);
+  }, [keepLoggedIn, ready]);
+  React.useEffect(() => {
+    if (ready) storage.set('logoJastip', logoJastip);
+  }, [logoJastip, ready]);
+
+  function signIn(remember: boolean) {
+    setKeepLoggedIn(remember);
+  }
 
   // Shared by the Pengaturan "Keluar" button and the dashboard drawer's
   // own "Keluar" shortcut. Deliberately does NOT clear userProfile: with
@@ -80,22 +109,29 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
   // account's credentials (see sign-up.tsx's TODO) — wiping it here would
   // permanently delete the account the user just signed up with, since
   // login.tsx's email/password check has nothing else to compare
-  // against. A no-op placeholder for now; once Supabase auth is wired,
-  // this is where a real supabase.auth.signOut() call belongs.
-  function signOut() {}
+  // against. It only drops the "Tetap masuk" flag, so the next app open
+  // asks for the password again; once Supabase auth is wired, this is
+  // where a real supabase.auth.signOut() call belongs.
+  function signOut() {
+    setKeepLoggedIn(false);
+  }
 
   const value = React.useMemo(
     () => ({
       userProfile,
       setUserProfile,
+      keepLoggedIn,
+      signIn,
       signOut,
+      logoJastip,
+      setLogoJastip,
       adminWhatsapp,
       setAdminWhatsapp,
       publikasiOpening,
       setPublikasiOpening,
       ready,
     }),
-    [userProfile, adminWhatsapp, publikasiOpening, ready]
+    [userProfile, keepLoggedIn, logoJastip, adminWhatsapp, publikasiOpening, ready]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

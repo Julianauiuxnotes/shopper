@@ -1,12 +1,15 @@
 import CameraIcon from '@/assets/images/figma/icon-camera.svg';
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import CaretDownIcon from '@/assets/images/figma/icon-caret-down.svg';
+import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import PrinterIcon from '@/assets/images/figma/icon-printer.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
+import { TagihanReceipt } from '@/components/tagihan-receipt';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { computeItemTotals, useEvents } from '@/lib/events-store';
+import { captureViewToPng } from '@/lib/capture-view';
+import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
@@ -20,6 +23,27 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 // Same options/labels as Tambah Pesanan's own Fee Jastip type toggle
 // (app/tambah-pesanan.tsx) — the confirm sheet's Fee Jastip field is
 // built to match that screen exactly, not just visually.
+// `info` is the grey helper line under each label (Figma node 181:558).
+// Figma's second row just repeats its own label there, read as
+// placeholder copy, so that one is this app's own wording.
+const ONGKIR_OPTIONS = [
+  {
+    value: 'awal',
+    label: 'Bayar ongkir di awal',
+    info: 'Ongkir ditambahkan ke total tagihan pelanggan.',
+  },
+  {
+    value: 'saatPengiriman',
+    label: 'Ongkir dibayar saat pengiriman',
+    info: 'Pelanggan bayar ongkir langsung ke kurir.',
+  },
+  {
+    value: 'gratis',
+    label: 'Free ongkir',
+    info: 'Pelanggan tidak dikenakan ongkir.',
+  },
+] as const;
+
 const FEE_TYPE_OPTIONS = [
   ['percent', 'Pakai %'],
   ['flat', 'Pakai IDR'],
@@ -89,8 +113,7 @@ type ConfirmDraft = {
 // button just for these three fields.
 export default function OrderDetailScreen() {
   const router = useRouter();
-  const { getEvent, getOrder, updateOrder, updateOrderItem, addOrderItem } = useEvents();
-  const { userProfile } = useSettings();
+  const { getEvent, getOrder } = useEvents();
   const { eventId, orderId } = useLocalSearchParams<{ eventId?: string; orderId?: string }>();
   const event = eventId ? getEvent(eventId) : undefined;
   const order = eventId && orderId ? getOrder(eventId, orderId) : undefined;
@@ -109,6 +132,18 @@ export default function OrderDetailScreen() {
       </View>
     );
   }
+
+  return <OrderDetailContent event={event} order={order} />;
+}
+
+// Split out from the screen above so every hook below runs
+// unconditionally — the "not found" early return used to sit above
+// them, which broke the Rules of Hooks whenever the order appeared a
+// render late (e.g. on reload, while the events store is still loading).
+function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order }) {
+  const router = useRouter();
+  const { updateOrder, updateOrderItem, addOrderItem } = useEvents();
+  const { userProfile } = useSettings();
 
   const [confirmingItemId, setConfirmingItemId] = React.useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = React.useState<ConfirmDraft | null>(null);
@@ -329,12 +364,33 @@ export default function OrderDetailScreen() {
     updateOrder(event!.id, order!.id, (o) => ({ ...o, alamat }));
   }
 
-  function setWhatsapp(whatsapp: string) {
+  // Orders store the full number ("+62" + local digits, see
+  // tambah-pesanan.tsx); the field shows "+62" as a fixed prefix and only
+  // the local part is editable (Figma node 181:545).
+  const whatsappLocal = order.whatsapp.replace(/^\+62/, '');
+
+  function setWhatsapp(local: string) {
+    // Digits only, and no leading 0 — "0812…" after +62 isn't a valid number.
+    const whatsapp = `+62${local.replace(/\D/g, '').replace(/^0+/, '')}`;
     updateOrder(event!.id, order!.id, (o) => ({ ...o, whatsapp }));
   }
 
   function setMetodePengiriman(metode: 'instant' | 'ekspedisi') {
     updateOrder(event!.id, order!.id, (o) => ({ ...o, metodePengiriman: metode }));
+  }
+
+  // The two options are mutually exclusive; tapping the ticked one
+  // again clears it (back to Figma's "Default" state, node 181:528).
+  function togglePembayaranOngkir(value: NonNullable<Order['pembayaranOngkir']>) {
+    updateOrder(event!.id, order!.id, (o) => ({
+      ...o,
+      pembayaranOngkir: o.pembayaranOngkir === value ? null : value,
+    }));
+  }
+
+  function setOngkir(text: string) {
+    const ongkir = Number(text.replace(/\D/g, '')) || 0;
+    updateOrder(event!.id, order!.id, (o) => ({ ...o, ongkir }));
   }
 
   function setStatusPembayaran(status: 'lunas' | 'belum') {
@@ -345,7 +401,54 @@ export default function OrderDetailScreen() {
   // plus the jastip fee (order.profit) — same correction applied to
   // Tambah Pesanan's own confirmation message, since "Total pembayaran"
   // alone is really just the goods cost (see lib/events-store.tsx).
-  const totalTagihan = order.totalPembayaran + order.profit;
+  // Ongkir only joins the bill when it's paid upfront ("Bayar ongkir di
+  // awal") — paid-on-delivery ongkir goes straight to the courier.
+  const ongkirDitagih = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
+  const totalTagihan = order.totalPembayaran + order.profit + ongkirDitagih;
+
+  // "Cetak tagihan customer" (Figma button 181:368): captures the
+  // off-screen <TagihanReceipt> (Figma 181:175) to a PNG and saves it —
+  // a browser download on web, the photo gallery on native.
+  const receiptRef = React.useRef<View>(null);
+  const [receiptPrintedAt, setReceiptPrintedAt] = React.useState(() => new Date());
+  const [savingReceipt, setSavingReceipt] = React.useState(false);
+  const ongkirLabel =
+    ONGKIR_OPTIONS.find((o) => o.value === order.pembayaranOngkir)?.label ?? null;
+
+  async function handleCetakTagihan() {
+    if (savingReceipt) return;
+    setSavingReceipt(true);
+    setReceiptPrintedAt(new Date());
+    try {
+      // Let the receipt re-render with the fresh "Waktu cetak" first.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const fileName = `tagihan-${order.orderNumber}.png`;
+      if (Platform.OS === 'web') {
+        const dataUri = await captureViewToPng(receiptRef, fileName);
+        const a = document.createElement('a');
+        a.href = dataUri;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+      // Dynamic import for the same reason as handleDownloadPhoto above.
+      const MediaLibrary = await import('expo-media-library');
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Izin dibutuhkan', 'Aktifkan akses galeri untuk menyimpan tagihan.');
+        return;
+      }
+      const uri = await captureViewToPng(receiptRef, fileName);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('Berhasil', 'Tagihan tersimpan ke galeri.');
+    } catch {
+      Alert.alert('Gagal', 'Tagihan tidak berhasil disimpan.');
+    } finally {
+      setSavingReceipt(false);
+    }
+  }
 
   async function handleKirimTotalPembayaran() {
     // Opens WhatsApp with the confirmation message pre-filled to the
@@ -371,6 +474,20 @@ export default function OrderDetailScreen() {
   return (
     <>
       <View className="flex-1 bg-white">
+        {/* Rendered off-screen only so handleCetakTagihan can capture it. */}
+        <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: 0 }}>
+          <TagihanReceipt
+            ref={receiptRef}
+            event={event}
+            order={order}
+            namaJastip={userProfile.namaJastip || 'Jastip by Juli'}
+            teleponJastip={userProfile.telepon ?? ''}
+            printedAt={receiptPrintedAt}
+            ongkirLabel={ongkirLabel}
+            ongkirDitagih={ongkirDitagih}
+            totalTagihan={totalTagihan}
+          />
+        </View>
         <View className="flex-row items-center gap-[5px] px-[20px] pt-[20px]">
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <CaretCircleLeftIcon width={24} height={24} />
@@ -412,19 +529,20 @@ export default function OrderDetailScreen() {
 
           <View className="gap-[4px]">
             <Text className="font-inter text-[10px] text-neutral-800">No. Whatsapp</Text>
-            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+            <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
               <Input
-                value={order.whatsapp}
+                value={whatsappLocal}
                 onChangeText={setWhatsapp}
                 placeholderTextColor="#9ca3af"
                 keyboardType="phone-pad"
-                className="h-auto border-0 bg-transparent p-0 text-[12px] text-black shadow-none"
+                className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
               />
             </View>
           </View>
 
           <View className="gap-[10px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Metode pengiriman</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">Metode pengiriman</Text>
             <View className="flex-row gap-[10px]">
               {(
                 [
@@ -452,6 +570,52 @@ export default function OrderDetailScreen() {
                 );
               })}
             </View>
+
+            {/* Figma section 181:627 — Default 181:550 / Bayar ongkir di
+                awal 181:370 / Ongkir dibayar saat pengiriman 181:447. Only
+                the Default frame has the label + helper-line rows (181:558);
+                the same row layout is used for the ticked states too. */}
+            <Text className="font-inter-semibold text-[12px] text-neutral-800">
+              Pembayaran ongkos kirim
+            </Text>
+            {ONGKIR_OPTIONS.map(({ value, label, info }) => {
+              const checked = order.pembayaranOngkir === value;
+              return (
+                <React.Fragment key={value}>
+                  <Pressable
+                    onPress={() => togglePembayaranOngkir(value)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                    className="flex-row items-center gap-[5px] self-start">
+                    {checked ? (
+                      <CheckSquareIcon width={12} height={12} />
+                    ) : (
+                      <View className="h-[10px] w-[10px] rounded-[2px] border border-[#5d5d5d]" />
+                    )}
+                    <View className="shrink justify-center gap-[2px]">
+                      <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                      <Text className="font-inter text-[12px] text-neutral-500">{info}</Text>
+                    </View>
+                  </Pressable>
+                  {value === 'awal' && checked ? (
+                    <View className="w-[96px] gap-[4px]">
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Ongkos kirim</Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Input
+                          value={order.ongkir ? order.ongkir.toLocaleString('id-ID') : ''}
+                          onChangeText={setOngkir}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="number-pad"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-[#5a5959] shadow-none"
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
           </View>
 
           <View className="gap-[13px]">
@@ -535,11 +699,20 @@ export default function OrderDetailScreen() {
               })}
             </View>
 
-            <Pressable
-              onPress={openAddItem}
-              className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
-              <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
-            </Pressable>
+            <View className="flex-row items-center gap-[13px]">
+              <Pressable
+                onPress={openAddItem}
+                className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleCetakTagihan}
+                disabled={savingReceipt}
+                accessibilityRole="button"
+                className="items-center rounded-[8px] bg-orange-500 p-[10px]">
+                <Text className="font-inter text-[12px] text-orange-50">Cetak tagihan customer</Text>
+              </Pressable>
+            </View>
           </View>
 
           <View className="gap-[6px]">

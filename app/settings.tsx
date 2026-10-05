@@ -3,9 +3,21 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
+import * as ImagePicker from 'expo-image-picker';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+
+// Logo upload limits. The logo's slot on printed output is 101x47
+// (components/jastiper-logo.tsx): 300x140 px keeps it sharp on a 3x
+// phone screen, and 600x280 px leaves headroom for a paper printout.
+// The size cap matters because the logo is stored on-device as a base64
+// `data:` URI (lib/settings-store.tsx) — 500 KB becomes ~670 KB of
+// text, comfortably under Android AsyncStorage's 2 MB-per-entry limit.
+const LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+const LOGO_MIN_WIDTH = 300;
+const LOGO_MIN_HEIGHT = 140;
+const LOGO_MAX_BYTES = 500 * 1024;
 
 // No Figma design exists for this screen yet — built using the same
 // visual language already established across the app (input pattern
@@ -27,11 +39,64 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // instead, which has its own confirm-match flow.
 export default function SettingsScreen() {
   const router = useRouter();
-  const { userProfile, setUserProfile, ready } = useSettings();
+  const { userProfile, setUserProfile, logoJastip, setLogoJastip, ready } = useSettings();
+  const [logoError, setLogoError] = React.useState<string | null>(null);
+
+  // Saves straight to the store on pick (no Simpan step), like the photo
+  // fields elsewhere. Errors show inline: Alert.alert is a no-op on web.
+  async function handlePickLogo() {
+    setLogoError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setLogoError('Aktifkan akses foto di pengaturan perangkat untuk memilih logo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      base64: true,
+      quality: 1,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType ?? 'image/jpeg';
+    if (!LOGO_MIME_TYPES.includes(mimeType)) {
+      setLogoError('Format tidak didukung. Pilih gambar PNG atau JPG.');
+      return;
+    }
+    if (asset.width < LOGO_MIN_WIDTH || asset.height < LOGO_MIN_HEIGHT) {
+      setLogoError(
+        `Gambar terlalu kecil (${asset.width} x ${asset.height} px). Minimal ${LOGO_MIN_WIDTH} x ${LOGO_MIN_HEIGHT} px.`
+      );
+      return;
+    }
+    // On web the picker's uri is already a data: URI; on native it's a
+    // file:// path, so build one from the base64 payload.
+    const dataUri = asset.uri.startsWith('data:')
+      ? asset.uri
+      : asset.base64
+        ? `data:${mimeType};base64,${asset.base64}`
+        : null;
+    if (!dataUri) {
+      setLogoError('Logo tidak berhasil dibaca. Coba pilih gambar lain.');
+      return;
+    }
+    const base64Length = dataUri.length - dataUri.indexOf(',') - 1;
+    const bytes = asset.fileSize ?? Math.round(base64Length * 0.75);
+    if (bytes > LOGO_MAX_BYTES) {
+      setLogoError(
+        `Ukuran file terlalu besar (${Math.round(bytes / 1024)} KB). Maksimal ${LOGO_MAX_BYTES / 1024} KB.`
+      );
+      return;
+    }
+    setLogoJastip(dataUri);
+  }
 
   const [namaDraft, setNamaDraft] = React.useState(userProfile.nama);
   const [namaJastipDraft, setNamaJastipDraft] = React.useState(userProfile.namaJastip);
   const [emailDraft, setEmailDraft] = React.useState(userProfile.email);
+  const [teleponDraft, setTeleponDraft] = React.useState(userProfile.telepon ?? '');
   const [justSaved, setJustSaved] = React.useState(false);
 
   // `useState(userProfile.nama)` above only reads its initial value once,
@@ -44,6 +109,7 @@ export default function SettingsScreen() {
     setNamaDraft(userProfile.nama);
     setNamaJastipDraft(userProfile.namaJastip);
     setEmailDraft(userProfile.email);
+    setTeleponDraft(userProfile.telepon ?? '');
   }, [ready]);
 
   const isValid =
@@ -54,7 +120,8 @@ export default function SettingsScreen() {
   const isDirty =
     namaDraft !== userProfile.nama ||
     namaJastipDraft !== userProfile.namaJastip ||
-    emailDraft !== userProfile.email;
+    emailDraft !== userProfile.email ||
+    teleponDraft !== (userProfile.telepon ?? '');
 
   function handleSave() {
     if (!isValid) return;
@@ -63,6 +130,7 @@ export default function SettingsScreen() {
       nama: namaDraft.trim(),
       namaJastip: namaJastipDraft.trim(),
       email: emailDraft.trim(),
+      telepon: teleponDraft,
     });
     setJustSaved(true);
   }
@@ -92,6 +160,55 @@ export default function SettingsScreen() {
 
         <View className="gap-[16px]">
           <Text className="font-inter-bold text-[14px] text-neutral-800">Data Akun</Text>
+
+          <View className="gap-[8px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">Logo Jastip</Text>
+            <View className="flex-row items-center gap-[12px]">
+              {/* Same 101:47 proportions as the logo's slot on printouts. */}
+              <View className="h-[70px] w-[150px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
+                {logoJastip ? (
+                  <Image
+                    source={{ uri: logoJastip }}
+                    resizeMode="contain"
+                    style={{ width: 150, height: 70 }}
+                    accessibilityLabel="Logo jastip"
+                  />
+                ) : (
+                  <Text className="font-inter text-[10px] text-neutral-500">Belum ada logo</Text>
+                )}
+              </View>
+              <View className="items-start gap-[8px]">
+                <Pressable
+                  onPress={handlePickLogo}
+                  accessibilityRole="button"
+                  className="rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                  <Text className="font-inter text-[12px] text-orange-500">
+                    {logoJastip ? 'Ganti logo' : 'Unggah logo'}
+                  </Text>
+                </Pressable>
+                {logoJastip ? (
+                  <Pressable
+                    onPress={() => {
+                      setLogoError(null);
+                      setLogoJastip(null);
+                    }}
+                    accessibilityRole="button"
+                    hitSlop={8}>
+                    <Text className="font-inter-semibold text-[12px] text-red-500 underline">
+                      Hapus logo
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            <Text className="font-inter text-[10px] text-neutral-500">
+              PNG atau JPG, mendatar (rasio sekitar 2:1). Minimal {LOGO_MIN_WIDTH} x{' '}
+              {LOGO_MIN_HEIGHT} px, disarankan 600 x 280 px. Maksimal {LOGO_MAX_BYTES / 1024} KB.
+            </Text>
+            {logoError ? (
+              <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>
+            ) : null}
+          </View>
 
           <View className="gap-[4px]">
             <Text className="font-inter-bold text-[12px] text-neutral-800">Nama</Text>
@@ -133,6 +250,29 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
+        </View>
+
+        {/* Optional (not part of isValid). Shown on the tagihan receipt
+            under the jastiper's name. Same "+62" prefix pattern as
+            Pengaturan Publikasi's admin WhatsApp field. */}
+        <View className="gap-[4px]">
+          <Text className="font-inter-bold text-[12px] text-neutral-800">No. Telepon Jastip</Text>
+          <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+            <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
+            <Input
+              value={teleponDraft}
+              onChangeText={withDirtyReset((value: string) =>
+                setTeleponDraft(value.replace(/\D/g, '').replace(/^0+/, ''))
+              )}
+              placeholder="81234567890"
+              placeholderTextColor="#9ca3af"
+              keyboardType="phone-pad"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+            />
+          </View>
+          <Text className="font-inter text-[10px] text-neutral-500">
+            Ditampilkan di tagihan customer, di bawah nama jastip.
+          </Text>
         </View>
 
         <View className="gap-[4px]">

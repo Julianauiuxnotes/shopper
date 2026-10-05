@@ -11,18 +11,19 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // (error). No real backend auth exists yet (see sign-up.tsx's TODO) —
 // "login" here checks the entered email/password against whatever
 // profile is currently held in lib/settings-store's userProfile
-// (written by Sign Up), which only works within the same browser/app
-// session since that store is in-memory only and resets on reload.
+// (written by Sign Up and persisted on-device). Ticking "Tetap masuk"
+// makes the splash screen skip straight to the dashboard next time.
 // Wrong credentials show the exact error state from Figma ("Email atau
 // password salah. Coba lagi.") rather than silently failing or always
 // succeeding.
 export default function LoginScreen() {
   const router = useRouter();
-  const { userProfile } = useSettings();
+  const { userProfile, signIn } = useSettings();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
   const [loginError, setLoginError] = React.useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
 
   const isValid = email.trim().length > 0 && password.length > 0;
 
@@ -46,6 +47,7 @@ export default function LoginScreen() {
       setLoginError(true);
       return;
     }
+    signIn(keepLoggedIn);
     router.replace('/dashboard');
   }
 
@@ -95,6 +97,30 @@ export default function LoginScreen() {
                 errorMessage={loginError ? 'Email atau password salah. Coba lagi.' : undefined}
               />
             </View>
+
+            {/* Not in the Figma LOGIN section — styled to match the card's
+                existing neutral-50-on-orange-500 treatment. */}
+            <Pressable
+              onPress={() => setKeepLoggedIn((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: keepLoggedIn }}
+              hitSlop={8}
+              className="flex-row items-center gap-[8px] self-start">
+              <View
+                className={cn(
+                  'h-[18px] w-[18px] items-center justify-center rounded-[4px] border border-neutral-50',
+                  keepLoggedIn && 'bg-neutral-50'
+                )}>
+                {/* A text tick, not a lucide icon: importing one icon from
+                    lucide-react-native bundles the whole library on web. */}
+                {keepLoggedIn ? (
+                  <Text className="font-inter-bold text-[12px] leading-[14px] text-orange-500">
+                    ✓
+                  </Text>
+                ) : null}
+              </View>
+              <Text className="font-inter text-[12px] text-neutral-50">Tetap masuk</Text>
+            </Pressable>
 
             <Pressable
               onPress={handleSubmit}
