@@ -2,8 +2,14 @@ import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
 import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
-import { computeItemTotals, type JastipEvent, type Order } from '@/lib/events-store';
+import {
+  computeItemTotals,
+  getTotalTagihan,
+  type JastipEvent,
+  type Order,
+} from '@/lib/events-store';
 import { formatDateRange, formatIDR, formatPrintTimestamp } from '@/lib/format';
+import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import * as React from 'react';
 import { View } from 'react-native';
 
@@ -15,12 +21,6 @@ type TagihanReceiptProps = {
   // left off the receipt when it's empty.
   teleponJastip: string;
   printedAt: Date;
-  // Label of the ticked "Pembayaran ongkos kirim" option, or null when
-  // none is ticked (the Ongkos kirim block is then left off the receipt).
-  ongkirLabel: string | null;
-  // Ongkir billed upfront; 0 unless "Bayar ongkir di awal" is ticked.
-  ongkirDitagih: number;
-  totalTagihan: number;
 };
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,16 +37,24 @@ function DashedLine() {
 }
 
 // Figma node 181:175 "Cetak struk tagihan" — the customer's bill, laid
-// out as a 390px-wide receipt. Not shown on screen as a page: Order
-// Detail renders it off-screen and captures it to an image when "Cetak
-// tagihan customer" is tapped, so `collapsable={false}` keeps the root a
-// real native view that can be captured.
-const TagihanReceipt = React.forwardRef<View, TagihanReceiptProps>(function TagihanReceipt(
-  { event, order, namaJastip, teleponJastip, printedAt, ongkirLabel, ongkirDitagih, totalTagihan },
-  ref
-) {
+// out as a receipt up to 390px wide. Shown by app/tagihan.tsx.
+function TagihanReceipt({
+  event,
+  order,
+  namaJastip,
+  teleponJastip,
+  printedAt,
+}: TagihanReceiptProps) {
+  // The ticked "Pembayaran ongkos kirim" option, if any; the Ongkos kirim
+  // block is left off the receipt when none is ticked.
+  const ongkirLabel =
+    ONGKIR_OPTIONS.find((o) => o.value === order.pembayaranOngkir)?.label ?? null;
+  // Ongkir billed upfront; 0 unless "Bayar ongkir di awal" is ticked.
+  const ongkirDitagih = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
+  const totalTagihan = getTotalTagihan(order);
+
   return (
-    <View ref={ref} collapsable={false} className="w-[390px] bg-white pb-[24px]">
+    <View className="w-full max-w-[390px] bg-white pb-[24px]">
       <View className="items-center gap-[24px] py-[24px]">
         <View className="w-full items-center gap-[11px]">
           <JastiperLogo />
@@ -125,7 +133,7 @@ const TagihanReceipt = React.forwardRef<View, TagihanReceiptProps>(function Tagi
                     </Text>
                   </View>
                 </View>
-                <View className="w-[342px] border-t border-neutral-400" />
+                <View className="w-full border-t border-neutral-400" />
               </React.Fragment>
             );
           })}
@@ -152,6 +160,6 @@ const TagihanReceipt = React.forwardRef<View, TagihanReceiptProps>(function Tagi
       </View>
     </View>
   );
-});
+}
 
 export { TagihanReceipt };

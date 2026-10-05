@@ -4,16 +4,15 @@ import CaretDownIcon from '@/assets/images/figma/icon-caret-down.svg';
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import PrinterIcon from '@/assets/images/figma/icon-printer.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
-import { TagihanReceipt } from '@/components/tagihan-receipt';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { captureViewToPng } from '@/lib/capture-view';
 import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { useSettings } from '@/lib/settings-store';
+import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import { cn } from '@/lib/utils';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as React from 'react';
 import { Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -23,27 +22,6 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 // Same options/labels as Tambah Pesanan's own Fee Jastip type toggle
 // (app/tambah-pesanan.tsx) — the confirm sheet's Fee Jastip field is
 // built to match that screen exactly, not just visually.
-// `info` is the grey helper line under each label (Figma node 181:558).
-// Figma's second row just repeats its own label there, read as
-// placeholder copy, so that one is this app's own wording.
-const ONGKIR_OPTIONS = [
-  {
-    value: 'awal',
-    label: 'Bayar ongkir di awal',
-    info: 'Ongkir ditambahkan ke total tagihan pelanggan.',
-  },
-  {
-    value: 'saatPengiriman',
-    label: 'Ongkir dibayar saat pengiriman',
-    info: 'Pelanggan bayar ongkir langsung ke kurir.',
-  },
-  {
-    value: 'gratis',
-    label: 'Free ongkir',
-    info: 'Pelanggan tidak dikenakan ongkir.',
-  },
-] as const;
-
 const FEE_TYPE_OPTIONS = [
   ['percent', 'Pakai %'],
   ['flat', 'Pakai IDR'],
@@ -406,50 +384,6 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   const ongkirDitagih = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
   const totalTagihan = order.totalPembayaran + order.profit + ongkirDitagih;
 
-  // "Cetak tagihan customer" (Figma button 181:368): captures the
-  // off-screen <TagihanReceipt> (Figma 181:175) to a PNG and saves it —
-  // a browser download on web, the photo gallery on native.
-  const receiptRef = React.useRef<View>(null);
-  const [receiptPrintedAt, setReceiptPrintedAt] = React.useState(() => new Date());
-  const [savingReceipt, setSavingReceipt] = React.useState(false);
-  const ongkirLabel =
-    ONGKIR_OPTIONS.find((o) => o.value === order.pembayaranOngkir)?.label ?? null;
-
-  async function handleCetakTagihan() {
-    if (savingReceipt) return;
-    setSavingReceipt(true);
-    setReceiptPrintedAt(new Date());
-    try {
-      // Let the receipt re-render with the fresh "Waktu cetak" first.
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      const fileName = `tagihan-${order.orderNumber}.png`;
-      if (Platform.OS === 'web') {
-        const dataUri = await captureViewToPng(receiptRef, fileName);
-        const a = document.createElement('a');
-        a.href = dataUri;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return;
-      }
-      // Dynamic import for the same reason as handleDownloadPhoto above.
-      const MediaLibrary = await import('expo-media-library');
-      const permission = await MediaLibrary.requestPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Izin dibutuhkan', 'Aktifkan akses galeri untuk menyimpan tagihan.');
-        return;
-      }
-      const uri = await captureViewToPng(receiptRef, fileName);
-      await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert('Berhasil', 'Tagihan tersimpan ke galeri.');
-    } catch {
-      Alert.alert('Gagal', 'Tagihan tidak berhasil disimpan.');
-    } finally {
-      setSavingReceipt(false);
-    }
-  }
-
   async function handleKirimTotalPembayaran() {
     // Opens WhatsApp with the confirmation message pre-filled to the
     // order's own No. Whatsapp (the customer) — the jastiper still taps
@@ -474,20 +408,6 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   return (
     <>
       <View className="flex-1 bg-white">
-        {/* Rendered off-screen only so handleCetakTagihan can capture it. */}
-        <View pointerEvents="none" style={{ position: 'absolute', left: -10000, top: 0 }}>
-          <TagihanReceipt
-            ref={receiptRef}
-            event={event}
-            order={order}
-            namaJastip={userProfile.namaJastip || 'Jastip by Juli'}
-            teleponJastip={userProfile.telepon ?? ''}
-            printedAt={receiptPrintedAt}
-            ongkirLabel={ongkirLabel}
-            ongkirDitagih={ongkirDitagih}
-            totalTagihan={totalTagihan}
-          />
-        </View>
         <View className="flex-row items-center gap-[5px] px-[20px] pt-[20px]">
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <CaretCircleLeftIcon width={24} height={24} />
@@ -705,13 +625,20 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
                 className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                 <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
               </Pressable>
-              <Pressable
-                onPress={handleCetakTagihan}
-                disabled={savingReceipt}
-                accessibilityRole="button"
-                className="items-center rounded-[8px] bg-orange-500 p-[10px]">
-                <Text className="font-inter text-[12px] text-orange-50">Cetak tagihan customer</Text>
-              </Pressable>
+{/* Figma button 181:368. Opens the bill (app/tagihan.tsx) as a
+                  preview — in a new browser tab on web, as a pushed screen
+                  on native. A plain link rather than window.open() from a
+                  handler, so mobile browsers don't treat it as a pop-up — and
+                  not `asChild`, which drops `target` on web. */}
+              <Link
+                href={{
+                  pathname: '/tagihan',
+                  params: { eventId: event.id, orderId: order.id },
+                }}
+                target="_blank"
+                className="overflow-hidden rounded-[8px] bg-orange-500 p-[10px] font-inter text-[12px] text-orange-50">
+                Cetak tagihan customer
+              </Link>
             </View>
           </View>
 
