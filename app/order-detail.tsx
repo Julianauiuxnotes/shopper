@@ -625,17 +625,13 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
                 className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                 <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
               </Pressable>
-{/* Figma button 181:368. Opens the bill (app/tagihan.tsx) as a
-                  preview — in a new browser tab on web, as a pushed screen
-                  on native. A plain link rather than window.open() from a
-                  handler, so mobile browsers don't treat it as a pop-up — and
-                  not `asChild`, which drops `target` on web. */}
+{/* Figma button 181:368. Opens the bill (app/tagihan.tsx) in the
+                  same tab/stack, so its back arrow returns here. */}
               <Link
                 href={{
                   pathname: '/tagihan',
                   params: { eventId: event.id, orderId: order.id },
                 }}
-                target="_blank"
                 className="overflow-hidden rounded-[8px] bg-orange-500 p-[10px] font-inter text-[12px] text-orange-50">
                 Cetak tagihan customer
               </Link>

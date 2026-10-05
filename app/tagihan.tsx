@@ -7,11 +7,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-// Preview of the customer's bill (Figma node 181:175), opened by Order
-// Detail's "Cetak tagihan customer" button — in a new browser tab on web,
-// so it reads the order from the same on-device storage rather than from
-// in-memory state. Replaces the earlier "save the receipt as an image"
-// behaviour, which didn't work in mobile browsers.
+// Preview of the customer's bill (Figma node 181:175), opened in place
+// by Order Detail's "Cetak tagihan customer" button. Replaces the earlier
+// "save the receipt as an image" behaviour, which didn't work in mobile
+// browsers.
 export default function TagihanScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
@@ -36,7 +35,8 @@ export default function TagihanScreen() {
     );
   }
 
-  // A new tab has no history to go back to, so fall back to the order.
+  // Opened directly (reload, shared link) there's no history to go back
+  // to, so fall back to the order.
   function handleBack() {
     if (router.canGoBack()) {
       router.back();
