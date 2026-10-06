@@ -1,26 +1,21 @@
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
-import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
-import {
-  computeItemTotals,
-  getTotalTagihan,
-  type JastipEvent,
-  type Order,
-} from '@/lib/events-store';
-import { formatDateRange, formatIDR, formatPrintTimestamp } from '@/lib/format';
+import { formatIDR, formatPrintTimestamp } from '@/lib/format';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
+import type { ReceiptSnapshot } from '@/lib/receipt-link';
 import * as React from 'react';
 import { View } from 'react-native';
 
 type TagihanReceiptProps = {
-  event: JastipEvent;
-  order: Order;
-  namaJastip: string;
-  // Local digits of the jastiper's number from Pengaturan; the line is
-  // left off the receipt when it's empty.
-  teleponJastip: string;
-  printedAt: Date;
+  // Everything the receipt prints (lib/receipt-link.ts). Both the
+  // jastiper's in-app preview and the customer's public page render from
+  // one of these, so the two can't drift apart.
+  snapshot: ReceiptSnapshot;
+  // The jastiper's logo slot. The public page passes nothing: the logo
+  // can't travel in the link, and Figma's grey "Logo Jastiper"
+  // placeholder would look broken to a customer.
+  logo?: React.ReactNode;
 };
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,54 +32,43 @@ function DashedLine() {
 }
 
 // Figma node 181:175 "Cetak struk tagihan" — the customer's bill, laid
-// out as a receipt up to 390px wide. Shown by app/tagihan.tsx.
-function TagihanReceipt({
-  event,
-  order,
-  namaJastip,
-  teleponJastip,
-  printedAt,
-}: TagihanReceiptProps) {
+// out as a receipt up to 390px wide. Shown by app/tagihan.tsx (jastiper)
+// and app/r.tsx (customer).
+function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
   // The ticked "Pembayaran ongkos kirim" option, if any; the Ongkos kirim
   // block is left off the receipt when none is ticked.
-  const ongkirLabel =
-    ONGKIR_OPTIONS.find((o) => o.value === order.pembayaranOngkir)?.label ?? null;
-  // Ongkir billed upfront; 0 unless "Bayar ongkir di awal" is ticked.
-  const ongkirDitagih = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
-  const totalTagihan = getTotalTagihan(order);
+  const ongkirLabel = ONGKIR_OPTIONS.find((o) => o.value === snapshot.ok)?.label ?? null;
 
   return (
     <View className="w-full max-w-[390px] bg-white pb-[24px]">
       <View className="items-center gap-[24px] py-[24px]">
         <View className="w-full items-center gap-[11px]">
-          <JastiperLogo />
-          <Text className="font-inter text-[14px] text-neutral-800">{namaJastip}</Text>
-          {teleponJastip ? (
-            <Text className="font-inter text-[12px] text-neutral-800">+62{teleponJastip}</Text>
+          {logo}
+          <Text className="font-inter text-[14px] text-neutral-800">{snapshot.nj}</Text>
+          {snapshot.tj ? (
+            <Text className="font-inter text-[12px] text-neutral-800">+62{snapshot.tj}</Text>
           ) : null}
           <Text className="font-inter text-[12px] text-neutral-800">
-            Waktu cetak : {formatPrintTimestamp(printedAt)}
+            Waktu cetak : {formatPrintTimestamp(new Date(snapshot.t))}
           </Text>
         </View>
 
         <DashedLine />
 
         <View className="w-full gap-[10px]">
-          <InfoRow label="Nama acara">{event.namaAcara}</InfoRow>
-          <InfoRow label="Tanggal acara">
-            {formatDateRange(event.tanggalDari, event.tanggalSampai)}
-          </InfoRow>
+          <InfoRow label="Nama acara">{snapshot.ea}</InfoRow>
+          <InfoRow label="Tanggal acara">{snapshot.ed}</InfoRow>
           <InfoRow label="Nomor order">
             <Text className="font-inter-bold text-[12px] text-neutral-800">
-              {order.orderNumber}
+              {snapshot.on}
             </Text>
           </InfoRow>
-          <InfoRow label="Nama customer">{order.nama}</InfoRow>
-          <InfoRow label="Alamat">{order.alamat}</InfoRow>
-          <InfoRow label="Total pesanan">{order.items.length} items</InfoRow>
+          <InfoRow label="Nama customer">{snapshot.cn}</InfoRow>
+          <InfoRow label="Alamat">{snapshot.al}</InfoRow>
+          <InfoRow label="Total pesanan">{snapshot.it.length} items</InfoRow>
           <InfoRow label="Status pembayaran">
             <Text className="font-inter-bold text-[12px] text-neutral-800">
-              {order.statusPembayaran === 'lunas' ? 'Lunas' : 'Belum bayar'}
+              {snapshot.lu ? 'Lunas' : 'Belum bayar'}
             </Text>
           </InfoRow>
         </View>
@@ -102,9 +86,9 @@ function TagihanReceipt({
                     Ongkos kirim : {ongkirLabel}
                   </Text>
                 </View>
-                {ongkirDitagih > 0 ? (
+                {snapshot.og > 0 ? (
                   <Text className="font-inter text-[10px] text-neutral-800">
-                    {formatIDR(ongkirDitagih)}
+                    {formatIDR(snapshot.og)}
                   </Text>
                 ) : null}
               </View>
@@ -112,38 +96,32 @@ function TagihanReceipt({
           ) : null}
 
           <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">List pesanan</Text>
-          {order.items.map((item) => {
-            const { fee } = computeItemTotals(item);
-            // Same "price already includes the jastip fee" per-unit figure
-            // as app/cetak-penanda.tsx.
-            const perUnitInclFee = item.harga + fee / item.jumlah;
-            return (
-              <React.Fragment key={item.id}>
-                <View className="gap-[8px]">
-                  <View className="flex-row items-center gap-[5px]">
-                    <CheckSquareIcon width={12} height={12} />
-                    <Text className="flex-1 font-inter text-[10px] text-neutral-800">
-                      {item.namaProduk}
-                    </Text>
-                  </View>
-                  <View className="flex-row gap-[8px]">
-                    <Text className="font-inter text-[10px] text-neutral-800">{item.jumlah}x</Text>
-                    <Text className="font-inter text-[10px] text-neutral-800">
-                      {formatIDR(perUnitInclFee)}*
-                    </Text>
-                  </View>
+          {snapshot.it.map(([namaProduk, jumlah, perUnitInclFee], index) => (
+            <React.Fragment key={index}>
+              <View className="gap-[8px]">
+                <View className="flex-row items-center gap-[5px]">
+                  <CheckSquareIcon width={12} height={12} />
+                  <Text className="flex-1 font-inter text-[10px] text-neutral-800">
+                    {namaProduk}
+                  </Text>
                 </View>
-                <View className="w-full border-t border-neutral-400" />
-              </React.Fragment>
-            );
-          })}
+                <View className="flex-row gap-[8px]">
+                  <Text className="font-inter text-[10px] text-neutral-800">{jumlah}x</Text>
+                  <Text className="font-inter text-[10px] text-neutral-800">
+                    {formatIDR(perUnitInclFee)}*
+                  </Text>
+                </View>
+              </View>
+              <View className="w-full border-t border-neutral-400" />
+            </React.Fragment>
+          ))}
 
           <View className="gap-[6px]">
             <Text className="font-inter-bold text-[10px] text-neutral-800">
               Total tagihan yang harus dibayar
             </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(totalTagihan)}
+              {formatIDR(snapshot.tt)}
             </Text>
           </View>
           <Text className="font-inter text-[10px] text-[#1e1e1e]">
