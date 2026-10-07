@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import * as React from 'react';
-import { useEvents } from './events-store';
+import { AppState, Platform } from 'react-native';
+import { SUPABASE_KEY, SUPABASE_URL } from './backend';
+import { newId, useEvents } from './events-store';
 import { useSettings } from './settings-store';
 import { storage } from './storage';
 import { supabase } from './supabase';
@@ -47,6 +49,10 @@ type SignUpInput = {
 type AuthContextValue = {
   /** False until the saved session (if any) has been read. */
   ready: boolean;
+  /** A message to show on the login screen (e.g. logged out because the
+   * account became active elsewhere); null when there is none. */
+  notice: string | null;
+  clearNotice: () => void;
   signedIn: boolean;
   email: string;
   userId: string | null;
@@ -69,6 +75,50 @@ type AuthContextValue = {
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
+
+// Shown when an account is already in use on another browser or device:
+// at login (which is then refused), and on a device that finds another
+// one has taken over while it was away.
+const ACTIVE_ELSEWHERE =
+  'Akun ini sedang aktif di browser lain, silahkan keluar untuk masuk kembali dengan akun yang sama';
+
+// How often an open app renews its hold on the account. The server lets
+// another device in after 3 minutes of silence (see
+// supabase/migrations/0004_shopper_single_active_session.sql).
+const HEARTBEAT_MS = 30_000;
+
+async function getDeviceId() {
+  let id = await storage.get<string | null>('deviceId', null);
+  if (!id) {
+    id = newId('d');
+    await storage.set('deviceId', id);
+  }
+  return id;
+}
+
+// Claims the logged-in account for this device. False only when the
+// server says another device is actively using it. If the server can't be
+// asked (offline, for instance) the answer is true: not being able to
+// check must never lock someone out of their own data.
+async function claimSession() {
+  try {
+    const deviceId = await getDeviceId();
+    const { data, error } = await supabase.rpc('shopper_claim_session', {
+      p_device_id: deviceId,
+    });
+    return error ? true : data !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function releaseSession() {
+  try {
+    await supabase.rpc('shopper_release_session', { p_device_id: await getDeviceId() });
+  } catch {
+    // offline: the hold simply expires on its own.
+  }
+}
 
 /** An error whose `message` is already written for the user, in Indonesian. */
 export class AuthError extends Error {}
@@ -158,6 +208,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [sessionRead, setSessionRead] = React.useState(false);
   const [state, setState] = React.useState<ShopState | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
 
   // The effects below outlive renders; read the stores through a ref.
   const stores = React.useRef({ settings, eventsStore });
@@ -235,6 +286,13 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         current = null;
       }
+      // Another device took over while this one was closed.
+      if (current && !(await claimSession())) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        await storage.set('authShopCache', null);
+        current = null;
+        setNotice(ACTIVE_ELSEWHERE);
+      }
       if (cancelled) return;
       if (current) {
         setSession(current);
@@ -263,6 +321,55 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  // While logged in, keep renewing this device's hold on the account. If
+  // the server says another device has it, this one is logged out.
+  const hasSession = session !== null;
+  const tokenRef = React.useRef<string | null>(null);
+  tokenRef.current = session?.access_token ?? null;
+  React.useEffect(() => {
+    if (!hasSession) return;
+    let stopped = false;
+    const beat = async () => {
+      if (stopped || (await claimSession()) || stopped) return;
+      stopped = true;
+      stores.current.settings.signOut();
+      await storage.set('authShopCache', null);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      setNotice(ACTIVE_ELSEWHERE);
+      setSession(null);
+      setState(null);
+    };
+    const timer = setInterval(beat, HEARTBEAT_MS);
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') beat();
+    });
+    // Without "Tetap masuk" the session ends when the tab closes, so give
+    // the account up at that moment rather than making another device
+    // wait out the timeout. `keepalive` lets the request outlive the page.
+    const onPageHide = async () => {
+      if (stores.current.settings.keepLoggedIn) return;
+      const token = tokenRef.current;
+      if (!token) return;
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/shopper_release_session`, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_device_id: await getDeviceId() }),
+      }).catch(() => {});
+    };
+    if (Platform.OS === 'web') window.addEventListener('pagehide', onPageHide);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      subscription.remove();
+      if (Platform.OS === 'web') window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [hasSession]);
+
   const refresh = React.useCallback(async () => {
     if (!session) return;
     const next = await loadShopState(session.user.id);
@@ -286,6 +393,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       );
       if (!data.session) return 'confirm_email';
+      await claimSession();
+      setNotice(null);
       stores.current.settings.signIn(true);
       setSession(data.session);
       try {
@@ -301,6 +410,13 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = React.useCallback<AuthContextValue['signIn']>(
     async (email, password, remember) => {
       const data = check(await supabase.auth.signInWithPassword({ email, password }));
+      // One active browser per account: refuse this login if another
+      // device is using it, leaving that device's session untouched.
+      if (!(await claimSession())) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        throw new AuthError(ACTIVE_ELSEWHERE);
+      }
+      setNotice(null);
       stores.current.settings.signIn(remember);
       setSession(data.session);
       try {
@@ -315,6 +431,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = React.useCallback(async () => {
     stores.current.settings.signOut();
     await storage.set('authShopCache', null);
+    // Let another device log in straight away.
+    await releaseSession();
     // 'local': end the session on this device even when offline.
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     setSession(null);
@@ -346,6 +464,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = React.useMemo<AuthContextValue>(
     () => ({
       ready: sessionRead,
+      notice,
+      clearNotice: () => setNotice(null),
       signedIn: session !== null,
       email: session?.user.email ?? '',
       userId: session?.user.id ?? null,
@@ -366,7 +486,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelInvite: (inviteId) => call('shopper_cancel_invite', { p_invite_id: inviteId }),
       removeMember: (userId) => call('shopper_remove_member', { p_user_id: userId }),
     }),
-    [sessionRead, session, state, signUp, signIn, signOut, updateShop, call]
+    [sessionRead, notice, session, state, signUp, signIn, signOut, updateShop, call]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

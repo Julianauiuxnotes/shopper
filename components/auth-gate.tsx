@@ -12,16 +12,18 @@ const ENTRY_ROUTES = ['', 'login', 'sign-up'];
 // logged-in users past the welcome/login screens. Renders nothing;
 // mounted once in app/_layout.tsx.
 function AuthGate() {
-  const { ready, signedIn } = useAuth();
+  const { ready, signedIn, notice } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const route = segments[0] ?? '';
 
   React.useEffect(() => {
     if (!ready) return;
-    if (!signedIn && !PUBLIC_ROUTES.includes(route)) router.replace('/');
+    // Logged out with something to explain (the account became active on
+    // another device): go to the login screen, which shows the message.
+    if (!signedIn && !PUBLIC_ROUTES.includes(route)) router.replace(notice ? '/login' : '/');
     else if (signedIn && ENTRY_ROUTES.includes(route)) router.replace('/dashboard');
-  }, [ready, signedIn, route, router]);
+  }, [ready, signedIn, notice, route, router]);
 
   return null;
 }

@@ -15,7 +15,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // credentials, unconfirmed email, no connection).
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, notice } = useAuth();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -95,7 +95,8 @@ export default function LoginScreen() {
                 onToggleSecure={() => setShowPassword((s) => !s)}
                 hasError={loginError !== null}
                 tintErrorText={false}
-                errorMessage={loginError ?? undefined}
+                // `notice`: why this device was logged out, if it was.
+                errorMessage={loginError ?? notice ?? undefined}
               />
             </View>
 
