@@ -34,6 +34,10 @@ type SettingsContextValue = {
   // app open instead of asking for the password again.
   keepLoggedIn: boolean;
   signIn: (remember: boolean) => void;
+  // Clears the business settings a previous account left on this device
+  // (logo, admin WhatsApp, publikasi template). Called at Sign Up,
+  // alongside the events store's resetEvents().
+  resetBusinessSettings: () => void;
   signOut: () => void;
   // The jastiper's business logo, uploaded in Pengaturan and shown on
   // printed output (components/jastiper-logo.tsx). Stored as a `data:`
@@ -99,6 +103,12 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (ready) storage.set('logoJastip', logoJastip);
   }, [logoJastip, ready]);
 
+  function resetBusinessSettings() {
+    setLogoJastip(null);
+    setAdminWhatsapp('');
+    setPublikasiOpening('');
+  }
+
   function signIn(remember: boolean) {
     setKeepLoggedIn(remember);
   }
@@ -122,6 +132,7 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
       setUserProfile,
       keepLoggedIn,
       signIn,
+      resetBusinessSettings,
       signOut,
       logoJastip,
       setLogoJastip,

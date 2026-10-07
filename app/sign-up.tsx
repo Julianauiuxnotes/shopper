@@ -1,6 +1,7 @@
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
+import { useEvents } from '@/lib/events-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
@@ -12,7 +13,8 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // off-canvas in the source design, so it's intentionally not rendered.
 export default function SignUpScreen() {
   const router = useRouter();
-  const { setUserProfile } = useSettings();
+  const { setUserProfile, resetBusinessSettings } = useSettings();
+  const { resetEvents } = useEvents();
   const [nama, setNama] = React.useState('');
   const [namaJastip, setNamaJastip] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -36,6 +38,13 @@ export default function SignUpScreen() {
     // (fymscirqwnnlubepymgc.supabase.co) is unpaused and reconnected. Until
     // then, persist to the local settings store so Pengaturan has real
     // data to show/edit.
+    // A new account starts empty. Events, orders and business settings
+    // are stored per device rather than per account (no backend yet), and
+    // signing up replaces the device's one local account — so anything
+    // left over from the previous account or from testing is cleared here
+    // instead of showing up on the new user's dashboard.
+    resetEvents();
+    resetBusinessSettings();
     setUserProfile({
       nama: nama.trim(),
       namaJastip: namaJastip.trim(),

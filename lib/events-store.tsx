@@ -99,6 +99,11 @@ type NewOrderInput = {
 
 type EventsContextValue = {
   events: JastipEvent[];
+  // Wipes every event and order and restarts the code sequences. Called
+  // when a new account signs up: this store is per-device, not per
+  // account, so without it a brand-new user would inherit whatever the
+  // device's previous account (or earlier testing) left behind.
+  resetEvents: () => void;
   addEvent: (input: NewEventInput) => JastipEvent;
   getEvent: (id: string) => JastipEvent | undefined;
   addOrder: (eventId: string, input: NewOrderInput) => Order | undefined;
@@ -337,8 +342,17 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const resetEvents = React.useCallback(() => {
+    eventSeqRef.current = 0;
+    orderSeqRef.current = new Map();
+    storage.set('eventSeq', 0);
+    storage.set('orderSeq', []);
+    setEvents([]);
+  }, []);
+
   const value = React.useMemo(
     () => ({
+      resetEvents,
       events,
       addEvent,
       getEvent,
@@ -348,7 +362,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       updateOrderItem,
       addOrderItem,
     }),
-    [events, addEvent, getEvent, addOrder, getOrder, updateOrder, updateOrderItem, addOrderItem]
+    [events, resetEvents, addEvent, getEvent, addOrder, getOrder, updateOrder, updateOrderItem, addOrderItem]
   );
 
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;
