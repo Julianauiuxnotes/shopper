@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { addPendingDeletes } from './pending-deletes';
 import { storage } from './storage';
 
 // Persisted on-device via lib/storage.ts (AsyncStorage — localStorage on
@@ -115,6 +116,11 @@ type EventsContextValue = {
   // pulled from the server (or re-keying local data before the first sync).
   replaceEvents: (updater: (prev: JastipEvent[]) => JastipEvent[]) => void;
   addEvent: (input: NewEventInput) => JastipEvent;
+  // Permanently remove an event (with all its orders) or one order. The
+  // deletion is also queued for the server (lib/pending-deletes.ts), so it
+  // disappears on the shop's other devices too.
+  deleteEvent: (eventId: string) => void;
+  deleteOrder: (eventId: string, orderId: string) => void;
   getEvent: (id: string) => JastipEvent | undefined;
   addOrder: (eventId: string, input: NewOrderInput) => Order | undefined;
   getOrder: (eventId: string, orderId: string) => Order | undefined;
@@ -398,6 +404,30 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     setEvents([]);
   }, []);
 
+  const deleteEvent = React.useCallback(
+    (eventId: string) => {
+      const event = events.find((e) => e.id === eventId);
+      if (!event) return;
+      addPendingDeletes({
+        events: [eventId],
+        orders: event.orders.map((o) => `${eventId}/${o.id}`),
+      });
+      setEvents((prev) => prev.filter((e) => e.id !== eventId));
+    },
+    [events]
+  );
+
+  const deleteOrder = React.useCallback((eventId: string, orderId: string) => {
+    addPendingDeletes({ orders: [`${eventId}/${orderId}`] });
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? withTotals({ ...e, orders: e.orders.filter((o) => o.id !== orderId) })
+          : e
+      )
+    );
+  }, []);
+
   const replaceEvents = React.useCallback(
     (updater: (prev: JastipEvent[]) => JastipEvent[]) => setEvents(updater),
     []
@@ -408,6 +438,8 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       ready,
       resetEvents,
       replaceEvents,
+      deleteEvent,
+      deleteOrder,
       events,
       addEvent,
       getEvent,
@@ -422,6 +454,8 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       ready,
       resetEvents,
       replaceEvents,
+      deleteEvent,
+      deleteOrder,
       addEvent,
       getEvent,
       addOrder,

@@ -1,4 +1,10 @@
 import { type JastipEvent, newId, type Order, withTotals } from './events-store';
+import {
+  clearPendingDeletes,
+  getPendingDeletes,
+  type PendingDeletes,
+  removePendingDeletes,
+} from './pending-deletes';
 import { storage } from './storage';
 import { supabase } from './supabase';
 
@@ -19,7 +25,11 @@ import { supabase } from './supabase';
 //
 // Conflicts: per document, the last write to reach the server wins.
 // Events and orders are separate documents, so people working on
-// different orders never collide. Nothing is ever deleted by sync.
+// different orders never collide.
+//
+// Deleting: a deleted event or order stays on the server as a small
+// "deleted" marker in place of its document, so the other devices learn
+// of it and remove their copy. A delete beats an edit made elsewhere.
 //
 // Photos (an event's fotoUri, an item's fotoStruk) are device-local URIs
 // and are left out of what's synced; a merge keeps this device's own.
@@ -64,6 +74,11 @@ function orderDoc(order: Order): OrderDoc {
 
 const orderKey = (eventId: string, orderId: string) => `${eventId}/${orderId}`;
 
+// What a deleted event's or order's row holds, and its snapshot text.
+const TOMBSTONE = { deleted: true } as const;
+const TOMBSTONE_TEXT = canon(TOMBSTONE);
+const isTombstone = (data: unknown) => (data as { deleted?: unknown } | null)?.deleted === true;
+
 type SyncState = {
   shopId: string;
   /** Last synced form of each event, by id. */
@@ -85,6 +100,7 @@ async function loadState(shopId: string): Promise<SyncState> {
 /** Forgets everything synced so far. Called when a different shop logs in on this device. */
 export async function resetSyncState() {
   await storage.set('syncState', null);
+  await clearPendingDeletes();
 }
 
 // Data created before sync existed used the display code as its id
@@ -123,8 +139,13 @@ function applyRekey(events: JastipEvent[], plan: ReturnType<typeof planRekey>): 
   }));
 }
 
-type EventRow = { id: string; data: EventDoc; server_updated_at: string };
-type OrderRow = { event_id: string; id: string; data: OrderDoc; server_updated_at: string };
+type EventRow = { id: string; data: EventDoc | typeof TOMBSTONE; server_updated_at: string };
+type OrderRow = {
+  event_id: string;
+  id: string;
+  data: OrderDoc | typeof TOMBSTONE;
+  server_updated_at: string;
+};
 
 function unwrap<R extends { data: unknown; error: unknown }>(result: R) {
   if (result.error) throw result.error;
@@ -175,14 +196,26 @@ function mergeRows(
   prev: JastipEvent[],
   eventRows: EventRow[],
   orderRows: OrderRow[],
-  base: Snapshots
+  base: Snapshots,
+  // Deleted on this device and not yet sent: the server still has these
+  // as live documents, and they must not be brought back.
+  deleting: PendingDeletes
 ) {
   const byId = new Map(prev.map((e) => [e.id, e]));
-  const order = prev.map((e) => e.id);
+  let order = prev.map((e) => e.id);
   const seen: Snapshots = { events: {}, orders: {} };
   let changed = 0;
 
   for (const row of eventRows) {
+    if (deleting.events.includes(row.id)) continue;
+    if (isTombstone(row.data)) {
+      seen.events[row.id] = TOMBSTONE_TEXT;
+      if (byId.delete(row.id)) {
+        order = order.filter((id) => id !== row.id);
+        changed += 1;
+      }
+      continue;
+    }
     if (!isValidEventDoc(row.data)) continue;
     const remote = canon(row.data);
     const mine = byId.get(row.id);
@@ -203,12 +236,22 @@ function mergeRows(
   }
 
   for (const row of orderRows) {
-    if (!isValidOrderDoc(row.data)) continue;
+    const key = orderKey(row.event_id, row.id);
+    if (deleting.orders.includes(key)) continue;
     const event = byId.get(row.event_id);
+    if (isTombstone(row.data)) {
+      seen.orders[key] = TOMBSTONE_TEXT;
+      if (event?.orders.some((o) => o.id === row.id)) {
+        byId.set(row.event_id, { ...event, orders: event.orders.filter((o) => o.id !== row.id) });
+        changed += 1;
+      }
+      continue;
+    }
+    if (!isValidOrderDoc(row.data)) continue;
     // Its event isn't on this device; nothing to attach the order to.
     if (!event) continue;
-    const key = orderKey(row.event_id, row.id);
-    const remote = canon(row.data);
+    const data = row.data;
+    const remote = canon(data);
     const mine = event.orders.find((o) => o.id === row.id);
     const local = mine ? canon(orderDoc(mine)) : null;
     if (local !== null && local !== remote && local !== base.orders[key]) continue;
@@ -217,9 +260,9 @@ function mergeRows(
     // Keep this device's receipt photos for the items it still has.
     const photos = new Map((mine?.items ?? []).map((item) => [item.id, item.fotoStruk]));
     const merged: Order = {
-      ...row.data,
+      ...data,
       id: row.id,
-      items: row.data.items.map((item) => ({ ...item, fotoStruk: photos.get(item.id) ?? null })),
+      items: data.items.map((item) => ({ ...item, fotoStruk: photos.get(item.id) ?? null })),
     };
     byId.set(row.event_id, {
       ...event,
@@ -259,6 +302,8 @@ export async function syncOnce(
     await storage.set('syncState', state);
   }
 
+  const deleting = await getPendingDeletes();
+
   // --- Pull ---------------------------------------------------------
   let eventQuery = supabase
     .from('shop_events')
@@ -279,9 +324,11 @@ export async function syncOnce(
   let pulled = 0;
   if (eventRows.length > 0 || orderRows.length > 0) {
     const base: Snapshots = { events: { ...state.events }, orders: { ...state.orders } };
-    const result = mergeRows(getEvents(), eventRows, orderRows, base);
+    const result = mergeRows(getEvents(), eventRows, orderRows, base, deleting);
     pulled = result.changed;
-    if (pulled > 0) replaceEvents((prev) => mergeRows(prev, eventRows, orderRows, base).next);
+    if (pulled > 0) {
+      replaceEvents((prev) => mergeRows(prev, eventRows, orderRows, base, deleting).next);
+    }
     Object.assign(state.events, result.seen.events);
     Object.assign(state.orders, result.seen.orders);
 
@@ -294,9 +341,39 @@ export async function syncOnce(
 
   // --- Push ---------------------------------------------------------
   const current = getEvents();
-  const eventsToPush: Array<{ shop_id: string; id: string; data: EventDoc }> = [];
-  const ordersToPush: Array<{ shop_id: string; event_id: string; id: string; data: OrderDoc }> = [];
+  const eventsToPush: Array<{
+    shop_id: string;
+    id: string;
+    data: EventDoc | typeof TOMBSTONE;
+  }> = [];
+  const ordersToPush: Array<{
+    shop_id: string;
+    event_id: string;
+    id: string;
+    data: OrderDoc | typeof TOMBSTONE;
+  }> = [];
   const pending: Array<() => void> = [];
+
+  // Deletions first: each becomes a "deleted" marker in place of the
+  // document.
+  for (const id of deleting.events) {
+    eventsToPush.push({ shop_id: shopId, id, data: TOMBSTONE });
+    pending.push(() => {
+      state.events[id] = TOMBSTONE_TEXT;
+    });
+  }
+  for (const key of deleting.orders) {
+    const slash = key.indexOf('/');
+    ordersToPush.push({
+      shop_id: shopId,
+      event_id: key.slice(0, slash),
+      id: key.slice(slash + 1),
+      data: TOMBSTONE,
+    });
+    pending.push(() => {
+      state.orders[key] = TOMBSTONE_TEXT;
+    });
+  }
 
   for (const event of current) {
     const doc = eventDoc(event);
@@ -339,6 +416,7 @@ export async function syncOnce(
   // Only now are the snapshots moved on: a failed push leaves them as
   // they were, so the same documents are sent again next time.
   for (const commit of pending) commit();
+  await removePendingDeletes(deleting);
 
   await storage.set('syncState', state);
   return { pulled, pushed: eventsToPush.length + ordersToPush.length };

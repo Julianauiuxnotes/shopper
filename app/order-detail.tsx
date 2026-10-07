@@ -5,6 +5,7 @@ import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import PrinterIcon from '@/assets/images/figma/icon-printer.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
@@ -120,7 +121,16 @@ export default function OrderDetailScreen() {
 // render late (e.g. on reload, while the events store is still loading).
 function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order }) {
   const router = useRouter();
-  const { updateOrder, updateOrderItem, addOrderItem } = useEvents();
+  const { updateOrder, updateOrderItem, addOrderItem, deleteOrder } = useEvents();
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+
+  // Leaves the screen first, then deletes: the order this screen is
+  // showing must not vanish from under it.
+  function handleDeleteOrder() {
+    setConfirmingDelete(false);
+    router.replace({ pathname: '/event-detail', params: { id: event.id } });
+    deleteOrder(event.id, order.id);
+  }
   const [confirmingItemId, setConfirmingItemId] = React.useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = React.useState<ConfirmDraft | null>(null);
   const [fotoStrukDraft, setFotoStrukDraft] = React.useState<string | null>(null);
@@ -689,8 +699,24 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
               </Text>
             </Pressable>
           </Link>
+
+          <Pressable
+            onPress={() => setConfirmingDelete(true)}
+            accessibilityRole="button"
+            className="w-full items-center justify-center rounded-[12px] border border-red-500 bg-white px-[10px] py-[16px]">
+            <Text className="font-inter-semibold text-[14px] text-red-500">Hapus pesanan</Text>
+          </Pressable>
         </ScrollView>
       </View>
+
+      <ConfirmDialog
+        visible={confirmingDelete}
+        title="Hapus pesanan?"
+        message={`Pesanan ${order.orderNumber} atas nama ${order.nama || 'customer'} akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`}
+        confirmLabel="Hapus"
+        onConfirm={handleDeleteOrder}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
       {confirmDraft ? (
         <BottomSheet

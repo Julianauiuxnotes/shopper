@@ -1,5 +1,6 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import ShareIcon from '@/assets/images/figma/icon-share.svg';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-store';
 import { getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
@@ -23,7 +24,8 @@ import { Image, Pressable, ScrollView, Share, View } from 'react-native';
 // rather than showing a fake placeholder.
 export default function EventDetailScreen() {
   const router = useRouter();
-  const { getEvent } = useEvents();
+  const { getEvent, deleteEvent } = useEvents();
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const { shop } = useAuth();
   const {
     userProfile,
@@ -236,7 +238,33 @@ export default function EventDetailScreen() {
           orders={belumOrders}
           eventId={event.id}
         />
+
+        <Pressable
+          onPress={() => setConfirmingDelete(true)}
+          accessibilityRole="button"
+          className="w-full items-center justify-center rounded-[12px] border border-red-500 bg-white px-[10px] py-[16px]">
+          <Text className="font-inter-semibold text-[14px] text-red-500">Hapus event</Text>
+        </Pressable>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmingDelete}
+        title="Hapus event?"
+        message={
+          event.orders.length > 0
+            ? `Event "${event.namaAcara}" dan ${event.orders.length} pesanan di dalamnya akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`
+            : `Event "${event.namaAcara}" akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`
+        }
+        confirmLabel="Hapus"
+        onConfirm={() => {
+          // Leaves the screen first, then deletes: the event this screen
+          // is showing must not vanish from under it.
+          setConfirmingDelete(false);
+          router.replace('/dashboard');
+          deleteEvent(event.id);
+        }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </View>
   );
 }
