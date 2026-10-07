@@ -1,54 +1,55 @@
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { useSettings } from '@/lib/settings-store';
+import { AuthError, useAuth } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 // Figma section LOGIN, node 49:878 (empty) / 53:2844 (filled) / 53:2888
-// (error). No real backend auth exists yet (see sign-up.tsx's TODO) —
-// "login" here checks the entered email/password against whatever
-// profile is currently held in lib/settings-store's userProfile
-// (written by Sign Up and persisted on-device). Ticking "Tetap masuk"
-// makes the splash screen skip straight to the dashboard next time.
-// Wrong credentials show the exact error state from Figma ("Email atau
-// password salah. Coba lagi.") rather than silently failing or always
-// succeeding.
+// (error). Logs in through lib/auth-store.tsx (Supabase Auth). Ticking
+// "Tetap masuk" keeps the session when the app is closed; without it the
+// next app open asks for the password again. Failures use Figma's error
+// state, with the message for what actually went wrong (wrong
+// credentials, unconfirmed email, no connection).
 export default function LoginScreen() {
   const router = useRouter();
-  const { userProfile, signIn } = useSettings();
+  const { signIn } = useAuth();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
-  const [loginError, setLoginError] = React.useState(false);
+  // The message to show under the fields; null when there is none.
+  const [loginError, setLoginError] = React.useState<string | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
 
   const isValid = email.trim().length > 0 && password.length > 0;
 
   function handleChangeEmail(value: string) {
     setEmail(value);
-    setLoginError(false);
+    setLoginError(null);
   }
 
   function handleChangePassword(value: string) {
     setPassword(value);
-    setLoginError(false);
+    setLoginError(null);
   }
 
-  function handleSubmit() {
-    if (!isValid) return;
-    const matches =
-      userProfile.email.length > 0 &&
-      email.trim().toLowerCase() === userProfile.email.toLowerCase() &&
-      password === userProfile.password;
-    if (!matches) {
-      setLoginError(true);
-      return;
+  async function handleSubmit() {
+    if (!isValid || submitting) return;
+    setSubmitting(true);
+    setLoginError(null);
+    try {
+      await signIn(email.trim(), password, keepLoggedIn);
+      router.replace('/dashboard');
+    } catch (error) {
+      setLoginError(
+        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+      );
+    } finally {
+      setSubmitting(false);
     }
-    signIn(keepLoggedIn);
-    router.replace('/dashboard');
   }
 
   return (
@@ -82,7 +83,7 @@ export default function LoginScreen() {
                 onChangeText={handleChangeEmail}
                 placeholder="Email"
                 keyboardType="email-address"
-                hasError={loginError}
+                hasError={loginError !== null}
                 tintErrorText={false}
               />
               <FormField
@@ -92,9 +93,9 @@ export default function LoginScreen() {
                 placeholder="Password"
                 secureTextEntry={!showPassword}
                 onToggleSecure={() => setShowPassword((s) => !s)}
-                hasError={loginError}
+                hasError={loginError !== null}
                 tintErrorText={false}
-                errorMessage={loginError ? 'Email atau password salah. Coba lagi.' : undefined}
+                errorMessage={loginError ?? undefined}
               />
             </View>
 
@@ -136,7 +137,7 @@ export default function LoginScreen() {
                   'font-inter-semibold text-[14px]',
                   isValid ? 'text-orange-500' : 'text-orange-700'
                 )}>
-                Login
+                {submitting ? 'Memproses...' : 'Login'}
               </Text>
             </Pressable>
 

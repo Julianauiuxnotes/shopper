@@ -3,7 +3,7 @@ import EyeIcon from '@/assets/images/figma/icon-eye.svg';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { useSettings } from '@/lib/settings-store';
+import { AuthError, useAuth } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 import { Stack, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -18,11 +18,13 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // transition (which doesn't animate on web at all). Two fields —
 // "Password baru" and "Konfirmasi password baru" — must match before
 // Simpan is enabled; a mismatch shows an inline error the same way Sign
-// Up's "Verifikasi Password" field does. On save, writes straight into
-// lib/settings-store's userProfile.password and closes the sheet.
+// Up's "Verifikasi Password" field does. On save, changes the account's
+// password on the server (lib/auth-store.tsx) and closes the sheet.
 export default function GantiPasswordScreen() {
   const router = useRouter();
-  const { userProfile, setUserProfile } = useSettings();
+  const { changePassword } = useAuth();
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [passwordBaru, setPasswordBaru] = React.useState('');
   const [konfirmasi, setKonfirmasi] = React.useState('');
   const [showPasswordBaru, setShowPasswordBaru] = React.useState(false);
@@ -99,16 +101,33 @@ export default function GantiPasswordScreen() {
                       Password tidak sama
                     </Text>
                   ) : null}
+                  {saveError ? (
+                    <Text className="font-inter-semibold text-[10px] text-red-500">
+                      {saveError}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
 
               <Pressable
-                onPress={() => {
-                  if (!isValid) return;
-                  setUserProfile({ ...userProfile, password: passwordBaru });
-                  close();
+                onPress={async () => {
+                  if (!isValid || saving) return;
+                  setSaving(true);
+                  setSaveError(null);
+                  try {
+                    await changePassword(passwordBaru);
+                    close();
+                  } catch (error) {
+                    setSaveError(
+                      error instanceof AuthError
+                        ? error.message
+                        : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+                    );
+                  } finally {
+                    setSaving(false);
+                  }
                 }}
-                disabled={!isValid}
+                disabled={!isValid || saving}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !isValid }}
                 className={cn(
@@ -120,7 +139,7 @@ export default function GantiPasswordScreen() {
                     'font-inter-semibold text-[14px]',
                     isValid ? 'text-orange-50' : 'text-orange-300'
                   )}>
-                  Simpan
+                  {saving ? 'Menyimpan...' : 'Simpan'}
                 </Text>
               </Pressable>
             </ScrollView>

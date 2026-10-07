@@ -1,6 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import ShareIcon from '@/assets/images/figma/icon-share.svg';
 import { Text } from '@/components/ui/text';
+import { useAuth } from '@/lib/auth-store';
 import { getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
 import { formatDateRange, formatIDR } from '@/lib/format';
 import { buildOrderFormLink } from '@/lib/order-form-link';
@@ -23,6 +24,7 @@ import { Image, Pressable, ScrollView, Share, View } from 'react-native';
 export default function EventDetailScreen() {
   const router = useRouter();
   const { getEvent } = useEvents();
+  const { shop } = useAuth();
   const {
     userProfile,
     adminWhatsapp,
@@ -111,30 +113,43 @@ export default function EventDetailScreen() {
           <Text className="font-inter-semibold text-[14px] text-black">{event.kodeEvent}</Text>
         </View>
 
-        {/* Tap the link to copy it; the icon opens the share sheet. */}
-        <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
-          <Text className="font-inter-semibold text-[10px] text-neutral-50">
-            Bagikan form order jastip
-          </Text>
-          <View className="flex-row items-center gap-[10px]">
-            <Pressable
-              onPress={handleCopyLink}
-              accessibilityRole="button"
-              accessibilityLabel="Salin link form order"
-              className="flex-1 rounded-[7px] bg-white p-[4px]">
-              <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
-                {linkCopied ? '✓ Link tersalin' : shareLink || 'Menyiapkan link...'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleShare}
-              accessibilityRole="button"
-              accessibilityLabel="Bagikan link form order"
-              hitSlop={8}>
-              <ShareIcon width={25} height={25} />
-            </Pressable>
+        {/* The customer order form is a Team feature. Tap the link to copy
+            it; the icon opens the share sheet. */}
+        {shop?.plan === 'team' ? (
+          <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
+            <Text className="font-inter-semibold text-[10px] text-neutral-50">
+              Bagikan form order jastip
+            </Text>
+            <View className="flex-row items-center gap-[10px]">
+              <Pressable
+                onPress={handleCopyLink}
+                accessibilityRole="button"
+                accessibilityLabel="Salin link form order"
+                className="flex-1 rounded-[7px] bg-white p-[4px]">
+                <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
+                  {linkCopied ? '✓ Link tersalin' : shareLink || 'Menyiapkan link...'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel="Bagikan link form order"
+                hitSlop={8}>
+                <ShareIcon width={25} height={25} />
+              </Pressable>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View className="gap-[4px] rounded-[10px] border border-orange-300 bg-orange-50 p-[10px]">
+            <Text className="font-inter-semibold text-[10px] text-orange-600">
+              Form order untuk customer
+            </Text>
+            <Text className="font-inter text-[10px] text-neutral-700">
+              Tersedia di paket Team. Ganti paket di Pengaturan Akun untuk membagikan link form
+              order ke customer.
+            </Text>
+          </View>
+        )}
 
         {event.fotoUri ? (
           <Image

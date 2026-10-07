@@ -3,7 +3,7 @@ import SplashDecoration from '@/assets/images/figma/splash-decoration.svg';
 import { Text } from '@/components/ui/text';
 import { useSettings } from '@/lib/settings-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link, Redirect } from 'expo-router';
+import { Link } from 'expo-router';
 import * as React from 'react';
 import { Image, type LayoutChangeEvent, Pressable, useWindowDimensions, View } from 'react-native';
 
@@ -38,13 +38,11 @@ export default function SplashScreen() {
     setSize({ width, height });
   }
 
-  const { keepLoggedIn, ready: settingsReady } = useSettings();
+  const { ready: settingsReady } = useSettings();
 
   const ready = size.width > 0 && size.height > 0 && settingsReady;
 
-  // "Tetap masuk" was ticked at the last login — skip the welcome screen.
-  if (settingsReady && keepLoggedIn) return <Redirect href="/dashboard" />;
-
+  // A logged-in user is sent on to the dashboard by components/auth-gate.tsx.
   return (
     <View className="flex-1 overflow-hidden bg-[#eaeaea]" style={{ height: windowHeight }} onLayout={handleLayout}>
       {ready ? (

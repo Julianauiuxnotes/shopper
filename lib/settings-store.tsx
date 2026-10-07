@@ -2,19 +2,16 @@ import * as React from 'react';
 import { createOrderInbox, type OrderInbox } from './order-inbox';
 import { storage } from './storage';
 
-// Persisted on-device via lib/storage.ts (AsyncStorage), same local
-// persistence as lib/events-store.tsx and the separate Cashly project's
-// own localStorage. TODO: migrate to Supabase once the backend
-// (fymscirqwnnlubepymgc.supabase.co) is unpaused/reconnected — this is
-// still single-device storage, not a real account system. Holds the
-// account profile captured at Sign Up (Nama, Nama Jastip, Email,
-// Password), editable from Pengaturan, plus the Pengaturan Publikasi
-// config (admin WhatsApp number + the event-publication opening message
-// template). This store just captures the values so the UI/config is
-// ready whenever real auth/backend (Supabase) is wired — note the
-// password is persisted as plain text here, same as it already lived in
-// plain memory, acceptable only because this is a local-only prototype
-// with no real backend yet.
+// The device's copy of the account and shop settings, persisted via
+// lib/storage.ts (AsyncStorage). Screens read names, phone numbers and
+// the Pengaturan Publikasi config from here.
+//
+// Since real accounts arrived, the server is the source of truth for the
+// account profile and shop settings: lib/auth-store.tsx fills this store
+// after login and after each save. What still lives only here is
+// device-local: the logo, the order inbox, and the "Tetap masuk" flag.
+// `UserProfile.password` is always '' now; the field remains only because
+// the type is shared across screens.
 
 type UserProfile = {
   nama: string;
@@ -88,7 +85,8 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
       const savedProfile = await storage.get('userProfile', BLANK_PROFILE);
       const savedWhatsapp = await storage.get('adminWhatsapp', '');
       const savedOpening = await storage.get('publikasiOpening', '');
-      setUserProfile(savedProfile);
+      // Older versions saved the password here in plain text; drop it.
+      setUserProfile({ ...savedProfile, password: '' });
       setAdminWhatsapp(savedWhatsapp);
       setPublikasiOpening(savedOpening);
       setKeepLoggedIn(await storage.get('keepLoggedIn', false));
@@ -140,15 +138,8 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
     setKeepLoggedIn(remember);
   }
 
-  // Shared by the Pengaturan "Keluar" button and the dashboard drawer's
-  // own "Keluar" shortcut. Deliberately does NOT clear userProfile: with
-  // no real backend yet, this local profile IS the only copy of the
-  // account's credentials (see sign-up.tsx's TODO) — wiping it here would
-  // permanently delete the account the user just signed up with, since
-  // login.tsx's email/password check has nothing else to compare
-  // against. It only drops the "Tetap masuk" flag, so the next app open
-  // asks for the password again; once Supabase auth is wired, this is
-  // where a real supabase.auth.signOut() call belongs.
+  // Drops the "Tetap masuk" flag. Called by lib/auth-store.tsx's signOut,
+  // which also ends the server session.
   function signOut() {
     setKeepLoggedIn(false);
   }

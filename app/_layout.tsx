@@ -1,6 +1,8 @@
 import '@/global.css';
 
 import { IncomingOrdersSync } from '@/components/incoming-orders-sync';
+import { AuthGate } from '@/components/auth-gate';
+import { AuthProvider } from '@/lib/auth-store';
 import { EventsProvider } from '@/lib/events-store';
 import { SettingsProvider } from '@/lib/settings-store';
 import { NAV_THEME } from '@/lib/theme';
@@ -60,17 +62,20 @@ export default function RootLayout() {
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <EventsProvider>
         <SettingsProvider>
-          <IncomingOrdersSync />
-          {/* Web only: the app is designed for phone widths, but a desktop
+          <AuthProvider>
+            <AuthGate />
+            <IncomingOrdersSync />
+            {/* Web only: the app is designed for phone widths, but a desktop
               browser window has no such constraint by default. Center it in
               a phone-sized frame so `expo start --web` is a faithful
               preview. Native builds (Platform.OS !== 'web') are untouched. */}
-          <View
-            className={
-              Platform.OS === 'web' ? 'mx-auto w-full max-w-[430px] flex-1 bg-white' : 'flex-1'
-            }>
-            <Stack screenOptions={{ headerShown: false, title: 'Shopper' }} />
-          </View>
+            <View
+              className={
+                Platform.OS === 'web' ? 'mx-auto w-full max-w-[430px] flex-1 bg-white' : 'flex-1'
+              }>
+              <Stack screenOptions={{ headerShown: false, title: 'Shopper' }} />
+            </View>
+          </AuthProvider>
         </SettingsProvider>
       </EventsProvider>
       <PortalHost />

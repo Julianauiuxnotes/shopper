@@ -4,6 +4,7 @@ import { SideDrawer } from '@/components/ui/side-drawer';
 import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
 import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
+import { useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
@@ -25,7 +26,8 @@ import { Pressable, ScrollView, View } from 'react-native';
 export default function DashboardScreen() {
   const router = useRouter();
   const { events } = useEvents();
-  const { userProfile, signOut } = useSettings();
+  const { userProfile } = useSettings();
+  const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
 
@@ -175,12 +177,13 @@ export default function DashboardScreen() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() =>
-                    close(() => {
-                      signOut();
-                      router.replace('/');
-                    })
-                  }
+                  // Signs out straight away rather than after the drawer's
+                  // closing animation: components/auth-gate.tsx then sends
+                  // the user to the welcome screen on its own.
+                  onPress={() => {
+                    signOut();
+                    close();
+                  }}
                   className="w-full items-start px-[10px] py-[16px]">
                   <Text className="font-inter-semibold text-[16px] text-white">Keluar</Text>
                 </Pressable>

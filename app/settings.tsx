@@ -2,6 +2,8 @@ import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.sv
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { compressLogo } from '@/lib/compress-image';
+import { TeamSection } from '@/components/team-section';
+import { AuthError, useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import * as ImagePicker from 'expo-image-picker';
@@ -45,7 +47,13 @@ const LOGO_MAX_STORED_BYTES = 500 * 1024;
 // instead, which has its own confirm-match flow.
 export default function SettingsScreen() {
   const router = useRouter();
-  const { userProfile, setUserProfile, logoJastip, setLogoJastip, ready } = useSettings();
+  const { userProfile, logoJastip, setLogoJastip, ready } = useSettings();
+  const { role, updateShop, updateMyName } = useAuth();
+  // Shop settings (shop name, phone, logo) are the owner's to change; an
+  // invited member can only edit their own name.
+  const isOwner = role === 'owner';
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [logoError, setLogoError] = React.useState<string | null>(null);
 
   // Saves straight to the store on pick (no Simpan step), like the photo
@@ -106,14 +114,16 @@ export default function SettingsScreen() {
   // at this component's first render — if that happens before the
   // store's persisted profile finishes loading (see lib/settings-store.tsx),
   // these drafts would otherwise permanently lock in the pre-load empty
-  // strings. Re-syncs once, exactly when loading completes.
+  // strings. Re-syncs when loading completes, and again whenever the
+  // profile itself changes (it is refreshed from the server after login
+  // and after each save, see lib/auth-store.tsx).
   React.useEffect(() => {
     if (!ready) return;
     setNamaDraft(userProfile.nama);
     setNamaJastipDraft(userProfile.namaJastip);
     setEmailDraft(userProfile.email);
     setTeleponDraft(userProfile.telepon ?? '');
-  }, [ready]);
+  }, [ready, userProfile.nama, userProfile.namaJastip, userProfile.email, userProfile.telepon]);
 
   const isValid =
     namaDraft.trim().length > 0 &&
@@ -126,16 +136,24 @@ export default function SettingsScreen() {
     emailDraft !== userProfile.email ||
     teleponDraft !== (userProfile.telepon ?? '');
 
-  function handleSave() {
-    if (!isValid) return;
-    setUserProfile({
-      ...userProfile,
-      nama: namaDraft.trim(),
-      namaJastip: namaJastipDraft.trim(),
-      email: emailDraft.trim(),
-      telepon: teleponDraft,
-    });
-    setJustSaved(true);
+  // Saves to the server; lib/auth-store.tsx then refreshes the local
+  // store from it. Needs a connection until offline saving arrives with
+  // step 2 of the sync plan.
+  async function handleSave() {
+    if (!isValid || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (namaDraft.trim() !== userProfile.nama) await updateMyName(namaDraft.trim());
+      if (isOwner) await updateShop({ name: namaJastipDraft.trim(), telepon: teleponDraft });
+      setJustSaved(true);
+    } catch (error) {
+      setSaveError(
+        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   function withDirtyReset<T>(setter: (value: T) => void) {
@@ -233,6 +251,7 @@ export default function SettingsScreen() {
               <Input
                 value={namaJastipDraft}
                 onChangeText={withDirtyReset(setNamaJastipDraft)}
+                editable={isOwner}
                 placeholder="Nama Jastip"
                 placeholderTextColor="#9ca3af"
                 className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
@@ -246,6 +265,9 @@ export default function SettingsScreen() {
               <Input
                 value={emailDraft}
                 onChangeText={withDirtyReset(setEmailDraft)}
+                // The login email; changing it needs an email-confirmation
+                // flow that doesn't exist yet.
+                editable={false}
                 placeholder="Email"
                 placeholderTextColor="#9ca3af"
                 keyboardType="email-address"
@@ -265,6 +287,7 @@ export default function SettingsScreen() {
             <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
             <Input
               value={teleponDraft}
+              editable={isOwner}
               onChangeText={withDirtyReset((value: string) =>
                 setTeleponDraft(value.replace(/\D/g, '').replace(/^0+/, ''))
               )}
@@ -282,9 +305,7 @@ export default function SettingsScreen() {
         <View className="gap-[4px]">
           <Text className="font-inter-bold text-[12px] text-neutral-800">Password</Text>
           <View className="flex-row items-center justify-between rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-            <Text className="font-inter text-[12px] text-neutral-800">
-              {'•'.repeat(Math.min(userProfile.password.length || 8, 12))}
-            </Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{'•'.repeat(8)}</Text>
             <Link href="/ganti-password" asChild>
               <Pressable hitSlop={8}>
                 <Text className="font-inter-semibold text-[12px] text-orange-500 underline">
@@ -297,9 +318,9 @@ export default function SettingsScreen() {
 
         <Pressable
           onPress={handleSave}
-          disabled={!isValid}
+          disabled={!isValid || saving}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !isValid }}
+          accessibilityState={{ disabled: !isValid || saving, busy: saving }}
           className={cn(
             'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
             isValid ? 'bg-orange-500' : 'bg-orange-200'
@@ -309,13 +330,24 @@ export default function SettingsScreen() {
               'font-inter-semibold text-[14px]',
               isValid ? 'text-orange-50' : 'text-orange-300'
             )}>
-            Simpan
+            {saving ? 'Menyimpan...' : 'Simpan'}
           </Text>
         </Pressable>
 
         {justSaved && !isDirty ? (
           <Text className="text-center font-inter text-[12px] text-orange-500">✓ Tersimpan</Text>
         ) : null}
+        {saveError ? (
+          <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
+        ) : null}
+        {!isOwner ? (
+          <Text className="text-center font-inter text-[10px] text-neutral-500">
+            Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.
+          </Text>
+        ) : null}
+
+        <View className="h-px w-full bg-neutral-300" />
+        <TeamSection />
       </ScrollView>
     </KeyboardAvoidingView>
   );

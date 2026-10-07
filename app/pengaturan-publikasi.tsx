@@ -1,6 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { AuthError, useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'expo-router';
@@ -44,8 +45,12 @@ const SAMPLE_EVENT = {
 // photo would appear" instead.
 export default function PengaturanPublikasiScreen() {
   const router = useRouter();
-  const { adminWhatsapp, setAdminWhatsapp, publikasiOpening, setPublikasiOpening, ready } =
-    useSettings();
+  const { adminWhatsapp, publikasiOpening, ready } = useSettings();
+  const { role, updateShop } = useAuth();
+  // These are shop settings: only the owner may change them.
+  const isOwner = role === 'owner';
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [whatsappDraft, setWhatsappDraft] = React.useState(adminWhatsapp);
   const [openingDraft, setOpeningDraft] = React.useState(publikasiOpening);
   const [justSaved, setJustSaved] = React.useState(false);
@@ -57,16 +62,26 @@ export default function PengaturanPublikasiScreen() {
     if (!ready) return;
     setWhatsappDraft(adminWhatsapp);
     setOpeningDraft(publikasiOpening);
-  }, [ready]);
+  }, [ready, adminWhatsapp, publikasiOpening]);
 
-  const isValid = whatsappDraft.trim().length > 0;
+  const isValid = isOwner && whatsappDraft.trim().length > 0;
   const isDirty = whatsappDraft !== adminWhatsapp || openingDraft !== publikasiOpening;
 
-  function handleSave() {
-    if (!isValid) return;
-    setAdminWhatsapp(whatsappDraft.trim());
-    setPublikasiOpening(openingDraft);
-    setJustSaved(true);
+  // Saves to the server; lib/auth-store.tsx then refreshes the local store.
+  async function handleSave() {
+    if (!isValid || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateShop({ adminWhatsapp: whatsappDraft.trim(), publikasiOpening: openingDraft });
+      setJustSaved(true);
+    } catch (error) {
+      setSaveError(
+        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   function withDirtyReset<T>(setter: (value: T) => void) {
@@ -175,12 +190,20 @@ export default function PengaturanPublikasiScreen() {
               'font-inter-semibold text-[14px]',
               isValid ? 'text-orange-50' : 'text-orange-300'
             )}>
-            Simpan
+            {saving ? 'Menyimpan...' : 'Simpan'}
           </Text>
         </Pressable>
 
         {justSaved && !isDirty ? (
           <Text className="text-center font-inter text-[12px] text-orange-500">✓ Tersimpan</Text>
+        ) : null}
+        {saveError ? (
+          <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
+        ) : null}
+        {!isOwner ? (
+          <Text className="text-center font-inter text-[10px] text-neutral-500">
+            Pengaturan publikasi hanya bisa diubah oleh pemilik toko.
+          </Text>
         ) : null}
       </ScrollView>
     </KeyboardAvoidingView>

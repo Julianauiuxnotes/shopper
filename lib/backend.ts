@@ -13,6 +13,8 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_KEY ?? 'sb_publishable_07a-bKsjQfSQSuH-Vi9cjQ_c_fktXxc';
 
+export { SUPABASE_URL, SUPABASE_KEY };
+
 export const backendConfigured = SUPABASE_URL.length > 0 && SUPABASE_KEY.length > 0;
 
 /**
