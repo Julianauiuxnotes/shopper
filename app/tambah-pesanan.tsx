@@ -1,22 +1,49 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import CaretDownIcon from '@/assets/images/figma/icon-caret-down.svg';
+import TrashIcon from '@/assets/images/figma/icon-trash.svg';
+import XCircleOrangeIcon from '@/assets/images/figma/icon-x-circle-orange.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { useSettings } from '@/lib/settings-store';
+import { parseOrderForm } from '@/lib/parse-order-form';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   View,
 } from 'react-native';
+
+// The example order form from Figma's "Contoh rekomendasi order form"
+// pop-up (node 199:794), as [label, value] rows so the pop-up can bold
+// the labels. "Salin contoh form order" copies it as plain text for the
+// jastiper to send to customers; lib/parse-order-form.ts reads this
+// format, including the "[Nama produk (Jumlah)] contoh →" hint.
+const CONTOH_GREETING = 'Hi dear, yuk lengkapi form pesanan dibawah ini ya';
+const CONTOH_ROWS = [
+  ['Nama', 'Anjani'],
+  ['Alamat', 'Perumahan Galaxy, blok Jupiter no. 2, Bandung, 40524'],
+  ['No. Whatsapp', '0851211151167'],
+  [
+    'List pesanan',
+    '[Nama produk (Jumlah)] contoh → Herborist lotion Strawberry (1), Wardah cushion shade N21 (1)',
+  ],
+] as const;
+const CONTOH_FORM_PESANAN = [
+  CONTOH_GREETING,
+  '',
+  ...CONTOH_ROWS.map(([label, value]) => `${label}: ${value}`),
+].join('\n');
 
 const FEE_TYPE_OPTIONS = [
   ['percent', 'Pakai %'],
@@ -61,10 +88,9 @@ function itemTotals(item: ItemDraft) {
 }
 
 // Figma section TAMBAH PESANAN MANUAL, node 53:3251 (empty) / 53:3323 /
-// 53:3395 (filled, 1 and 2 items). The "Order form" paste box captures
-// raw text only — TODO: parse pasted order text into the fields below
-// automatically; that's a distinct feature (text extraction) not built
-// here. "Nomor order" shows the real order number this will get (not
+// 53:3395 (filled, 1 and 2 items). The "Order form" paste box reads the
+// pasted text into the fields below (lib/parse-order-form.ts).
+// "Nomor order" shows the real order number this will get (not
 // the mockup's literal "Auto" placeholder) since it's fully
 // deterministic from the event's existing order count.
 export default function TambahPesananScreen() {
@@ -82,6 +108,106 @@ export default function TambahPesananScreen() {
     'instant'
   );
   const [items, setItems] = React.useState<ItemDraft[]>([blankItem()]);
+  // What the last "Terapkan" managed to fill, for the note under the
+  // box; null until it has been applied (and again once the text changes).
+  const [autoFilled, setAutoFilled] = React.useState<string[] | null>(null);
+
+  // "Contoh form pesanan": a pop-up (Figma node 199:794) with the
+  // recommended order-form format, which the jastiper can copy and send
+  // to customers to fill in.
+  const [showContoh, setShowContoh] = React.useState(false);
+  // Fade driven by hand rather than Modal's own animationType, so it's the
+  // same eased fade in and out on web and native — and so the pop-up stays
+  // mounted while it fades out (closeContoh only hides it afterwards).
+  // The same 0→1 value also eases the card up 12px and from 96% size, so
+  // it settles into place instead of just blinking on.
+  const contohOpacity = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (!showContoh) return;
+    Animated.timing(contohOpacity, {
+      toValue: 1,
+      duration: 360,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [showContoh, contohOpacity]);
+
+  function closeContoh() {
+    Animated.timing(contohOpacity, {
+      toValue: 0,
+      duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: false,
+    }).start(() => setShowContoh(false));
+  }
+  const [contohCopied, setContohCopied] = React.useState(false);
+
+  async function handleSalinContoh() {
+    if (Platform.OS === 'web') {
+      try {
+        await navigator.clipboard.writeText(CONTOH_FORM_PESANAN);
+        setContohCopied(true);
+      } catch {
+        // clipboard blocked — the text is still on screen to select by hand.
+      }
+      return;
+    }
+    // No clipboard module in this app; the share sheet offers "Copy" and
+    // can send the template straight to a chat.
+    try {
+      await Share.share({ message: CONTOH_FORM_PESANAN });
+    } catch {
+      // dismissed
+    }
+  }
+
+  function handleChangeOrderForm(text: string) {
+    setOrderFormText(text);
+    setAutoFilled(null);
+  }
+
+  const canApplyOrderForm = orderFormText.trim().length > 0;
+
+  // "Terapkan": reads the pasted order-form text
+  // (lib/parse-order-form.ts) and fills every field it recognises;
+  // unrecognised fields keep what they had. Recognised products replace
+  // the whole list — Harga and Fee Jastip are the jastiper's own numbers
+  // and are still filled in by hand. Only on the button, not while
+  // typing, so pasting or editing the text never changes the form by
+  // itself.
+  function handleApplyOrderForm() {
+    if (!canApplyOrderForm) return;
+    const parsed = parseOrderForm(orderFormText);
+    const filled: string[] = [];
+    if (parsed.nama) {
+      setNama(parsed.nama);
+      filled.push('Nama');
+    }
+    if (parsed.alamat) {
+      setAlamat(parsed.alamat);
+      filled.push('Alamat');
+    }
+    if (parsed.whatsapp) {
+      setWhatsapp(parsed.whatsapp);
+      filled.push('No. Whatsapp');
+    }
+    if (parsed.metodePengiriman) {
+      setMetodePengiriman(parsed.metodePengiriman);
+      filled.push('Metode pengiriman');
+    }
+    if (parsed.items.length > 0) {
+      setItems(
+        parsed.items.map((it) => ({
+          ...blankItem(),
+          namaProduk: it.namaProduk,
+          jumlah: String(it.jumlah),
+        }))
+      );
+      filled.push(`${parsed.items.length} produk`);
+    }
+    setAutoFilled(filled);
+  }
   // Anchored dropdown (not a centered modal): measures the tapped
   // trigger's on-screen position so the options panel renders directly
   // below it, like a real <select>. `feeTriggerRefs` holds one ref per
@@ -105,6 +231,11 @@ export default function TambahPesananScreen() {
 
   function updateItem(key: string, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  }
+
+  function removeItem(key: string) {
+    setItems((prev) => prev.filter((it) => it.key !== key));
+    delete feeTriggerRefs.current[key];
   }
 
   const validItems = items.filter(
@@ -212,23 +343,77 @@ export default function TambahPesananScreen() {
             </Text>
           </View>
 
-          <View className="gap-[4px]">
+          {/* Figma node 53:3315. */}
+          <View className="gap-[10px]">
+            <View className="gap-[4px]">
+              <Text className="font-inter-bold text-[14px] text-neutral-800">
+                Copy-paste form pesanan
+              </Text>
+              <Text className="font-inter text-[11px] text-neutral-600">
+                Copy paste chat pesanan dari whatsapp disini dan terapkan untuk secara otomatis
+                mengisi form pesanan.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setContohCopied(false);
+                setShowContoh(true);
+              }}
+              accessibilityRole="button"
+              className="w-[166px] items-center justify-center rounded-[8px] border border-neutral-800 bg-neutral-50 p-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Contoh form pesanan</Text>
+            </Pressable>
             <Text className="font-inter text-[12px] text-neutral-800">Order form</Text>
-            {/* TODO: parse pasted order text into the fields below automatically */}
-            <Input
-              value={orderFormText}
-              onChangeText={setOrderFormText}
-              placeholder="Copy Paste text order form disini."
-              placeholderTextColor="#9ca3af"
-              multiline
-              textAlignVertical="top"
-              className="h-[114px] rounded-[8px] border-neutral-400 bg-white p-[10px] text-[12px] text-neutral-800 shadow-none"
-            />
+            {/* The height lives on this wrapper, not the Input: the shared
+                Input's own `sm:h-9` wins over a height class on screens
+                640px and wider, which squashed this box to one line (36px)
+                in a desktop browser while phones showed the full 114px. */}
+            <View className="h-[114px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Input
+                value={orderFormText}
+                onChangeText={handleChangeOrderForm}
+                placeholder="Copy Paste text order form disini."
+                placeholderTextColor="#9ca3af"
+                multiline
+                textAlignVertical="top"
+                style={{ height: '100%' }}
+                className="flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+              />
+            </View>
+            <Pressable
+              onPress={handleApplyOrderForm}
+              disabled={!canApplyOrderForm}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canApplyOrderForm }}
+              className={cn(
+                'items-center rounded-[8px] border p-[10px]',
+                canApplyOrderForm ? 'border-orange-400 bg-orange-50' : 'border-orange-200 bg-white'
+              )}>
+              <Text
+                className={cn(
+                  'font-inter text-[12px]',
+                  canApplyOrderForm ? 'text-orange-500' : 'text-orange-300'
+                )}>
+                Terapkan
+              </Text>
+            </Pressable>
+            {autoFilled ? (
+              <Text className="font-inter text-[10px] text-neutral-500">
+                {autoFilled.length > 0
+                  ? `Terisi otomatis: ${autoFilled.join(', ')}. Cek lagi, lalu isi Harga dan Fee Jastip.`
+                  : 'Belum ada data yang dikenali. Lihat "Contoh form pesanan" untuk format yang bisa dibaca.'}
+              </Text>
+            ) : null}
           </View>
 
-          <Text className="font-inter text-[12px] text-neutral-800">
-            Atau isi manual form dibawah ini:
-          </Text>
+          <View className="h-px w-full bg-neutral-300" />
+
+          <View className="gap-[6px]">
+            <Text className="font-inter text-[12px] text-neutral-800">
+              Atau isi manual form dibawah ini:
+            </Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">Form pesanan manual</Text>
+          </View>
 
           <View className="gap-[4px]">
             <Text className="font-inter text-[12px] text-neutral-800">Nama</Text>
@@ -428,6 +613,19 @@ export default function TambahPesananScreen() {
                     </View>
                   </View>
                 </View>
+
+                {/* Not on the only row: the form always keeps one item to
+                    fill in. */}
+                {items.length > 1 ? (
+                  <Pressable
+                    onPress={() => removeItem(item.key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Hapus produk ${item.namaProduk || index + 1}`}
+                    className="flex-row items-center gap-[4px] self-start rounded-[8px] border border-neutral-800 bg-neutral-50 p-[10px]">
+                    <TrashIcon width={16} height={16} />
+                    <Text className="font-inter text-[12px] text-neutral-800">Hapus</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ))}
 
@@ -491,6 +689,86 @@ export default function TambahPesananScreen() {
             </View>
           ) : null}
         </Pressable>
+      </Modal>
+
+      <Modal visible={showContoh} transparent animationType="none" onRequestClose={closeContoh}>
+        {/* Inline style only: NativeWind classes don't apply to Animated.View. */}
+        <Animated.View style={{ flex: 1, opacity: contohOpacity }}>
+          <Pressable
+            onPress={closeContoh}
+            className="flex-1 items-center justify-center bg-black/50 p-[20px]">
+            {/* Inner Pressable with no onPress: swallows taps on the card so
+              only the backdrop dismisses. */}
+            <Animated.View
+              style={{
+                width: '100%',
+                maxWidth: 330,
+                transform: [
+                  {
+                    translateY: contohOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                  {
+                    scale: contohOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.96, 1],
+                    }),
+                  },
+                ],
+              }}>
+              <Pressable className="w-full items-center gap-[10px] rounded-[8px] bg-white p-[20px]">
+                <Pressable
+                  onPress={closeContoh}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tutup"
+                  hitSlop={8}
+                  className="self-end p-[2px]">
+                  <XCircleOrangeIcon width={19.5} height={19.5} />
+                </Pressable>
+                <View className="w-full gap-[4px]">
+                  <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">
+                    Contoh rekomendasi order form
+                  </Text>
+                  <Text className="font-inter text-[12px] text-neutral-600">
+                    Kamu bisa modifikasi form pesanan dibawah ini tapi pastikan form pesanan
+                    memiliki komponen data Nama, Alamat, No.Whatsapp, dan List pesanan seperti
+                    dibawah ini agar data bisa tersalin secara otomatis dan tepat ke form di
+                    aplikasi Shopper.
+                  </Text>
+                </View>
+                <View className="w-full">
+                  <Text className="font-inter text-[14px] text-[#5d5d5d]">
+                    <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">Contoh</Text>:
+                  </Text>
+                  <Text selectable className="mt-[14px] font-inter text-[12px] text-[#5d5d5d]">
+                    {CONTOH_GREETING}
+                  </Text>
+                  <View className="mt-[12px]">
+                    {CONTOH_ROWS.map(([label, value]) => (
+                      <Text
+                        key={label}
+                        selectable
+                        className="font-inter text-[12px] text-[#5d5d5d]">
+                        <Text className="font-inter-bold text-[12px] text-[#5d5d5d]">{label}</Text>:{' '}
+                        {value}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+                <Pressable
+                  onPress={handleSalinContoh}
+                  accessibilityRole="button"
+                  className="mt-[14px] w-[187px] items-center justify-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                  <Text className="text-center font-inter text-[12px] text-orange-500">
+                    {contohCopied ? '✓ Contoh tersalin' : 'Salin contoh form order'}
+                  </Text>
+                </Pressable>
+              </Pressable>
+            </Animated.View>
+          </Pressable>
+        </Animated.View>
       </Modal>
     </>
   );

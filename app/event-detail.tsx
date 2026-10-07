@@ -3,7 +3,11 @@ import ShareIcon from '@/assets/images/figma/icon-share.svg';
 import { Text } from '@/components/ui/text';
 import { getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
 import { formatDateRange, formatIDR } from '@/lib/format';
+import { buildOrderFormLink } from '@/lib/order-form-link';
+import { useSettings } from '@/lib/settings-store';
+import * as Clipboard from 'expo-clipboard';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import * as React from 'react';
 import { Image, Pressable, ScrollView, Share, View } from 'react-native';
 
 // Figma section BUKA EVENT JASTIP, node 53:3113 "After click Simpan" —
@@ -16,29 +20,64 @@ import { Image, Pressable, ScrollView, Share, View } from 'react-native';
 // one exists (set via expo-image-picker in buka-event-jastip.tsx), and
 // the whole block is omitted for events with no photo (it's optional),
 // rather than showing a fake placeholder.
-// Hidden for now (user request, 2026-10-05): the customer order form the
-// link points to isn't built yet. Flip to true to bring the section back.
-const SHOW_SHARE_LINK = false;
-
 export default function EventDetailScreen() {
   const router = useRouter();
   const { getEvent } = useEvents();
+  const {
+    userProfile,
+    adminWhatsapp,
+    orderInbox,
+    ensureOrderInbox,
+    ready: settingsReady,
+  } = useSettings();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const event = id ? getEvent(id) : undefined;
 
-  const shareLink = event ? `https://www.shopper.app/jastiper-order-form/${event.kodeEvent}` : '';
+  // The customer order form for this event (app/o.tsx). The link carries
+  // the event's details itself (lib/order-form-link.ts) plus the id of
+  // this jastiper's order inbox, where submitted orders are sent — so
+  // there's no link until the inbox exists. The contact number shown on
+  // the customer's bukti is the admin number from Pengaturan Publikasi if
+  // set, else the jastiper's own from Pengaturan.
+  React.useEffect(() => {
+    if (settingsReady && !orderInbox) ensureOrderInbox().catch(() => {});
+  }, [settingsReady, orderInbox, ensureOrderInbox]);
+  const shareLink =
+    event && orderInbox
+      ? buildOrderFormLink(event, {
+          namaJastip: userProfile.namaJastip || 'Jastip by Juli',
+          whatsapp: adminWhatsapp || userProfile.telepon || '',
+          inboxId: orderInbox.id,
+        })
+      : '';
+  const [linkCopied, setLinkCopied] = React.useState(false);
   const lunasOrders = event?.orders.filter((o) => o.statusPembayaran === 'lunas') ?? [];
   const belumOrders = event?.orders.filter((o) => o.statusPembayaran === 'belum') ?? [];
   // Receivable per status: what customers have paid vs. still owe.
   const lunasTotal = lunasOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
   const belumTotal = belumOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
 
-  async function handleShare() {
+  async function handleCopyLink() {
     if (!shareLink) return;
     try {
-      await Share.share({ message: shareLink });
+      await Clipboard.setStringAsync(shareLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
     } catch {
-      // user dismissed the share sheet — nothing to do
+      // clipboard blocked — the share icon still works.
+    }
+  }
+
+  async function handleShare() {
+    if (!shareLink || !event) return;
+    try {
+      await Share.share({
+        message: `Yuk order di ${event.namaAcara}! Isi form pesanan di sini:\n${shareLink}`,
+      });
+    } catch {
+      // No share sheet (most desktop browsers) or dismissed; copying is
+      // the useful fallback either way.
+      handleCopyLink();
     }
   }
 
@@ -72,23 +111,30 @@ export default function EventDetailScreen() {
           <Text className="font-inter-semibold text-[14px] text-black">{event.kodeEvent}</Text>
         </View>
 
-        {SHOW_SHARE_LINK ? (
-          <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
-            <Text className="font-inter-semibold text-[10px] text-neutral-50">
-              Share form order jastip link
-            </Text>
-            <View className="flex-row items-center gap-[10px]">
-              <View className="flex-1 rounded-[7px] bg-white p-[4px]">
-                <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
-                  {shareLink}
-                </Text>
-              </View>
-              <Pressable onPress={handleShare} hitSlop={8}>
-                <ShareIcon width={25} height={25} />
-              </Pressable>
-            </View>
+        {/* Tap the link to copy it; the icon opens the share sheet. */}
+        <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
+          <Text className="font-inter-semibold text-[10px] text-neutral-50">
+            Bagikan form order jastip
+          </Text>
+          <View className="flex-row items-center gap-[10px]">
+            <Pressable
+              onPress={handleCopyLink}
+              accessibilityRole="button"
+              accessibilityLabel="Salin link form order"
+              className="flex-1 rounded-[7px] bg-white p-[4px]">
+              <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
+                {linkCopied ? '✓ Link tersalin' : shareLink || 'Menyiapkan link...'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleShare}
+              accessibilityRole="button"
+              accessibilityLabel="Bagikan link form order"
+              hitSlop={8}>
+              <ShareIcon width={25} height={25} />
+            </Pressable>
           </View>
-        ) : null}
+        </View>
 
         {event.fotoUri ? (
           <Image
@@ -205,6 +251,9 @@ function OrderListSection({
                 <View className="gap-[2px]">
                   <Text className="font-inter-semibold text-[12px] text-neutral-800">
                     {order.orderNumber} · {order.nama}
+                    {order.sumber === 'customer' && order.totalPembayaran === 0
+                      ? ' · dari form customer, isi harga'
+                      : ''}
                   </Text>
                   <Text className="font-inter text-[10px] text-neutral-600">
                     {order.items.length} barang · {formatIDR(order.totalPembayaran)}

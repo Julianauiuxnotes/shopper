@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
+import { compressPhoto } from '@/lib/compress-image';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import { cn } from '@/lib/utils';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
@@ -180,7 +181,13 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
       return;
     }
 
-    setFotoStrukDraft(asset.uri);
+    // Shrunk to ~200 KB before it's stored anywhere (lib/compress-image.ts).
+    try {
+      const compressed = await compressPhoto(asset);
+      setFotoStrukDraft(compressed.uri);
+    } catch {
+      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+    }
   }
 
   function handleBuatPesanan(close: () => void) {
@@ -263,7 +270,13 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
       return;
     }
 
-    setAddFotoStrukDraft(asset.uri);
+    // Shrunk to ~200 KB before it's stored anywhere (lib/compress-image.ts).
+    try {
+      const compressed = await compressPhoto(asset);
+      setAddFotoStrukDraft(compressed.uri);
+    } catch {
+      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+    }
   }
 
   function handleAddItem(close: () => void, dibeli: boolean) {

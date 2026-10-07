@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { compressPhoto } from '@/lib/compress-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -60,7 +61,13 @@ export default function BukaEventJastipScreen() {
       return;
     }
 
-    setFotoUri(asset.uri);
+    // Shrunk to ~200 KB before it's stored anywhere (lib/compress-image.ts).
+    try {
+      const compressed = await compressPhoto(asset);
+      setFotoUri(compressed.uri);
+    } catch {
+      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+    }
   }
 
   function handleSimpan() {

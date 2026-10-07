@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createOrderInbox, type OrderInbox } from './order-inbox';
 import { storage } from './storage';
 
 // Persisted on-device via lib/storage.ts (AsyncStorage), same local
@@ -45,6 +46,12 @@ type SettingsContextValue = {
   // URL that dies with the tab, so it wouldn't survive a reload.
   logoJastip: string | null;
   setLogoJastip: (value: string | null) => void;
+  // Where customers' order-form submissions arrive (lib/order-inbox.ts).
+  // Null until the first order-form link is made; ensureOrderInbox()
+  // creates it once and it then stays for the life of the account, since
+  // links already shared point at it.
+  orderInbox: OrderInbox | null;
+  ensureOrderInbox: () => Promise<OrderInbox>;
   adminWhatsapp: string;
   setAdminWhatsapp: (value: string) => void;
   publikasiOpening: string;
@@ -68,6 +75,9 @@ const BLANK_PROFILE: UserProfile = { nama: '', namaJastip: '', email: '', passwo
 function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = React.useState<UserProfile>(BLANK_PROFILE);
   const [logoJastip, setLogoJastip] = React.useState<string | null>(null);
+  const [orderInbox, setOrderInbox] = React.useState<OrderInbox | null>(null);
+  // Shared by concurrent callers so two screens can't each make an inbox.
+  const inboxPromise = React.useRef<Promise<OrderInbox> | null>(null);
   const [adminWhatsapp, setAdminWhatsapp] = React.useState('');
   const [publikasiOpening, setPublikasiOpening] = React.useState('');
   const [keepLoggedIn, setKeepLoggedIn] = React.useState(false);
@@ -83,6 +93,7 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
       setPublikasiOpening(savedOpening);
       setKeepLoggedIn(await storage.get('keepLoggedIn', false));
       setLogoJastip(await storage.get<string | null>('logoJastip', null));
+      setOrderInbox(await storage.get<OrderInbox | null>('orderInbox', null));
       setReady(true);
     })();
   }, []);
@@ -102,9 +113,25 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (ready) storage.set('logoJastip', logoJastip);
   }, [logoJastip, ready]);
+  React.useEffect(() => {
+    if (ready) storage.set('orderInbox', orderInbox);
+  }, [orderInbox, ready]);
+
+  const ensureOrderInbox = React.useCallback(() => {
+    if (orderInbox) return Promise.resolve(orderInbox);
+    inboxPromise.current ??= createOrderInbox().then((inbox) => {
+      setOrderInbox(inbox);
+      return inbox;
+    });
+    return inboxPromise.current;
+  }, [orderInbox]);
 
   function resetBusinessSettings() {
     setLogoJastip(null);
+    // A new account gets its own inbox; the old account's links stop
+    // delivering here.
+    setOrderInbox(null);
+    inboxPromise.current = null;
     setAdminWhatsapp('');
     setPublikasiOpening('');
   }
@@ -136,13 +163,24 @@ function SettingsProvider({ children }: { children: React.ReactNode }) {
       signOut,
       logoJastip,
       setLogoJastip,
+      orderInbox,
+      ensureOrderInbox,
       adminWhatsapp,
       setAdminWhatsapp,
       publikasiOpening,
       setPublikasiOpening,
       ready,
     }),
-    [userProfile, keepLoggedIn, logoJastip, adminWhatsapp, publikasiOpening, ready]
+    [
+      userProfile,
+      keepLoggedIn,
+      logoJastip,
+      orderInbox,
+      ensureOrderInbox,
+      adminWhatsapp,
+      publikasiOpening,
+      ready,
+    ]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

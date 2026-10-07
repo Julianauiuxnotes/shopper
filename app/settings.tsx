@@ -1,6 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { compressLogo } from '@/lib/compress-image';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,7 +18,12 @@ import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } fr
 const LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 const LOGO_MIN_WIDTH = 300;
 const LOGO_MIN_HEIGHT = 140;
-const LOGO_MAX_BYTES = 500 * 1024;
+// Picked files are compressed to ~200 KB before storing; this only stops
+// absurdly large inputs from being loaded into memory at all.
+const LOGO_MAX_INPUT_BYTES = 10 * 1024 * 1024;
+// A complex PNG can stay above the 200 KB target even at the smallest
+// size; this is the hard ceiling (see the AsyncStorage note above).
+const LOGO_MAX_STORED_BYTES = 500 * 1024;
 
 // No Figma design exists for this screen yet — built using the same
 // visual language already established across the app (input pattern
@@ -54,7 +60,6 @@ export default function SettingsScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      base64: true,
       quality: 1,
     });
     if (result.canceled || !result.assets[0]) return;
@@ -71,26 +76,24 @@ export default function SettingsScreen() {
       );
       return;
     }
-    // On web the picker's uri is already a data: URI; on native it's a
-    // file:// path, so build one from the base64 payload.
-    const dataUri = asset.uri.startsWith('data:')
-      ? asset.uri
-      : asset.base64
-        ? `data:${mimeType};base64,${asset.base64}`
-        : null;
-    if (!dataUri) {
-      setLogoError('Logo tidak berhasil dibaca. Coba pilih gambar lain.');
-      return;
-    }
-    const base64Length = dataUri.length - dataUri.indexOf(',') - 1;
-    const bytes = asset.fileSize ?? Math.round(base64Length * 0.75);
-    if (bytes > LOGO_MAX_BYTES) {
+    if ((asset.fileSize ?? 0) > LOGO_MAX_INPUT_BYTES) {
       setLogoError(
-        `Ukuran file terlalu besar (${Math.round(bytes / 1024)} KB). Maksimal ${LOGO_MAX_BYTES / 1024} KB.`
+        `Ukuran file terlalu besar (${Math.round((asset.fileSize ?? 0) / 1024 / 1024)} MB). Maksimal ${LOGO_MAX_INPUT_BYTES / 1024 / 1024} MB.`
       );
       return;
     }
-    setLogoJastip(dataUri);
+    // Shrunk to ~200 KB (lib/compress-image.ts), then kept as a data: URI
+    // so it survives a reload (see lib/settings-store.tsx).
+    try {
+      const compressed = await compressLogo(asset, mimeType === 'image/png');
+      if (!compressed.base64 || compressed.bytes > LOGO_MAX_STORED_BYTES) {
+        setLogoError('Logo terlalu besar untuk disimpan. Coba gambar yang lebih sederhana.');
+        return;
+      }
+      setLogoJastip(`data:${compressed.mimeType};base64,${compressed.base64}`);
+    } catch {
+      setLogoError('Logo tidak berhasil dibaca. Coba pilih gambar lain.');
+    }
   }
 
   const [namaDraft, setNamaDraft] = React.useState(userProfile.nama);
@@ -203,7 +206,8 @@ export default function SettingsScreen() {
             </View>
             <Text className="font-inter text-[10px] text-neutral-500">
               PNG atau JPG, mendatar (rasio sekitar 2:1). Minimal {LOGO_MIN_WIDTH} x{' '}
-              {LOGO_MIN_HEIGHT} px, disarankan 600 x 280 px. Maksimal {LOGO_MAX_BYTES / 1024} KB.
+              {LOGO_MIN_HEIGHT} px, disarankan 600 x 280 px. Gambar dikompres otomatis ke sekitar
+              200 KB.
             </Text>
             {logoError ? (
               <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>

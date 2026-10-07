@@ -53,6 +53,10 @@ export type Order = {
   totalPembayaran: number;
   profit: number;
   statusPembayaran: 'lunas' | 'belum';
+  // 'customer' = arrived through the public order form (app/o.tsx), so its
+  // prices and fees haven't been filled in by the jastiper yet. Absent on
+  // orders the jastiper entered in Tambah Pesanan.
+  sumber?: 'customer';
 };
 
 /**
@@ -95,10 +99,13 @@ type NewOrderInput = {
   whatsapp: string;
   metodePengiriman: 'instant' | 'ekspedisi';
   items: Array<Omit<OrderItem, 'id' | 'dibeli' | 'fotoStruk'>>;
+  sumber?: 'customer';
 };
 
 type EventsContextValue = {
   events: JastipEvent[];
+  /** True once the saved events have loaded from storage. */
+  ready: boolean;
   // Wipes every event and order and restarts the code sequences. Called
   // when a new account signs up: this store is per-device, not per
   // account, so without it a brand-new user would inherit whatever the
@@ -234,6 +241,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
         totalPembayaran,
         profit,
         statusPembayaran: 'belum',
+        ...(input.sumber ? { sumber: input.sumber } : {}),
       };
 
       setEvents((prev) =>
@@ -352,6 +360,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
 
   const value = React.useMemo(
     () => ({
+      ready,
       resetEvents,
       events,
       addEvent,
@@ -362,7 +371,18 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       updateOrderItem,
       addOrderItem,
     }),
-    [events, resetEvents, addEvent, getEvent, addOrder, getOrder, updateOrder, updateOrderItem, addOrderItem]
+    [
+      events,
+      ready,
+      resetEvents,
+      addEvent,
+      getEvent,
+      addOrder,
+      getOrder,
+      updateOrder,
+      updateOrderItem,
+      addOrderItem,
+    ]
   );
 
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;
