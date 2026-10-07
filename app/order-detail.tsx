@@ -6,9 +6,16 @@ import PrinterIcon from '@/assets/images/figma/icon-printer.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { MoreMenu } from '@/components/ui/more-menu';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
+import {
+  computeItemTotals,
+  useEvents,
+  type JastipEvent,
+  type Order,
+  type OrderItem,
+} from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
@@ -85,11 +92,9 @@ type ConfirmDraft = {
 // aggregate-sync principle as `updateOrderItem`, previously a known
 // gap, now resolved.
 //
-// Nama/Alamat/No. Whatsapp are editable (were read-only Text before) —
-// saved straight to the store on every change, same immediate-update
-// pattern this screen already uses for Metode pengiriman/Status
-// pembayaran, rather than introducing a separate draft-state + Simpan
-// button just for these three fields.
+// Nama/Alamat/No. Whatsapp are editable. Like everything else on this
+// screen, edits go into a working copy and are only stored when "Simpan"
+// is pressed (see OrderDetailContent).
 export default function OrderDetailScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
@@ -119,10 +124,68 @@ export default function OrderDetailScreen() {
 // unconditionally — the "not found" early return used to sit above
 // them, which broke the Rules of Hooks whenever the order appeared a
 // render late (e.g. on reload, while the events store is still loading).
-function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order }) {
+//
+// Nothing on this screen is saved until "Simpan" is pressed. `order` below
+// is a working copy that every field, toggle and item sheet edits;
+// `savedOrder` is what the store holds. Simpan writes the copy back in
+// one go (and the sync then sends it to the shop's other devices).
+function OrderDetailContent({
+  event,
+  order: savedOrder,
+}: {
+  event: JastipEvent;
+  order: Order;
+}) {
   const router = useRouter();
-  const { updateOrder, updateOrderItem, addOrderItem, deleteOrder } = useEvents();
+  const { saveOrder, deleteOrder } = useEvents();
+  const [order, setOrder] = React.useState(savedOrder);
+  const [justSaved, setJustSaved] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
+
+  const isDirty = JSON.stringify(order) !== JSON.stringify(savedOrder);
+
+  // While there are no unsaved edits, follow the stored order, so a change
+  // synced in from another device shows up here too. With unsaved edits,
+  // the working copy is kept and wins when Simpan is pressed.
+  const dirtyRef = React.useRef(isDirty);
+  dirtyRef.current = isDirty;
+  React.useEffect(() => {
+    if (!dirtyRef.current) setOrder(savedOrder);
+  }, [savedOrder]);
+
+  function editOrder(updater: (order: Order) => Order) {
+    setOrder(updater);
+    setJustSaved(false);
+  }
+
+  // Item edits change the order's own totals, so those are recomputed
+  // from the items each time.
+  function editItems(updater: (items: OrderItem[]) => OrderItem[]) {
+    editOrder((o) => {
+      const items = updater(o.items);
+      let totalPembayaran = 0;
+      let profit = 0;
+      for (const item of items) {
+        const { subtotal, fee } = computeItemTotals(item);
+        totalPembayaran += subtotal;
+        profit += fee;
+      }
+      return { ...o, items, totalPembayaran, profit };
+    });
+  }
+
+  function handleSave() {
+    if (!isDirty) return;
+    saveOrder(event.id, order);
+    setJustSaved(true);
+  }
+
+  // The back arrow: straight to the event when there's nothing to lose,
+  // otherwise ask first.
+  function goToEvent() {
+    router.replace({ pathname: '/event-detail', params: { id: event.id } });
+  }
 
   // Leaves the screen first, then deletes: the order this screen is
   // showing must not vanish from under it.
@@ -202,7 +265,7 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
 
   function handleBuatPesanan(close: () => void) {
     if (!confirmingItemId || !confirmDraft || !isConfirmValid) return;
-    updateOrderItem(event!.id, order!.id, confirmingItemId, {
+    const updates = {
       namaProduk: confirmDraft.namaProduk.trim(),
       jumlah: parseNumber(confirmDraft.jumlah),
       harga: parseNumber(confirmDraft.harga),
@@ -210,7 +273,10 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
       feeValue: parseNumber(confirmDraft.feeValue),
       dibeli: true,
       fotoStruk: fotoStrukDraft,
-    });
+    };
+    editItems((items) =>
+      items.map((item) => (item.id === confirmingItemId ? { ...item, ...updates } : item))
+    );
     close();
   }
 
@@ -220,9 +286,8 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   // same `ConfirmDraft` shape and Fee Jastip dropdown mechanics, since
   // they can't be open at the same time but ARE conceptually different
   // actions (add vs. edit). Resolves the long-standing "+Tambah" TODO:
-  // `addOrderItem` (lib/events-store.tsx) applies the new item's
-  // subtotal/fee onto both the order's and the event's aggregates, same
-  // principle as `updateOrderItem`.
+  // The new item goes into the working copy (editItems), which
+  // recomputes the order's totals; the event's are recomputed on Simpan.
   const [addingItem, setAddingItem] = React.useState(false);
   const [addItemDraft, setAddItemDraft] = React.useState<ConfirmDraft>({
     namaProduk: '',
@@ -291,7 +356,7 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
 
   function handleAddItem(close: () => void, dibeli: boolean) {
     if (!isAddItemValid) return;
-    addOrderItem(event!.id, order!.id, {
+    const added = {
       namaProduk: addItemDraft.namaProduk.trim(),
       jumlah: parseNumber(addItemDraft.jumlah),
       harga: parseNumber(addItemDraft.harga),
@@ -299,7 +364,8 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
       feeValue: parseNumber(addItemDraft.feeValue),
       dibeli,
       fotoStruk: addFotoStrukDraft,
-    });
+    };
+    editItems((items) => [...items, { ...added, id: `${order.id}-${items.length}` }]);
     close();
   }
 
@@ -355,11 +421,11 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   }
 
   function setNama(nama: string) {
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, nama }));
+    editOrder((o) => ({ ...o, nama }));
   }
 
   function setAlamat(alamat: string) {
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, alamat }));
+    editOrder((o) => ({ ...o, alamat }));
   }
 
   // Orders store the full number ("+62" + local digits, see
@@ -370,17 +436,17 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   function setWhatsapp(local: string) {
     // Digits only, and no leading 0 — "0812…" after +62 isn't a valid number.
     const whatsapp = `+62${local.replace(/\D/g, '').replace(/^0+/, '')}`;
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, whatsapp }));
+    editOrder((o) => ({ ...o, whatsapp }));
   }
 
   function setMetodePengiriman(metode: 'instant' | 'ekspedisi') {
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, metodePengiriman: metode }));
+    editOrder((o) => ({ ...o, metodePengiriman: metode }));
   }
 
   // The two options are mutually exclusive; tapping the ticked one
   // again clears it (back to Figma's "Default" state, node 181:528).
   function togglePembayaranOngkir(value: NonNullable<Order['pembayaranOngkir']>) {
-    updateOrder(event!.id, order!.id, (o) => ({
+    editOrder((o) => ({
       ...o,
       pembayaranOngkir: o.pembayaranOngkir === value ? null : value,
     }));
@@ -388,11 +454,11 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
 
   function setOngkir(text: string) {
     const ongkir = Number(text.replace(/\D/g, '')) || 0;
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, ongkir }));
+    editOrder((o) => ({ ...o, ongkir }));
   }
 
   function setStatusPembayaran(status: 'lunas' | 'belum') {
-    updateOrder(event!.id, order!.id, (o) => ({ ...o, statusPembayaran: status }));
+    editOrder((o) => ({ ...o, statusPembayaran: status }));
   }
 
   // What the customer actually owes: goods cost (order.totalPembayaran)
@@ -412,11 +478,21 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
               would return to wherever the user came from (e.g. the tagihan
               preview) and does nothing after a direct load. */}
           <Pressable
-            onPress={() => router.replace({ pathname: '/event-detail', params: { id: event.id } })}
+            onPress={() => (isDirty ? setConfirmingDiscard(true) : goToEvent())}
             hitSlop={8}>
             <CaretCircleLeftIcon width={24} height={24} />
           </Pressable>
-          <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">Detil pesanan</Text>
+          <Text className="flex-1 font-inter-bold text-[14px] text-[#5d5d5d]">Detil pesanan</Text>
+          <MoreMenu
+            label="Menu pesanan"
+            items={[
+              {
+                label: 'Hapus pesanan',
+                destructive: true,
+                onPress: () => setConfirmingDelete(true),
+              },
+            ]}
+          />
         </View>
 
         <ScrollView contentContainerClassName="gap-[16px] px-[20px] pb-[40px] pt-[20px]">
@@ -684,30 +760,81 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
             </View>
           </View>
 
-          {/* Opens the bill (app/tagihan.tsx) in the same tab/stack, so its
-              back arrow returns here. The screen's primary action, in the
-              full-width slot "Kirim total pembayaran" used to occupy. */}
-          <Link
-            href={{
-              pathname: '/tagihan',
-              params: { eventId: event.id, orderId: order.id },
-            }}
-            asChild>
-            <Pressable className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-              <Text className="font-inter-semibold text-[14px] text-white">
-                Cetak tagihan customer
+          {/* Simpan is the screen's main action: nothing above is saved
+              until it is pressed. */}
+          <View className="gap-[8px]">
+            <Pressable
+              onPress={handleSave}
+              disabled={!isDirty}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !isDirty }}
+              className={cn(
+                'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                isDirty ? 'bg-orange-500' : 'bg-orange-200'
+              )}>
+              <Text
+                className={cn(
+                  'font-inter-semibold text-[14px]',
+                  isDirty ? 'text-white' : 'text-orange-300'
+                )}>
+                Simpan
               </Text>
             </Pressable>
-          </Link>
+            {justSaved && !isDirty ? (
+              <Text className="text-center font-inter text-[12px] text-orange-500">
+                ✓ Tersimpan
+              </Text>
+            ) : null}
+          </View>
 
-          <Pressable
-            onPress={() => setConfirmingDelete(true)}
-            accessibilityRole="button"
-            className="w-full items-center justify-center rounded-[12px] border border-red-500 bg-white px-[10px] py-[16px]">
-            <Text className="font-inter-semibold text-[14px] text-red-500">Hapus pesanan</Text>
-          </Pressable>
+          <View className="h-px w-full bg-neutral-300" />
+
+          {/* Opens the bill (app/tagihan.tsx) in the same tab/stack, so its
+              back arrow returns here. The bill is built from the saved
+              order, so it is unavailable while there are unsaved edits. */}
+          {isDirty ? (
+            <View className="gap-[8px]">
+              <View
+                accessibilityRole="button"
+                accessibilityState={{ disabled: true }}
+                className="w-full items-center justify-center rounded-[12px] border border-orange-200 bg-white px-[10px] py-[16px]">
+                <Text className="font-inter-semibold text-[14px] text-orange-300">
+                  Cetak tagihan customer
+                </Text>
+              </View>
+              <Text className="text-center font-inter text-[10px] text-neutral-500">
+                Simpan perubahan dulu untuk mencetak tagihan.
+              </Text>
+            </View>
+          ) : (
+            <Link
+              href={{
+                pathname: '/tagihan',
+                params: { eventId: event.id, orderId: order.id },
+              }}
+              asChild>
+              <Pressable className="w-full items-center justify-center rounded-[12px] border border-orange-500 bg-white px-[10px] py-[16px]">
+                <Text className="font-inter-semibold text-[14px] text-orange-500">
+                  Cetak tagihan customer
+                </Text>
+              </Pressable>
+            </Link>
+          )}
         </ScrollView>
       </View>
+
+      <ConfirmDialog
+        visible={confirmingDiscard}
+        title="Buang perubahan?"
+        message="Perubahan di pesanan ini belum disimpan. Kalau kamu keluar sekarang, perubahannya hilang."
+        confirmLabel="Buang"
+        cancelLabel="Lanjut edit"
+        onConfirm={() => {
+          setConfirmingDiscard(false);
+          goToEvent();
+        }}
+        onCancel={() => setConfirmingDiscard(false)}
+      />
 
       <ConfirmDialog
         visible={confirmingDelete}

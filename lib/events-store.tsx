@@ -121,6 +121,9 @@ type EventsContextValue = {
   // disappears on the shop's other devices too.
   deleteEvent: (eventId: string) => void;
   deleteOrder: (eventId: string, orderId: string) => void;
+  // Replaces an order with an edited copy (Order Detail's "Simpan") and
+  // recomputes the event's count, revenue and profit from its orders.
+  saveOrder: (eventId: string, order: Order) => void;
   getEvent: (id: string) => JastipEvent | undefined;
   addOrder: (eventId: string, input: NewOrderInput) => Order | undefined;
   getOrder: (eventId: string, orderId: string) => Order | undefined;
@@ -428,6 +431,16 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const saveOrder = React.useCallback((eventId: string, order: Order) => {
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? withTotals({ ...e, orders: e.orders.map((o) => (o.id === order.id ? order : o)) })
+          : e
+      )
+    );
+  }, []);
+
   const replaceEvents = React.useCallback(
     (updater: (prev: JastipEvent[]) => JastipEvent[]) => setEvents(updater),
     []
@@ -440,6 +453,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       replaceEvents,
       deleteEvent,
       deleteOrder,
+      saveOrder,
       events,
       addEvent,
       getEvent,
@@ -456,6 +470,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       replaceEvents,
       deleteEvent,
       deleteOrder,
+      saveOrder,
       addEvent,
       getEvent,
       addOrder,

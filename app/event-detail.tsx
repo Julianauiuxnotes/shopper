@@ -1,6 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import ShareIcon from '@/assets/images/figma/icon-share.svg';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { MoreMenu } from '@/components/ui/more-menu';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-store';
 import { getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
@@ -104,7 +105,15 @@ export default function EventDetailScreen() {
         <Pressable onPress={() => router.replace('/dashboard')} hitSlop={8}>
           <CaretCircleLeftIcon width={24} height={24} />
         </Pressable>
-        <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">{event.namaAcara}</Text>
+        <Text numberOfLines={1} className="flex-1 font-inter-bold text-[16px] text-[#5d5d5d]">
+          {event.namaAcara}
+        </Text>
+        <MoreMenu
+          label="Menu event"
+          items={[
+            { label: 'Hapus event', destructive: true, onPress: () => setConfirmingDelete(true) },
+          ]}
+        />
       </View>
 
       <ScrollView
@@ -238,13 +247,6 @@ export default function EventDetailScreen() {
           orders={belumOrders}
           eventId={event.id}
         />
-
-        <Pressable
-          onPress={() => setConfirmingDelete(true)}
-          accessibilityRole="button"
-          className="w-full items-center justify-center rounded-[12px] border border-red-500 bg-white px-[10px] py-[16px]">
-          <Text className="font-inter-semibold text-[14px] text-red-500">Hapus event</Text>
-        </Pressable>
       </ScrollView>
 
       <ConfirmDialog
