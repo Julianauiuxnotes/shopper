@@ -73,8 +73,8 @@ export default function TagihanScreen() {
   }
 
   // Straight into the customer's own WhatsApp chat with the message
-  // ready — the jastiper still taps send. Same wa.me pattern as Order
-  // Detail's "Kirim total pembayaran".
+  // ready — the jastiper still taps send. Same wa.me pattern as Tambah
+  // Pesanan's "Konfirmasi dan kirim total pembayaran".
   async function handleKirimWhatsapp() {
     const phoneDigits = order!.whatsapp.replace(/\D/g, '');
     const waUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(buildShareMessage())}`;

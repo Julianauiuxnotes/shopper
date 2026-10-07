@@ -9,13 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents, type JastipEvent, type Order } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
-import { useSettings } from '@/lib/settings-store';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import { cn } from '@/lib/utils';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as React from 'react';
-import { Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Image, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
@@ -121,8 +120,6 @@ export default function OrderDetailScreen() {
 function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order }) {
   const router = useRouter();
   const { updateOrder, updateOrderItem, addOrderItem } = useEvents();
-  const { userProfile } = useSettings();
-
   const [confirmingItemId, setConfirmingItemId] = React.useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = React.useState<ConfirmDraft | null>(null);
   const [fotoStrukDraft, setFotoStrukDraft] = React.useState<string | null>(null);
@@ -384,32 +381,16 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
   const ongkirDitagih = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
   const totalTagihan = order.totalPembayaran + order.profit + ongkirDitagih;
 
-  async function handleKirimTotalPembayaran() {
-    // Opens WhatsApp with the confirmation message pre-filled to the
-    // order's own No. Whatsapp (the customer) — the jastiper still taps
-    // send themselves. Same message format as Tambah Pesanan's own
-    // "Konfirmasi dan kirim total pembayaran" button.
-    const namaJastip = userProfile.namaJastip || 'Jastip by Juli';
-    const itemsList = order!.items.map((it) => `${it.namaProduk}, ${it.jumlah}`).join(', ');
-    const message =
-      `Hi! ini pesan konfirmasi dari ${namaJastip}. Kami sudah catat pesananmu ya. ` +
-      `Pesananmu ada ${order!.items.length} items dengan total pembayaran IDR ` +
-      `${totalTagihan.toLocaleString('id-ID')}. ` +
-      `Item pesananmu : ${itemsList}.`;
-    const phoneDigits = order!.whatsapp.replace(/\D/g, '');
-    const waUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
-    try {
-      await Linking.openURL(waUrl);
-    } catch {
-      // no WhatsApp / can't open the link — nothing else to do here.
-    }
-  }
-
   return (
     <>
       <View className="flex-1 bg-white">
         <View className="flex-row items-center gap-[5px] px-[20px] pt-[20px]">
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          {/* Always to this order's event page — not router.back(), which
+              would return to wherever the user came from (e.g. the tagihan
+              preview) and does nothing after a direct load. */}
+          <Pressable
+            onPress={() => router.replace({ pathname: '/event-detail', params: { id: event.id } })}
+            hitSlop={8}>
             <CaretCircleLeftIcon width={24} height={24} />
           </Pressable>
           <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">Detil pesanan</Text>
@@ -691,14 +672,6 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
               })}
             </View>
           </View>
-
-          <Pressable
-            onPress={handleKirimTotalPembayaran}
-            className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-            <Text className="font-inter-semibold text-[14px] text-white">
-              Kirim total pembayaran
-            </Text>
-          </Pressable>
         </ScrollView>
       </View>
 
