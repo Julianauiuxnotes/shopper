@@ -20,7 +20,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22+: @supabase/supabase-js needs Node's built-in WebSocket when
+          # the app's modules are loaded for the static export.
+          node-version: 22
           cache: npm
 
       - run: npm ci
