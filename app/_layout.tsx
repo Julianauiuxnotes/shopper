@@ -2,6 +2,8 @@ import '@/global.css';
 
 import { IncomingOrdersSync } from '@/components/incoming-orders-sync';
 import { AuthGate } from '@/components/auth-gate';
+import { DataSync } from '@/components/data-sync';
+import { OfflineBanner } from '@/components/offline-banner';
 import { AuthProvider } from '@/lib/auth-store';
 import { EventsProvider } from '@/lib/events-store';
 import { SettingsProvider } from '@/lib/settings-store';
@@ -64,6 +66,7 @@ export default function RootLayout() {
         <SettingsProvider>
           <AuthProvider>
             <AuthGate />
+            <DataSync />
             <IncomingOrdersSync />
             {/* Web only: the app is designed for phone widths, but a desktop
               browser window has no such constraint by default. Center it in
@@ -73,6 +76,7 @@ export default function RootLayout() {
               className={
                 Platform.OS === 'web' ? 'mx-auto w-full max-w-[430px] flex-1 bg-white' : 'flex-1'
               }>
+              <OfflineBanner />
               <Stack screenOptions={{ headerShown: false, title: 'Shopper' }} />
             </View>
           </AuthProvider>

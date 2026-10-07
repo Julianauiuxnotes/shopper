@@ -111,6 +111,9 @@ type EventsContextValue = {
   // account, so without it a brand-new user would inherit whatever the
   // device's previous account (or earlier testing) left behind.
   resetEvents: () => void;
+  // For lib/sync.ts: replaces the whole list after merging in changes
+  // pulled from the server (or re-keying local data before the first sync).
+  replaceEvents: (updater: (prev: JastipEvent[]) => JastipEvent[]) => void;
   addEvent: (input: NewEventInput) => JastipEvent;
   getEvent: (id: string) => JastipEvent | undefined;
   addOrder: (eventId: string, input: NewOrderInput) => Order | undefined;
@@ -152,6 +155,31 @@ function reviveEvent(e: JastipEvent): JastipEvent {
   return { ...e, tanggalDari: new Date(e.tanggalDari), tanggalSampai: new Date(e.tanggalSampai) };
 }
 
+// Ids for new events and orders. Random rather than derived from the
+// display code (DRM-…/ORD-…), because codes are numbered per device: two
+// devices of the same shop can both produce "ORD-0003", and on the server
+// those must stay two different orders, not overwrite each other.
+export function newId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** An event's order count, revenue and profit, recomputed from its orders. */
+export function withTotals(event: JastipEvent): JastipEvent {
+  return {
+    ...event,
+    totalOrder: event.orders.length,
+    revenue: event.orders.reduce((sum, o) => sum + o.totalPembayaran, 0),
+    profit: event.orders.reduce((sum, o) => sum + o.profit, 0),
+  };
+}
+
+// The number at the end of a display code ("ORD-0012" -> 12, and the last
+// three digits of "DRM-0710004" -> 4); 0 when there isn't one.
+function trailingNumber(code: string, digits: number) {
+  const match = code.match(new RegExp(`(\\d{1,${digits}})$`));
+  return match ? Number(match[1]) : 0;
+}
+
 export function computeItemTotals(
   item: Pick<OrderItem, 'harga' | 'jumlah' | 'feeType' | 'feeValue'>
 ) {
@@ -164,7 +192,12 @@ export function computeItemTotals(
 // DRM-<DDMM of start date><sequence> for events (memory: doremi-project's
 // "DRM-0406001" convention), ORD-<sequence, 4 digits> per event for
 // orders. Refs (not state) for the sequence counters so they're always
-// correct synchronously, even if called again before a re-render.
+// correct synchronously, even if called again before a re-render. The
+// next number is the higher of this device's counter and the highest
+// code already in the data, so numbering carries on correctly after
+// events and orders arrive from other devices. Two devices can still
+// produce the same code if both create one before syncing; the ids
+// (newId) keep those apart. Server-assigned numbers are a later step.
 function EventsProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = React.useState<JastipEvent[]>([]);
   const [ready, setReady] = React.useState(false);
@@ -192,46 +225,53 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     if (ready) storage.set('events', events);
   }, [events, ready]);
 
-  const addEvent = React.useCallback((input: NewEventInput): JastipEvent => {
-    eventSeqRef.current += 1;
-    storage.set('eventSeq', eventSeqRef.current);
-    const ddmm = `${pad2(input.tanggalDari.getDate())}${pad2(input.tanggalDari.getMonth() + 1)}`;
-    const kodeEvent = `DRM-${ddmm}${String(eventSeqRef.current).padStart(3, '0')}`;
-    const created: JastipEvent = {
-      id: kodeEvent,
-      kodeEvent,
-      orders: [],
-      totalOrder: 0,
-      revenue: 0,
-      profit: 0,
-      ...input,
-    };
-    setEvents((prev) => [...prev, created]);
-    return created;
-  }, []);
+  const addEvent = React.useCallback(
+    (input: NewEventInput): JastipEvent => {
+      const highest = Math.max(0, ...events.map((e) => trailingNumber(e.kodeEvent, 3)));
+      eventSeqRef.current = Math.max(eventSeqRef.current, highest) + 1;
+      storage.set('eventSeq', eventSeqRef.current);
+      const ddmm = `${pad2(input.tanggalDari.getDate())}${pad2(input.tanggalDari.getMonth() + 1)}`;
+      const kodeEvent = `DRM-${ddmm}${String(eventSeqRef.current).padStart(3, '0')}`;
+      const created: JastipEvent = {
+        id: newId('e'),
+        kodeEvent,
+        orders: [],
+        totalOrder: 0,
+        revenue: 0,
+        profit: 0,
+        ...input,
+      };
+      setEvents((prev) => [...prev, created]);
+      return created;
+    },
+    [events]
+  );
 
   const getEvent = React.useCallback((id: string) => events.find((e) => e.id === id), [events]);
 
   const addOrder = React.useCallback(
     (eventId: string, input: NewOrderInput): Order | undefined => {
-      if (!events.some((e) => e.id === eventId)) return undefined;
+      const event = events.find((e) => e.id === eventId);
+      if (!event) return undefined;
 
-      const nextSeq = (orderSeqRef.current.get(eventId) ?? 0) + 1;
+      const highest = Math.max(0, ...event.orders.map((o) => trailingNumber(o.orderNumber, 4)));
+      const nextSeq = Math.max(orderSeqRef.current.get(eventId) ?? 0, highest) + 1;
       orderSeqRef.current.set(eventId, nextSeq);
       storage.set('orderSeq', Array.from(orderSeqRef.current.entries()));
       const orderNumber = `ORD-${String(nextSeq).padStart(4, '0')}`;
 
+      const orderId = newId('o');
       let totalPembayaran = 0;
       let profit = 0;
       const items: OrderItem[] = input.items.map((item, index) => {
         const { subtotal, fee } = computeItemTotals(item);
         totalPembayaran += subtotal;
         profit += fee;
-        return { ...item, id: `${orderNumber}-${index}`, dibeli: false, fotoStruk: null };
+        return { ...item, id: `${orderId}-${index}`, dibeli: false, fotoStruk: null };
       });
 
       const order: Order = {
-        id: orderNumber,
+        id: orderId,
         orderNumber,
         nama: input.nama,
         alamat: input.alamat,
@@ -358,10 +398,16 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     setEvents([]);
   }, []);
 
+  const replaceEvents = React.useCallback(
+    (updater: (prev: JastipEvent[]) => JastipEvent[]) => setEvents(updater),
+    []
+  );
+
   const value = React.useMemo(
     () => ({
       ready,
       resetEvents,
+      replaceEvents,
       events,
       addEvent,
       getEvent,
@@ -375,6 +421,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       events,
       ready,
       resetEvents,
+      replaceEvents,
       addEvent,
       getEvent,
       addOrder,

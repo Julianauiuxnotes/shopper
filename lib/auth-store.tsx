@@ -4,14 +4,14 @@ import { useEvents } from './events-store';
 import { useSettings } from './settings-store';
 import { storage } from './storage';
 import { supabase } from './supabase';
+import { resetSyncState } from './sync';
 
 // Real accounts (Supabase Auth) and the shop a user belongs to — step 1
 // of the accounts/plans/sync plan; see
 // supabase/migrations/0002_shopper_accounts_and_shops.sql for the server
 // side and its rules.
 //
-// Still a prototype: events and orders stay on the device (step 2 moves
-// them), there is no invitation email (an invited person just signs up
+// Still a prototype: there is no invitation email (an invited person just signs up
 // with the invited address), and password reset isn't built, since both
 // need an email service this project doesn't have yet.
 //
@@ -196,14 +196,21 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const next = await loadShopState(current.user.id);
       if (!next) throw new AuthError('Toko tidak ditemukan untuk akun ini.');
 
-      // Events and orders are still stored per device, not per shop. So a
-      // device remembers which shop its local data belongs to: the first
-      // shop to log in adopts what's there, and a different shop logging
-      // in starts clean instead of seeing someone else's orders.
+      // A device remembers which shop the events and orders it holds
+      // belong to, because components/data-sync.tsx uploads whatever is
+      // on the device into the logged-in shop.
+      //   - Same shop as before: keep everything.
+      //   - A different shop: start clean, so one shop's orders are never
+      //     uploaded into another.
+      //   - No shop recorded yet (data from before accounts existed): the
+      //     owner adopts it into their shop; an invited member doesn't,
+      //     since leftovers on their device aren't the shop's data.
       const localShopId = await storage.get<string | null>('localShopId', null);
-      if (localShopId && localShopId !== next.shop.id) {
+      const foreign = localShopId ? localShopId !== next.shop.id : next.role !== 'owner';
+      if (foreign) {
         stores.current.eventsStore.resetEvents();
         stores.current.settings.resetBusinessSettings();
+        await resetSyncState();
       }
       await storage.set('localShopId', next.shop.id);
 
