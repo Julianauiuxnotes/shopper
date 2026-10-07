@@ -62,7 +62,11 @@ type AuthContextValue = {
   invites: ShopInvite[];
   /** 'confirm_email' = the account exists but must be confirmed by email before logging in. */
   signUp: (input: SignUpInput) => Promise<'signed_in' | 'confirm_email'>;
-  signIn: (email: string, password: string, remember: boolean) => Promise<void>;
+  /**
+   * Throws ActiveElsewhereError when the account is in use on another
+   * browser or device, unless `takeOver` is set, which logs that one out.
+   */
+  signIn: (email: string, password: string, remember: boolean, takeOver?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   /** Owner only. Saves shop settings to the server and the local store. */
   updateShop: (patch: Partial<Omit<Shop, 'id' | 'plan'>>) => Promise<void>;
@@ -76,11 +80,9 @@ type AuthContextValue = {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
-// Shown when an account is already in use on another browser or device:
-// at login (which is then refused), and on a device that finds another
-// one has taken over while it was away.
-const ACTIVE_ELSEWHERE =
-  'Akun ini sedang aktif di browser lain, silahkan keluar untuk masuk kembali dengan akun yang sama';
+// Shown on the login screen of a device that was logged out because the
+// account was taken over, or found active, on another one.
+const LOGGED_OUT_ELSEWHERE = 'Kamu keluar karena akun ini sedang aktif di browser/perangkat lain.';
 
 // How often an open app renews its hold on the account. The server lets
 // another device in after 3 minutes of silence (see
@@ -122,6 +124,17 @@ async function releaseSession() {
 
 /** An error whose `message` is already written for the user, in Indonesian. */
 export class AuthError extends Error {}
+
+/**
+ * Thrown by signIn when the account is active on another browser or
+ * device. The login screen asks the user whether to take it over, and if
+ * so calls signIn again with `takeOver`.
+ */
+export class ActiveElsewhereError extends AuthError {
+  constructor() {
+    super('Akun ini sedang aktif di browser/perangkat lain.');
+  }
+}
 
 // Supabase and the shopper_* functions report failures as codes or
 // English sentences; these are what the user sees instead.
@@ -291,7 +304,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         await storage.set('authShopCache', null);
         current = null;
-        setNotice(ACTIVE_ELSEWHERE);
+        setNotice(LOGGED_OUT_ELSEWHERE);
       }
       if (cancelled) return;
       if (current) {
@@ -335,7 +348,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       stores.current.settings.signOut();
       await storage.set('authShopCache', null);
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-      setNotice(ACTIVE_ELSEWHERE);
+      setNotice(LOGGED_OUT_ELSEWHERE);
       setSession(null);
       setState(null);
     };
@@ -408,13 +421,22 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signIn = React.useCallback<AuthContextValue['signIn']>(
-    async (email, password, remember) => {
+    async (email, password, remember, takeOver = false) => {
       const data = check(await supabase.auth.signInWithPassword({ email, password }));
-      // One active browser per account: refuse this login if another
-      // device is using it, leaving that device's session untouched.
-      if (!(await claimSession())) {
+      // One active browser per account. Unless the user has agreed to
+      // take the account over, refuse this login if another device is
+      // using it, leaving that device's session untouched.
+      if (takeOver) {
+        const result = await supabase.rpc('shopper_take_over_session', {
+          p_device_id: await getDeviceId(),
+        });
+        if (result.error) {
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          throw toAuthError(result.error);
+        }
+      } else if (!(await claimSession())) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-        throw new AuthError(ACTIVE_ELSEWHERE);
+        throw new ActiveElsewhereError();
       }
       setNotice(null);
       stores.current.settings.signIn(remember);

@@ -1,11 +1,11 @@
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { AuthError, useAuth } from '@/lib/auth-store';
+import { ActiveElsewhereError, AuthError, useAuth } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 
 // Figma section LOGIN, node 49:878 (empty) / 53:2844 (filled) / 53:2888
 // (error). Logs in through lib/auth-store.tsx (Supabase Auth). Ticking
@@ -36,14 +36,24 @@ export default function LoginScreen() {
     setLoginError(null);
   }
 
-  async function handleSubmit() {
+  // True while the "account is active elsewhere" pop-up is open.
+  const [confirmTakeOver, setConfirmTakeOver] = React.useState(false);
+
+  // `takeOver`: the user agreed in the pop-up to log the other browser out.
+  async function handleSubmit(takeOver = false) {
     if (!isValid || submitting) return;
     setSubmitting(true);
     setLoginError(null);
     try {
-      await signIn(email.trim(), password, keepLoggedIn);
+      await signIn(email.trim(), password, keepLoggedIn, takeOver);
+      setConfirmTakeOver(false);
       router.replace('/dashboard');
     } catch (error) {
+      if (error instanceof ActiveElsewhereError) {
+        setConfirmTakeOver(true);
+        return;
+      }
+      setConfirmTakeOver(false);
       setLoginError(
         error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
       );
@@ -125,7 +135,7 @@ export default function LoginScreen() {
             </Pressable>
 
             <Pressable
-              onPress={handleSubmit}
+              onPress={() => handleSubmit()}
               disabled={!isValid}
               accessibilityRole="button"
               accessibilityState={{ disabled: !isValid }}
@@ -154,6 +164,51 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* Asked when the account is active on another browser or device.
+          Prototype: "Setuju" takes the account over straight away. The
+          planned flow sends a confirmation email first and only switches
+          once it is confirmed; that waits for an email service (domain). */}
+      <Modal
+        visible={confirmTakeOver}
+        transparent
+        // No fade: the pop-up must be gone the moment a choice is made,
+        // not whenever an exit animation gets round to finishing.
+        animationType="none"
+        onRequestClose={() => setConfirmTakeOver(false)}>
+        <View className="flex-1 items-center justify-center bg-black/50 p-[20px]">
+          <View
+            accessibilityRole="alert"
+            className="w-full max-w-[330px] gap-[16px] rounded-[8px] bg-white p-[20px]">
+            <Text className="font-inter text-[13px] leading-[20px] text-neutral-800">
+              Akun ini sedang aktif di browser/perangkat lain. Apakah kamu mau keluar dari browser
+              lain dan login di sini? Jika setuju, akunmu di browser lain akan secara otomatis
+              keluar.
+            </Text>
+            <View className="flex-row gap-[10px]">
+              <Pressable
+                onPress={() => setConfirmTakeOver(false)}
+                disabled={submitting}
+                accessibilityRole="button"
+                className="flex-1 items-center justify-center rounded-[8px] border border-orange-500 bg-white p-[10px]">
+                <Text className="font-inter-semibold text-[12px] text-orange-500">
+                  Tidak setuju
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleSubmit(true)}
+                disabled={submitting}
+                accessibilityRole="button"
+                accessibilityState={{ busy: submitting }}
+                className="flex-1 items-center justify-center rounded-[8px] bg-orange-500 p-[10px]">
+                <Text className="font-inter-semibold text-[12px] text-white">
+                  {submitting ? 'Memproses...' : 'Setuju'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
