@@ -600,23 +600,11 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
               })}
             </View>
 
-            <View className="flex-row items-center gap-[13px]">
-              <Pressable
-                onPress={openAddItem}
-                className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
-                <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
-              </Pressable>
-{/* Figma button 181:368. Opens the bill (app/tagihan.tsx) in the
-                  same tab/stack, so its back arrow returns here. */}
-              <Link
-                href={{
-                  pathname: '/tagihan',
-                  params: { eventId: event.id, orderId: order.id },
-                }}
-                className="overflow-hidden rounded-[8px] bg-orange-500 p-[10px] font-inter text-[12px] text-orange-50">
-                Cetak tagihan customer
-              </Link>
-            </View>
+            <Pressable
+              onPress={openAddItem}
+              className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+              <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+            </Pressable>
           </View>
 
           <View className="gap-[6px]">
@@ -672,6 +660,22 @@ function OrderDetailContent({ event, order }: { event: JastipEvent; order: Order
               })}
             </View>
           </View>
+
+          {/* Opens the bill (app/tagihan.tsx) in the same tab/stack, so its
+              back arrow returns here. The screen's primary action, in the
+              full-width slot "Kirim total pembayaran" used to occupy. */}
+          <Link
+            href={{
+              pathname: '/tagihan',
+              params: { eventId: event.id, orderId: order.id },
+            }}
+            asChild>
+            <Pressable className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
+              <Text className="font-inter-semibold text-[14px] text-white">
+                Cetak tagihan customer
+              </Text>
+            </Pressable>
+          </Link>
         </ScrollView>
       </View>
 
