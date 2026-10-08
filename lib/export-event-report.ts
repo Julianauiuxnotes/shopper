@@ -2,6 +2,8 @@ import {
   type JastipEvent,
   type Order,
   type OrderItem,
+  getEventProfit,
+  getItemMarkup,
   getSisaPembayaran,
   getTotalTagihan,
 } from '@/lib/events-store';
@@ -87,7 +89,7 @@ function headerRows(event: JastipEvent): Cell[][] {
     ['Pengeluaran', money(expenses)],
     ['Pesanan', count(event.totalOrder)],
     ['Revenue', money(event.revenue)],
-    ['Profit', money(event.profit)],
+    ['Profit', money(getEventProfit(event))],
     [],
     [bold('Status pembayaran'), bold('Jumlah pesanan'), bold('Total tagihan')],
     ['Lunas', count(lunas.length), money(sumTagihan(lunas))],
@@ -120,6 +122,7 @@ function orderRows(event: JastipEvent): Cell[][] {
     'Jumlah',
     'Harga asli',
     'Harga ke pelanggan',
+    'Selisih harga',
     'Fee jastip',
     'Fee jastip (%)',
     'Fee jastip (IDR)',
@@ -150,6 +153,8 @@ function orderRows(event: JastipEvent): Cell[][] {
         // The jastiper's private note of the price before their markup.
         item.hargaAsli ? money(item.hargaAsli) : null,
         money(item.harga),
+        // Markup for the whole line; counts towards profit.
+        item.hargaAsli ? money(getItemMarkup(item)) : null,
         item.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR',
         item.feeType === 'percent' ? item.feeValue : null,
         money(fee),
@@ -194,7 +199,7 @@ export async function downloadEventReport(event: JastipEvent) {
     {
       data: [...headerRows(event), ...orderRows(event)],
       sheet: 'Laporan',
-      columns: widths(17, 13, 28, 26, 19, 16, 19, 16, 14, 17, 19, 12, 18, 14, 18, 14, 22, 16),
+      columns: widths(17, 13, 28, 26, 19, 16, 19, 15, 16, 14, 17, 19, 12, 18, 14, 18, 14, 22, 16),
     },
     { data: expenseRows(event), sheet: 'Pengeluaran', columns: widths(36, 14, 16) },
   ]).toBlob();

@@ -90,7 +90,10 @@ function itemTotals(item: ItemDraft, kurs: number) {
   const feeValue = parseNumber(item.feeValue);
   const subtotal = harga * jumlah;
   const fee = item.feeType === 'percent' ? subtotal * (feeValue / 100) : feeValue * jumlah;
-  return { subtotal, fee };
+  // Markup over harga asli: profit, but already inside the price billed.
+  const hargaAsli = Math.round(parseNumber(item.hargaAsli) * kurs);
+  const markup = hargaAsli > 0 ? (harga - hargaAsli) * jumlah : 0;
+  return { subtotal, fee, markup };
 }
 
 // Figma section TAMBAH PESANAN MANUAL, node 53:3251 (empty) / 53:3323 /
@@ -259,10 +262,14 @@ export default function TambahPesananScreen() {
 
   const totals = items.reduce(
     (acc, it) => {
-      const { subtotal, fee } = itemTotals(it, currency.kurs);
-      return { totalPembelanjaan: acc.totalPembelanjaan + subtotal, profit: acc.profit + fee };
+      const { subtotal, fee, markup } = itemTotals(it, currency.kurs);
+      return {
+        totalPembelanjaan: acc.totalPembelanjaan + subtotal,
+        profit: acc.profit + fee,
+        markup: acc.markup + markup,
+      };
     },
-    { totalPembelanjaan: 0, profit: 0 }
+    { totalPembelanjaan: 0, profit: 0, markup: 0 }
   );
   // What the customer actually owes: the goods cost plus the jastip fee
   // — distinct from totalPembelanjaan (goods cost alone) so the
@@ -530,7 +537,7 @@ export default function TambahPesananScreen() {
                   <View className="gap-[2px]">
                     <Text className="font-inter text-[12px] text-neutral-800">Profit</Text>
                     <Text className="font-inter-bold text-[14px] text-neutral-800">
-                      {formatIDR(totals.profit)}
+                      {formatIDR(totals.profit + totals.markup)}
                     </Text>
                   </View>
                 </View>
@@ -624,8 +631,9 @@ export default function TambahPesananScreen() {
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
-                    tagihan pelanggan. Boleh dikosongkan.
+                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
+                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
+                    dikosongkan.
                   </Text>
 
                   <View className="gap-[4px]">

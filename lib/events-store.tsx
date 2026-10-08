@@ -35,7 +35,8 @@ export type OrderItem = {
   hargaAsing?: number;
   // What the product cost at the event before the jastiper's own markup,
   // IDR per unit (and as typed, for Internasional events). The jastiper's
-  // private note: no total uses it and nothing shown to a customer
+  // private note: its gap to `harga` counts as profit (getOrderProfit),
+  // but it never changes the bill and nothing shown to a customer
   // (tagihan, receipt link, penanda) may include it.
   hargaAsli?: number;
   hargaAsliAsing?: number;
@@ -86,6 +87,29 @@ export type Order = {
 export function getTotalTagihan(order: Order) {
   const ongkir = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
   return order.totalPembayaran + order.profit + ongkir;
+}
+
+/**
+ * The jastiper's markup on one line: (harga ke pelanggan - harga asli) x
+ * jumlah, 0 when no harga asli was noted. Negative if sold below cost.
+ */
+export function getItemMarkup(item: Pick<OrderItem, 'harga' | 'hargaAsli' | 'jumlah'>) {
+  return item.hargaAsli ? (item.harga - item.hargaAsli) * item.jumlah : 0;
+}
+
+/**
+ * What the jastiper earns on an order: the jastip fees (`order.profit`)
+ * plus the markup over harga asli. The markup is already inside the
+ * price the customer pays, so it is NOT added to the bill — only the
+ * fees are (see getTotalTagihan).
+ */
+export function getOrderProfit(order: Order) {
+  return order.profit + order.items.reduce((sum, item) => sum + getItemMarkup(item), 0);
+}
+
+/** An event's profit: fees plus markup, over all its orders. */
+export function getEventProfit(event: JastipEvent) {
+  return event.orders.reduce((sum, order) => sum + getOrderProfit(order), 0);
 }
 
 /** What the customer still owes: nothing once Lunas, else the bill less the DP. */

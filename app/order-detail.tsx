@@ -17,6 +17,7 @@ import {
   type OrderItem,
   getSisaPembayaran,
   type PaymentStatus,
+  getOrderProfit,
 } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
@@ -760,7 +761,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           <View className="gap-[6px]">
             <Text className="font-inter-bold text-[10px] text-neutral-800">Profit</Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(order.profit)}
+              {formatIDR(getOrderProfit(order))}
             </Text>
           </View>
 
@@ -1018,8 +1019,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
-                    tagihan pelanggan. Boleh dikosongkan.
+                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
+                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
+                    dikosongkan.
                   </Text>
 
                   <View className="gap-[4px]">
@@ -1242,8 +1244,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
-                    tagihan pelanggan. Boleh dikosongkan.
+                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
+                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
+                    dikosongkan.
                   </Text>
 
                   <View className="gap-[4px]">

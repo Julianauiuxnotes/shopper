@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth-store';
 import { canExportReport, downloadEventReport } from '@/lib/export-event-report';
 import {
   type Expense,
+  getEventProfit,
   getSisaPembayaran,
   getTotalTagihan,
   type Order,
@@ -358,7 +359,7 @@ export default function EventDetailScreen() {
                   <View className="flex-row flex-wrap gap-x-[48px] gap-y-[12px]">
                     <Stat label="Pesanan" value={String(event.totalOrder)} />
                     <Stat label="Revenue" value={formatIDR(event.revenue)} />
-                    <Stat label="Profit" value={formatIDR(event.profit)} />
+                    <Stat label="Profit" value={formatIDR(getEventProfit(event))} />
                   </View>
                 </View>
                 <View className="gap-[12px]">

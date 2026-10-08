@@ -2,7 +2,7 @@ import MenuIcon from '@/assets/images/figma/icon-menu.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { SideDrawer } from '@/components/ui/side-drawer';
 import { Text } from '@/components/ui/text';
-import { useEvents } from '@/lib/events-store';
+import { useEvents, getEventProfit } from '@/lib/events-store';
 import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
 import { useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
@@ -32,7 +32,7 @@ export default function DashboardScreen() {
   const hasEvents = events.length > 0;
 
   const totalRevenue = events.reduce((sum, e) => sum + e.revenue, 0);
-  const totalProfit = events.reduce((sum, e) => sum + e.profit, 0);
+  const totalProfit = events.reduce((sum, e) => sum + getEventProfit(e), 0);
   const totalOrder = events.reduce((sum, e) => sum + e.totalOrder, 0);
   const today = new Date();
   const ongoingEvent = events.find((e) => isDateInRange(today, e.tanggalDari, e.tanggalSampai));
