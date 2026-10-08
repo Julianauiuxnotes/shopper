@@ -10,6 +10,11 @@ import { type PropsWithChildren } from 'react';
 // export sets, so these links resolve in both local dev and production.
 const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL ?? '';
 
+const IOS_NO_FOCUS_ZOOM = `
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select { font-size: 16px !important; }
+}`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="id" className="bg-background">
@@ -40,6 +45,12 @@ export default function Root({ children }: PropsWithChildren) {
           However, body scrolling is often nice to have for mobile web. If you want to enable it, remove this line.
         */}
         <ScrollViewStyleReset />
+
+        {/* iPhone browsers zoom the page in when a focused field's text is
+            under 16px, and not all of them obey maximum-scale above. So on
+            iOS only (the @supports test is true just there) every field's
+            text is 16px, which never triggers the zoom. */}
+        <style dangerouslySetInnerHTML={{ __html: IOS_NO_FOCUS_ZOOM }} />
 
         {/* Add any additional <head> elements that you want globally available on web... */}
       </head>
