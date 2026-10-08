@@ -43,6 +43,9 @@ export type OrderItem = {
   feeType: 'percent' | 'flat';
   feeValue: number; // percent (0-100) if feeType 'percent', else flat IDR per unit
   dibeli: boolean; // "sudah dibeli" — purchased by the jastiper yet
+  // Marked as sold out / not available at the event. Never true together
+  // with `dibeli`. A label only: it doesn't take the item off the bill.
+  tidakTersedia?: boolean;
   fotoStruk: string | null; // local file:// URI of the receipt photo, set on confirm
 };
 

@@ -221,6 +221,37 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
     setConfirmingItemId(itemId);
   }
 
+  // "Beri tanda" / "Edit penanda": first pick the mark for an item. Tidak
+  // tersedia is saved straight from that sheet; Sudah dibeli continues to
+  // the confirm sheet above.
+  const [markingItemId, setMarkingItemId] = React.useState<string | null>(null);
+  const [markChoice, setMarkChoice] = React.useState<'dibeli' | 'tidakTersedia' | null>(null);
+
+  function openMark(itemId: string) {
+    const item = order!.items.find((it) => it.id === itemId);
+    if (!item) return;
+    setMarkChoice(item.dibeli ? 'dibeli' : item.tidakTersedia ? 'tidakTersedia' : null);
+    setMarkingItemId(itemId);
+  }
+
+  function handleMarkSubmit(close: () => void) {
+    if (!markingItemId || !markChoice) return;
+    if (markChoice === 'dibeli') {
+      // Straight to the confirm sheet, without waiting for this one to
+      // slide away.
+      const itemId = markingItemId;
+      setMarkingItemId(null);
+      openConfirm(itemId);
+      return;
+    }
+    editItems((items) =>
+      items.map((item) =>
+        item.id === markingItemId ? { ...item, dibeli: false, tidakTersedia: true } : item
+      )
+    );
+    close();
+  }
+
   function updateConfirmDraft(patch: Partial<ConfirmDraft>) {
     setConfirmDraft((d) => (d ? { ...d, ...patch } : d));
   }
@@ -279,6 +310,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       feeType: confirmDraft.feeType,
       feeValue: parseNumber(confirmDraft.feeValue),
       dibeli: true,
+      tidakTersedia: false,
       fotoStruk: fotoStrukDraft,
     };
     editItems((items) =>
@@ -681,9 +713,22 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                             visual marker in the design, not a live
                             dibeli indicator, so it's never filled here. */}
                           <View className="size-[10px] rounded-[2px] border border-[#5d5d5d]" />
-                          <Text className="font-inter text-[12px] text-neutral-800">
+                          <Text className="shrink font-inter text-[12px] text-neutral-800">
                             {item.namaProduk}
                           </Text>
+                          {item.tidakTersedia ? (
+                            <View className="rounded-[4px] bg-red-100 px-[6px] py-[2px]">
+                              <Text className="font-inter-semibold text-[10px] text-red-600">
+                                Tidak tersedia
+                              </Text>
+                            </View>
+                          ) : item.dibeli ? (
+                            <View className="rounded-[4px] bg-green-100 px-[6px] py-[2px]">
+                              <Text className="font-inter-semibold text-[10px] text-green-700">
+                                Sudah dibeli
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
                         <Text className="font-inter text-[12px] text-neutral-800">
                           {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
@@ -720,9 +765,11 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                             point, reusing the exact same sheet/draft
                             (openConfirm), not a separate form. */}
                           <Pressable
-                            onPress={() => openConfirm(item.id)}
+                            onPress={() => openMark(item.id)}
                             className="items-center justify-center rounded-[4px] border border-orange-500 px-[10px] py-[4px]">
-                            <Text className="font-inter text-[10px] text-orange-500">Edit</Text>
+                            <Text className="font-inter text-[10px] text-orange-500">
+                              Edit penanda
+                            </Text>
                           </Pressable>
                           <Pressable
                             onPress={() => handleCetakPenanda(item.id)}
@@ -733,9 +780,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         </View>
                       ) : (
                         <Pressable
-                          onPress={() => openConfirm(item.id)}
+                          onPress={() => openMark(item.id)}
+                          accessibilityRole="button"
                           className="items-center justify-center rounded-[4px] border border-[#5d5d5d] bg-white px-[10px] py-[6px]">
-                          <Text className="font-inter text-[10px] text-black">Sudah dibeli</Text>
+                          <Text className="font-inter text-[10px] text-black">
+                            {item.dibeli || item.tidakTersedia ? 'Edit penanda' : 'Beri tanda'}
+                          </Text>
                         </Pressable>
                       )}
                     </View>
@@ -931,6 +981,78 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
         onConfirm={handleDeleteOrder}
         onCancel={() => setConfirmingDelete(false)}
       />
+
+      {markingItemId ? (
+        <BottomSheet onClose={() => setMarkingItemId(null)} sheetClassName="bg-orange-100">
+          {(close) => (
+            <View className="gap-[24px] px-[31px] pb-[32px] pt-[24.5px]">
+              <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
+                <CaretCircleLeftIcon width={24} height={24} />
+                <Text className="font-inter-semibold text-[16px] text-black">Beri tanda</Text>
+              </Pressable>
+
+              <View accessibilityRole="radiogroup" className="gap-[10px]">
+                {(
+                  [
+                    ['dibeli', 'Sudah dibeli', 'Barang sudah kamu beli di event.'],
+                    ['tidakTersedia', 'Tidak tersedia', 'Barang habis atau tidak dijual di event.'],
+                  ] as const
+                ).map(([value, title, description]) => {
+                  const selected = markChoice === value;
+                  return (
+                    <Pressable
+                      key={value}
+                      onPress={() => setMarkChoice(value)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      aria-checked={selected}
+                      className={cn(
+                        'flex-row gap-[10px] rounded-[8px] border bg-white p-[12px]',
+                        selected ? 'border-orange-500' : 'border-neutral-400'
+                      )}>
+                      <View
+                        className={cn(
+                          'mt-[1px] h-[16px] w-[16px] items-center justify-center rounded-full border',
+                          selected ? 'border-orange-500' : 'border-neutral-400'
+                        )}>
+                        {selected ? (
+                          <View className="h-[8px] w-[8px] rounded-full bg-orange-500" />
+                        ) : null}
+                      </View>
+                      <View className="flex-1 gap-[4px]">
+                        <Text className="font-inter-semibold text-[14px] text-neutral-800">
+                          {title}
+                        </Text>
+                        <Text className="font-inter text-[12px] text-neutral-700">
+                          {description}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                onPress={() => handleMarkSubmit(close)}
+                disabled={!markChoice}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !markChoice }}
+                className={cn(
+                  'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                  markChoice ? 'bg-orange-500' : 'bg-orange-200'
+                )}>
+                <Text
+                  className={cn(
+                    'font-inter-semibold text-[14px]',
+                    markChoice ? 'text-white' : 'text-orange-300'
+                  )}>
+                  {markChoice === 'dibeli' ? 'Next' : 'Simpan'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </BottomSheet>
+      ) : null}
 
       {confirmDraft ? (
         <BottomSheet
