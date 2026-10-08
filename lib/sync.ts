@@ -1,4 +1,4 @@
-import { type JastipEvent, newId, type Order, withTotals } from './events-store';
+import { type Expense, type JastipEvent, newId, type Order, withTotals } from './events-store';
 import {
   clearPendingDeletes,
   getPendingDeletes,
@@ -40,6 +40,8 @@ type EventDoc = {
   tanggalDari: string;
   tanggalSampai: string;
   lokasi: string;
+  budget?: number;
+  pengeluaran?: Expense[];
 };
 type OrderDoc = Omit<Order, 'id'>;
 
@@ -64,7 +66,21 @@ function eventDoc(event: JastipEvent): EventDoc {
     tanggalDari: new Date(event.tanggalDari).toISOString(),
     tanggalSampai: new Date(event.tanggalSampai).toISOString(),
     lokasi: event.lokasi,
+    // Left out entirely when unset (canon drops undefined), so events
+    // from before the field existed still match their synced snapshot.
+    budget: event.budget,
+    pengeluaran: event.pengeluaran?.length ? event.pengeluaran : undefined,
   };
+}
+
+// A synced event's expense list, keeping only well-formed entries.
+function readExpenses(value: unknown): Expense[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const list = value.filter(
+    (x): x is Expense =>
+      !!x && typeof x.id === 'string' && typeof x.nama === 'string' && typeof x.jumlah === 'number'
+  );
+  return list.length > 0 ? list : undefined;
 }
 
 function orderDoc(order: Order): OrderDoc {
@@ -230,6 +246,8 @@ function mergeRows(
       tanggalDari: new Date(row.data.tanggalDari),
       tanggalSampai: new Date(row.data.tanggalSampai),
       lokasi: row.data.lokasi,
+      budget: typeof row.data.budget === 'number' ? row.data.budget : undefined,
+      pengeluaran: readExpenses(row.data.pengeluaran),
     });
     if (!mine) order.push(row.id);
     changed += 1;

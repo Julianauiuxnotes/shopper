@@ -304,7 +304,7 @@ export default function TambahPesananScreen() {
       // just continue to Event Detail rather than blocking on this.
     }
 
-    router.replace({ pathname: '/event-detail', params: { id: event.id } });
+    router.replace({ pathname: '/event-detail', params: { id: event.id, tab: 'pesanan' } });
   }
 
   if (!event) {
@@ -412,7 +412,9 @@ export default function TambahPesananScreen() {
             <Text className="font-inter text-[12px] text-neutral-800">
               Atau isi manual form dibawah ini:
             </Text>
-            <Text className="font-inter-bold text-[14px] text-neutral-800">Form pesanan manual</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              Form pesanan manual
+            </Text>
           </View>
 
           <View className="gap-[4px]">

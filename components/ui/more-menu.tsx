@@ -11,7 +11,7 @@ type MoreMenuItem = {
   onPress: () => void;
 };
 
-const PANEL_WIDTH = 160;
+const PANEL_WIDTH = 190;
 
 // The "more" icon at the top right of a screen, with its drop-down menu.
 // Destructive actions (Hapus event, Hapus pesanan) live in here rather

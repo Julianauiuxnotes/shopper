@@ -129,13 +129,7 @@ export default function OrderDetailScreen() {
 // is a working copy that every field, toggle and item sheet edits;
 // `savedOrder` is what the store holds. Simpan writes the copy back in
 // one go (and the sync then sends it to the shop's other devices).
-function OrderDetailContent({
-  event,
-  order: savedOrder,
-}: {
-  event: JastipEvent;
-  order: Order;
-}) {
+function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; order: Order }) {
   const router = useRouter();
   const { saveOrder, deleteOrder } = useEvents();
   const [order, setOrder] = React.useState(savedOrder);
@@ -184,14 +178,14 @@ function OrderDetailContent({
   // The back arrow: straight to the event when there's nothing to lose,
   // otherwise ask first.
   function goToEvent() {
-    router.replace({ pathname: '/event-detail', params: { id: event.id } });
+    router.replace({ pathname: '/event-detail', params: { id: event.id, tab: 'pesanan' } });
   }
 
   // Leaves the screen first, then deletes: the order this screen is
   // showing must not vanish from under it.
   function handleDeleteOrder() {
     setConfirmingDelete(false);
-    router.replace({ pathname: '/event-detail', params: { id: event.id } });
+    router.replace({ pathname: '/event-detail', params: { id: event.id, tab: 'pesanan' } });
     deleteOrder(event.id, order.id);
   }
   const [confirmingItemId, setConfirmingItemId] = React.useState<string | null>(null);

@@ -20,6 +20,7 @@ const brandOrange = {
 const brandNeutral = {
   ...tailwindColors.neutral,
   50: '#fafafa',
+  200: '#eef2f6',
   300: '#e5e7eb',
   400: '#d1d5db',
   500: '#9ca3af',

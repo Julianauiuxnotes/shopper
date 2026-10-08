@@ -4,12 +4,12 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { useEvents } from '@/lib/events-store';
+import { type JastipEvent, useEvents } from '@/lib/events-store';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { compressPhoto } from '@/lib/compress-image';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import {
   Alert,
@@ -29,15 +29,38 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 // screen. Presented as a transparent modal sliding up from the bottom to
 // match; the dim + sheet are rendered here since expo-router's own
 // "transparentModal" presentation doesn't compose a backdrop for us.
+//
+// The same sheet edits an existing event when opened with `editId` (from
+// "Edit event detail" on the event page): the fields start filled in and
+// Simpan updates that event instead of creating one.
 export default function BukaEventJastipScreen() {
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const { ready, getEvent } = useEvents();
+  const sheetOptions = (
+    <Stack.Screen
+      options={{ presentation: 'transparentModal', animation: 'none', headerShown: false }}
+    />
+  );
+  if (!editId) return <EventForm />;
+  // Wait for the saved events, so the form can start from this one's.
+  if (!ready) return sheetOptions;
+  const editing = getEvent(editId);
+  return editing ? <EventForm editing={editing} /> : sheetOptions;
+}
+
+function EventForm({ editing }: { editing?: JastipEvent }) {
   const router = useRouter();
-  const { addEvent } = useEvents();
-  const [namaAcara, setNamaAcara] = React.useState('');
-  const [tanggalDari, setTanggalDari] = React.useState<Date | undefined>();
-  const [tanggalSampai, setTanggalSampai] = React.useState<Date | undefined>();
-  const [lokasi, setLokasi] = React.useState('');
+  const { addEvent, updateEvent } = useEvents();
+  const [namaAcara, setNamaAcara] = React.useState(editing?.namaAcara ?? '');
+  const [tanggalDari, setTanggalDari] = React.useState<Date | undefined>(editing?.tanggalDari);
+  const [tanggalSampai, setTanggalSampai] = React.useState<Date | undefined>(
+    editing?.tanggalSampai
+  );
+  const [lokasi, setLokasi] = React.useState(editing?.lokasi ?? '');
   const [activePicker, setActivePicker] = React.useState<'dari' | 'sampai' | null>(null);
-  const [fotoUri, setFotoUri] = React.useState<string | null>(null);
+  const [fotoUri, setFotoUri] = React.useState<string | null>(editing?.fotoUri ?? null);
+  // Digits only; shown with thousands separators. Optional.
+  const [budget, setBudget] = React.useState(editing?.budget ? String(editing.budget) : '');
 
   const isValid =
     namaAcara.trim().length > 0 && !!tanggalDari && !!tanggalSampai && lokasi.trim().length > 0;
@@ -72,6 +95,18 @@ export default function BukaEventJastipScreen() {
 
   function handleSimpan() {
     if (!isValid || !tanggalDari || !tanggalSampai) return;
+    if (editing) {
+      updateEvent(editing.id, {
+        namaAcara,
+        tanggalDari,
+        tanggalSampai,
+        lokasi,
+        fotoUri,
+        budget: Number(budget) || 0,
+      });
+      router.back();
+      return;
+    }
     // TODO: persist the event (and upload fotoUri, if set) via Supabase
     // once the backend (fymscirqwnnlubepymgc.supabase.co) is
     // unpaused/reconnected — for now it only lives in the in-memory
@@ -79,7 +114,14 @@ export default function BukaEventJastipScreen() {
     // Event Detail so they all reflect the same data. A local file://
     // URI isn't meaningful data to persist without a real upload, so
     // fotoUri travels with the event object but nothing uploads it yet.
-    const created = addEvent({ namaAcara, tanggalDari, tanggalSampai, lokasi, fotoUri });
+    const created = addEvent({
+      namaAcara,
+      tanggalDari,
+      tanggalSampai,
+      lokasi,
+      fotoUri,
+      budget: Number(budget) || 0,
+    });
     router.replace({ pathname: '/event-detail', params: { id: created.id } });
   }
 
@@ -99,7 +141,9 @@ export default function BukaEventJastipScreen() {
               showsVerticalScrollIndicator={false}>
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
-                <Text className="font-inter-semibold text-[16px] text-black">Buka Jastip</Text>
+                <Text className="font-inter-semibold text-[16px] text-black">
+                  {editing ? 'Edit event detail' : 'Buka Jastip'}
+                </Text>
               </Pressable>
 
               <View className="gap-[16px]">
@@ -191,6 +235,24 @@ export default function BukaEventJastipScreen() {
                     </Text>
                   </Pressable>
                 )}
+
+                <View className="gap-[4px]">
+                  <Text className="font-inter text-[12px] text-neutral-800">Budget jastip</Text>
+                  {/* min-h rather than vertical padding: the Input inside is
+                      already 36px tall on wide screens, and padding on top of
+                      that made this field taller than Nama Acara and Lokasi. */}
+                  <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
+                    <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                    <Input
+                      value={budget ? Number(budget).toLocaleString('id-ID') : ''}
+                      onChangeText={(value) => setBudget(value.replace(/\D/g, '').slice(0, 12))}
+                      placeholder="0"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="number-pad"
+                      className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                    />
+                  </View>
+                </View>
               </View>
 
               <Pressable

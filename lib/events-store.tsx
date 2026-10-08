@@ -70,6 +70,15 @@ export function getTotalTagihan(order: Order) {
   return order.totalPembayaran + order.profit + ongkir;
 }
 
+// Something the jastiper spent at an event (parking, packaging, ...).
+export type Expense = {
+  id: string;
+  nama: string;
+  // ISO date the money was spent; absent on entries from before the field.
+  tanggal?: string;
+  jumlah: number;
+};
+
 export type JastipEvent = {
   id: string;
   kodeEvent: string;
@@ -78,6 +87,11 @@ export type JastipEvent = {
   tanggalSampai: Date;
   lokasi: string;
   fotoUri: string | null;
+  // How much the jastiper plans to spend at this event, IDR. Optional:
+  // absent on events created before the field existed, 0 when left empty.
+  budget?: number;
+  // The event's own costs, listed on its Laporan tab. Absent when none.
+  pengeluaran?: Expense[];
   orders: Order[];
   // Derived from `orders` — kept as plain fields (not computed on read)
   // so Dashboard's aggregate sums stay a simple reduce over events.
@@ -92,6 +106,7 @@ type NewEventInput = {
   tanggalSampai: Date;
   lokasi: string;
   fotoUri: string | null;
+  budget?: number;
 };
 
 type NewOrderInput = {
@@ -116,6 +131,9 @@ type EventsContextValue = {
   // pulled from the server (or re-keying local data before the first sync).
   replaceEvents: (updater: (prev: JastipEvent[]) => JastipEvent[]) => void;
   addEvent: (input: NewEventInput) => JastipEvent;
+  updateEvent: (id: string, input: NewEventInput) => void;
+  addExpense: (eventId: string, input: Omit<Expense, 'id'>) => void;
+  deleteExpense: (eventId: string, expenseId: string) => void;
   // Permanently remove an event (with all its orders) or one order. The
   // deletion is also queued for the server (lib/pending-deletes.ts), so it
   // disappears on the shop's other devices too.
@@ -255,6 +273,11 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     },
     [events]
   );
+
+  // Edits an event's own details; its code, orders and expenses stay.
+  const updateEvent = React.useCallback((id: string, input: NewEventInput) => {
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...input } : e)));
+  }, []);
 
   const getEvent = React.useCallback((id: string) => events.find((e) => e.id === id), [events]);
 
@@ -441,6 +464,25 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const addExpense = React.useCallback((eventId: string, input: Omit<Expense, 'id'>) => {
+    const created: Expense = { id: newId('x'), ...input };
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, pengeluaran: [...(e.pengeluaran ?? []), created] } : e
+      )
+    );
+  }, []);
+
+  const deleteExpense = React.useCallback((eventId: string, expenseId: string) => {
+    setEvents((prev) =>
+      prev.map((e) => {
+        if (e.id !== eventId) return e;
+        const rest = (e.pengeluaran ?? []).filter((x) => x.id !== expenseId);
+        return { ...e, pengeluaran: rest.length > 0 ? rest : undefined };
+      })
+    );
+  }, []);
+
   const replaceEvents = React.useCallback(
     (updater: (prev: JastipEvent[]) => JastipEvent[]) => setEvents(updater),
     []
@@ -456,6 +498,9 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       saveOrder,
       events,
       addEvent,
+      updateEvent,
+      addExpense,
+      deleteExpense,
       getEvent,
       addOrder,
       getOrder,
@@ -472,6 +517,9 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       deleteOrder,
       saveOrder,
       addEvent,
+      updateEvent,
+      addExpense,
+      deleteExpense,
       getEvent,
       addOrder,
       getOrder,
