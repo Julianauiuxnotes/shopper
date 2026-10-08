@@ -39,9 +39,14 @@ export type OrderItem = {
   fotoStruk: string | null; // local file:// URI of the receipt photo, set on confirm
 };
 
+export type PaymentStatus = 'lunas' | 'belumLunas' | 'belum';
+
 export type Order = {
   id: string;
   orderNumber: string; // ORD-0001, per-event sequence (memory: normalize to 4-digit padding)
+  // When the order was entered (ISO). Absent on orders from before the
+  // field existed.
+  dibuat?: string;
   nama: string;
   alamat: string;
   whatsapp: string;
@@ -56,7 +61,11 @@ export type Order = {
   items: OrderItem[];
   totalPembayaran: number;
   profit: number;
-  statusPembayaran: 'lunas' | 'belum';
+  // 'belumLunas' = the customer has paid part of it (a DP or any partial
+  // payment); 'belum' = nothing paid yet.
+  statusPembayaran: PaymentStatus;
+  // Down payment already received, IDR. Optional: absent or 0 = none.
+  dp?: number;
   // 'customer' = arrived through the public order form (app/o.tsx), so its
   // prices and fees haven't been filled in by the jastiper yet. Absent on
   // orders the jastiper entered in Tambah Pesanan.
@@ -71,6 +80,12 @@ export type Order = {
 export function getTotalTagihan(order: Order) {
   const ongkir = order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0;
   return order.totalPembayaran + order.profit + ongkir;
+}
+
+/** What the customer still owes: nothing once Lunas, else the bill less the DP. */
+export function getSisaPembayaran(order: Order) {
+  if (order.statusPembayaran === 'lunas') return 0;
+  return Math.max(0, getTotalTagihan(order) - (order.dp ?? 0));
 }
 
 // Something the jastiper spent at an event (parking, packaging, ...).
@@ -126,6 +141,8 @@ type NewOrderInput = {
   whatsapp: string;
   metodePengiriman: 'instant' | 'ekspedisi';
   items: Array<Omit<OrderItem, 'id' | 'dibeli' | 'fotoStruk'>>;
+  /** Down payment already received, IDR. */
+  dp?: number;
   sumber?: 'customer';
 };
 
@@ -316,6 +333,7 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
       const order: Order = {
         id: orderId,
         orderNumber,
+        dibuat: new Date().toISOString(),
         nama: input.nama,
         alamat: input.alamat,
         whatsapp: input.whatsapp,
@@ -323,7 +341,8 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
         items,
         totalPembayaran,
         profit,
-        statusPembayaran: 'belum',
+        statusPembayaran: input.dp ? 'belumLunas' : 'belum',
+        ...(input.dp ? { dp: input.dp } : {}),
         ...(input.sumber ? { sumber: input.sumber } : {}),
       };
 

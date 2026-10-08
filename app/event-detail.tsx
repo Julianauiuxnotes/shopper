@@ -10,7 +10,14 @@ import { MoreMenu } from '@/components/ui/more-menu';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-store';
 import { canExportReport, downloadEventReport } from '@/lib/export-event-report';
-import { type Expense, getTotalTagihan, type Order, useEvents } from '@/lib/events-store';
+import {
+  type Expense,
+  getSisaPembayaran,
+  getTotalTagihan,
+  type Order,
+  type PaymentStatus,
+  useEvents,
+} from '@/lib/events-store';
 import { formatDate, formatDateRange, formatIDR } from '@/lib/format';
 import { buildOrderFormLink } from '@/lib/order-form-link';
 import { useSettings } from '@/lib/settings-store';
@@ -53,13 +60,19 @@ export default function EventDetailScreen() {
     ensureOrderInbox,
     ready: settingsReady,
   } = useSettings();
-  const { id, tab: tabParam } = useLocalSearchParams<{ id?: string; tab?: string }>();
+  const {
+    id,
+    tab: tabParam,
+    status: statusParam,
+  } = useLocalSearchParams<{ id?: string; tab?: string; status?: string }>();
   // Laporan (the event's numbers) or List pesanan (the orders). Screens
   // that come back here after working on an order pass `tab=pesanan` so
   // the jastiper lands on the list they left.
   const [tab, setTab] = React.useState<EventTab>(tabParam === 'pesanan' ? 'pesanan' : 'laporan');
   // Which orders the List pesanan tab shows.
-  const [paidFilter, setPaidFilter] = React.useState<'lunas' | 'belum'>('belum');
+  const [paidFilter, setPaidFilter] = React.useState<PaymentStatus>(
+    statusParam === 'belumLunas' || statusParam === 'lunas' ? statusParam : 'belum'
+  );
   // Switching tabs slides the white pill across and fades the new content
   // in; switching the paid/unpaid chip fades the list in. The switch
   // itself happens at once — only the look is animated.
@@ -68,7 +81,11 @@ export default function EventDetailScreen() {
   const pillPosition = React.useRef(new Animated.Value(tab === 'pesanan' ? 1 : 0)).current;
   const contentFade = React.useRef(new Animated.Value(1)).current;
   const listFade = React.useRef(new Animated.Value(1)).current;
-  const chipPosition = React.useRef(new Animated.Value(0)).current;
+  const chipPosition = React.useRef(
+    new Animated.Value(PAID_FILTERS.findIndex(([value]) => value === paidFilter))
+  ).current;
+  const chipWidth =
+    tabsWidth > 0 ? (tabsWidth - CHIP_GAP * (PAID_FILTERS.length - 1)) / PAID_FILTERS.length : 0;
   const fadeIn = (value: Animated.Value, duration = TRANSITION_MS) => {
     value.setValue(0);
     Animated.timing(value, {
@@ -89,11 +106,11 @@ export default function EventDetailScreen() {
     }).start();
     fadeIn(contentFade);
   };
-  const switchPaidFilter = (next: 'lunas' | 'belum') => {
+  const switchPaidFilter = (next: PaymentStatus) => {
     if (next === paidFilter) return;
     setPaidFilter(next);
     Animated.timing(chipPosition, {
-      toValue: next === 'lunas' ? 1 : 0,
+      toValue: PAID_FILTERS.findIndex(([value]) => value === next),
       duration: TRANSITION_MS,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
@@ -121,10 +138,14 @@ export default function EventDetailScreen() {
       : '';
   const [linkCopied, setLinkCopied] = React.useState(false);
   const lunasOrders = event?.orders.filter((o) => o.statusPembayaran === 'lunas') ?? [];
+  const sebagianOrders = event?.orders.filter((o) => o.statusPembayaran === 'belumLunas') ?? [];
   const belumOrders = event?.orders.filter((o) => o.statusPembayaran === 'belum') ?? [];
+  const ordersByStatus = { lunas: lunasOrders, belumLunas: sebagianOrders, belum: belumOrders };
   // Receivable per status: what customers have paid vs. still owe.
   const lunasTotal = lunasOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
   const belumTotal = belumOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
+  // For partly paid orders: what is still owed after their DP.
+  const sebagianSisa = sebagianOrders.reduce((sum, o) => sum + getSisaPembayaran(o), 0);
   const expenses = event?.pengeluaran ?? [];
   const expenseTotal = expenses.reduce((sum, x) => sum + x.jumlah, 0);
 
@@ -344,11 +365,16 @@ export default function EventDetailScreen() {
                   <Text className="font-inter-bold text-[14px] text-neutral-900">
                     Status pembayaran
                   </Text>
-                  <View className="flex-row gap-[61px]">
+                  <View className="flex-row flex-wrap gap-x-[32px] gap-y-[12px]">
                     <Stat
                       label="Lunas"
                       value={String(lunasOrders.length)}
                       note={formatIDR(lunasTotal)}
+                    />
+                    <Stat
+                      label="Belum lunas"
+                      value={String(sebagianOrders.length)}
+                      note={`Sisa ${formatIDR(sebagianSisa)}`}
                     />
                     <Stat
                       label="Belum Dibayar"
@@ -435,42 +461,50 @@ export default function EventDetailScreen() {
                 />
               </View>
 
-              {/* Figma node 222:1085: one list at a time, paid or unpaid. Three
-                layers so the white pill can slide between the chips: the
-                grey chip shapes, the pill, then the labels on top. */}
-              <View className="flex-row gap-[9px]">
+              {/* Figma node 222:1085, with a third chip for partly paid
+                orders: one list at a time. Three layers so the white pill
+                can slide between the chips: the grey chip shapes, the
+                pill, then the labels on top. The chips share the row's
+                width equally. */}
+              <View className="flex-row" style={{ gap: CHIP_GAP }}>
                 <View
-                  className="absolute bottom-0 left-0 top-0 flex-row gap-[9px]"
+                  className="absolute bottom-0 left-0 right-0 top-0 flex-row"
+                  style={{ gap: CHIP_GAP }}
                   pointerEvents="none">
-                  <View className="w-[136px] rounded-[36px] border border-neutral-300 bg-neutral-200" />
-                  <View className="w-[136px] rounded-[36px] border border-neutral-300 bg-neutral-200" />
+                  {PAID_FILTERS.map(([value]) => (
+                    <View
+                      key={value}
+                      className="flex-1 rounded-[36px] border border-neutral-300 bg-neutral-200"
+                    />
+                  ))}
                 </View>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    CHIP_PILL,
-                    {
-                      transform: [
-                        {
-                          translateX: chipPosition.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, CHIP_WIDTH + CHIP_GAP],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
-                <FilterChip
-                  label="Belum dibayar"
-                  active={paidFilter === 'belum'}
-                  onPress={() => switchPaidFilter('belum')}
-                />
-                <FilterChip
-                  label="Sudah dibayar"
-                  active={paidFilter === 'lunas'}
-                  onPress={() => switchPaidFilter('lunas')}
-                />
+                {chipWidth > 0 ? (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      CHIP_PILL,
+                      {
+                        width: chipWidth,
+                        transform: [
+                          {
+                            translateX: chipPosition.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, chipWidth + CHIP_GAP],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ) : null}
+                {PAID_FILTERS.map(([value, label]) => (
+                  <FilterChip
+                    key={value}
+                    label={label}
+                    active={paidFilter === value}
+                    onPress={() => switchPaidFilter(value)}
+                  />
+                ))}
               </View>
 
               <Animated.View
@@ -487,7 +521,7 @@ export default function EventDetailScreen() {
                 }}>
                 <OrderList
                   searching={searching}
-                  orders={(paidFilter === 'lunas' ? lunasOrders : belumOrders).filter(matchesQuery)}
+                  orders={ordersByStatus[paidFilter].filter(matchesQuery)}
                   eventId={event.id}
                 />
               </Animated.View>
@@ -614,13 +648,20 @@ function FilterChip({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       aria-pressed={active}
-      className="w-[136px] items-center justify-center rounded-[36px] border border-transparent px-[16px] py-[6px]">
-      <Text className="font-inter-semibold text-[14px] text-neutral-700">{label}</Text>
+      className="flex-1 items-center justify-center rounded-[36px] border border-transparent px-[4px] py-[6px]">
+      <Text numberOfLines={1} className="font-inter-semibold text-[13px] text-neutral-700">
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-const CHIP_WIDTH = 136;
+// The List pesanan chips, in the order they appear.
+const PAID_FILTERS: Array<[PaymentStatus, string]> = [
+  ['belum', 'Belum dibayar'],
+  ['belumLunas', 'Belum lunas'],
+  ['lunas', 'Sudah dibayar'],
+];
 const CHIP_GAP = 9;
 const LIST_TRANSITION_MS = 300;
 const CHIP_PILL = {
@@ -628,7 +669,6 @@ const CHIP_PILL = {
   top: 0,
   bottom: 0,
   left: 0,
-  width: CHIP_WIDTH,
   borderRadius: 36,
   backgroundColor: '#fafafa',
   boxShadow: '0px 4px 4.25px rgba(0, 0, 0, 0.15)',

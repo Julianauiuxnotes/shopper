@@ -130,8 +130,8 @@ export default function TagihanScreen() {
             </Text>
           </Pressable>
           <Text className="text-center font-inter text-[10px] text-neutral-500">
-            Customer bisa membuka tagihan dari link ini tanpa perlu login. Logo jastip tidak
-            ikut tampil di link.
+            Customer bisa membuka tagihan dari link ini tanpa perlu login. Logo jastip tidak ikut
+            tampil di link.
           </Text>
         </View>
       </ScrollView>

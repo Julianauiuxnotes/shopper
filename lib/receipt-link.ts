@@ -42,6 +42,10 @@ export type ReceiptSnapshot = {
   al: string;
   /** Lunas? */
   lu: boolean;
+  /** Partly paid ("Belum lunas")? Absent on links from before the status existed. */
+  bl?: boolean;
+  /** DP already paid, IDR (0 = none). Absent on older links. */
+  dp?: number;
   /** Ticked ongkir option (see lib/ongkir.ts), or null */
   ok: 'awal' | 'saatPengiriman' | 'gratis' | null;
   /** Ongkir billed upfront, IDR (0 unless ok === 'awal') */
@@ -70,6 +74,8 @@ export function buildReceiptSnapshot(
     cn: order.nama,
     al: order.alamat,
     lu: order.statusPembayaran === 'lunas',
+    bl: order.statusPembayaran === 'belumLunas',
+    dp: order.dp ?? 0,
     ok: order.pembayaranOngkir ?? null,
     og: order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0,
     it: order.items.map((item) => {
@@ -93,8 +99,12 @@ export function buildReceiptSnapshot(
 //
 //   nama jastip . telepon . printed-at (minutes) . nama acara .
 //   date from . date to . nomor order . nama customer . alamat .
-//   flags (lunas*4 + ongkir option index) . ongkir billed . total .
+//   flags (lunas*4 + belum-lunas*8 + ongkir option index) . ongkir billed .
+//   total . [format 3 only: DP paid] .
 //   then per item: nama produk . jumlah . price per unit
+//
+// Format "3" is the same with the DP added after the total; "2" links
+// already sent to customers still open.
 const ONGKIR_CODES = [null, 'awal', 'saatPengiriman', 'gratis'] as const;
 const HEADER_FIELDS = 12;
 
@@ -110,24 +120,31 @@ export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
     escapeText(snapshot.on),
     escapeText(snapshot.cn),
     escapeText(snapshot.al),
-    num((snapshot.lu ? 4 : 0) + Math.max(0, ONGKIR_CODES.indexOf(snapshot.ok))),
+    num(
+      (snapshot.lu ? 4 : 0) + (snapshot.bl ? 8 : 0) + Math.max(0, ONGKIR_CODES.indexOf(snapshot.ok))
+    ),
     num(snapshot.og),
     num(snapshot.tt),
+    num(snapshot.dp ?? 0),
     ...snapshot.it.flatMap(([nama, jumlah, harga]) => [escapeText(nama), num(jumlah), num(harga)]),
   ];
-  return `2.${fields.join('.')}`;
+  return `3.${fields.join('.')}`;
 }
 
 function decodeV2(encoded: string): ReceiptSnapshot | null {
   const f = encoded.split('.').slice(1);
-  if (f.length < HEADER_FIELDS || (f.length - HEADER_FIELDS) % 3 !== 0) return null;
+  // Format 3 carries one more header field than 2: the DP.
+  const header = encoded.startsWith('3.') ? HEADER_FIELDS + 1 : HEADER_FIELDS;
+  if (f.length < header || (f.length - header) % 3 !== 0) return null;
   const int = (text: string) => parseInt(text, 36);
   const numbers = [f[2], f[4], f[5], f[9], f[10], f[11]].map(int);
   if (numbers.some(Number.isNaN)) return null;
   const [minutes, from, to, flags, og, tt] = numbers;
+  const dp = header > HEADER_FIELDS ? int(f[12]) : 0;
+  if (Number.isNaN(dp)) return null;
 
   const it: ReceiptSnapshot['it'] = [];
-  for (let i = HEADER_FIELDS; i < f.length; i += 3) {
+  for (let i = header; i < f.length; i += 3) {
     const jumlah = int(f[i + 1]);
     const harga = int(f[i + 2]);
     if (Number.isNaN(jumlah) || Number.isNaN(harga)) return null;
@@ -145,7 +162,9 @@ function decodeV2(encoded: string): ReceiptSnapshot | null {
     on: unescapeText(f[6]),
     cn: unescapeText(f[7]),
     al: unescapeText(f[8]),
-    lu: flags >= 4,
+    lu: (flags & 4) !== 0,
+    bl: (flags & 8) !== 0,
+    dp,
     ok: ONGKIR_CODES[flags % 4] ?? null,
     og,
     it,
@@ -181,7 +200,7 @@ function decodeV1(encoded: string): ReceiptSnapshot | null {
 /** Returns null for anything that isn't a well-formed receipt link. */
 export function decodeReceiptSnapshot(encoded: string): ReceiptSnapshot | null {
   try {
-    return encoded.startsWith('2.') ? decodeV2(encoded) : decodeV1(encoded);
+    return /^[23]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
   } catch {
     return null;
   }

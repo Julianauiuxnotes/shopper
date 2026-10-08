@@ -1,26 +1,44 @@
-import { type JastipEvent, type Order, type OrderItem, getTotalTagihan } from '@/lib/events-store';
+import {
+  type JastipEvent,
+  type Order,
+  type OrderItem,
+  getSisaPembayaran,
+  getTotalTagihan,
+} from '@/lib/events-store';
 import { Platform } from 'react-native';
 
-// The event's report as an Excel file: a summary sheet, every order (one
-// row per product) and the event's expenses. Built on the device — nothing
-// is sent anywhere. Web only for now: saving a file on a phone needs the
-// native file/share modules, which the app doesn't include yet.
+// The event's report as an Excel file, laid out after the owner's own
+// template ("Example format for Shopper download report.xlsx"): one sheet
+// with the event and its finances at the top and every order below, one
+// row per product; a second sheet lists the event's expenses. Built on the
+// device — nothing is sent anywhere. Web only for now: saving a file on a
+// phone needs the native file/share modules, which the app doesn't include.
+//
+// Amounts are real numbers with an "IDR" number format (the template typed
+// them as text), so they can be summed and filtered in a spreadsheet.
 
-type Cell = string | number | Date | null | { value: string | number; fontWeight: 'bold' };
+type CellObject = {
+  value: string | number | Date;
+  fontWeight?: 'bold';
+  align?: 'left' | 'right';
+  format?: string;
+  columnSpan?: number;
+};
+type Cell = string | number | Date | null | CellObject;
+
+const IDR = '"IDR "#,##0';
+const DATE = 'dd/mm/yyyy';
 
 const bold = (value: string): Cell => ({ value, fontWeight: 'bold' });
+const money = (value: number): Cell => ({ value, format: IDR, align: 'right' });
+const count = (value: number): Cell => ({ value, align: 'right' });
+const date = (value: Date): Cell => ({ value, format: DATE, align: 'left' });
 
-const METODE: Record<Order['metodePengiriman'], string> = {
-  instant: 'Instant',
-  ekspedisi: 'Ekspedisi',
+const STATUS_LABEL: Record<Order['statusPembayaran'], string> = {
+  lunas: 'Lunas',
+  belumLunas: 'Belum lunas',
+  belum: 'Belum dibayar',
 };
-
-function ongkirNote(order: Order) {
-  if (order.pembayaranOngkir === 'awal') return 'Bayar di awal';
-  if (order.pembayaranOngkir === 'saatPengiriman') return 'Bayar saat pengiriman';
-  if (order.pembayaranOngkir === 'gratis') return 'Free ongkir';
-  return '';
-}
 
 /** Jastip fee for one line: per unit, percent of the price or a flat amount. */
 function itemFee(item: OrderItem) {
@@ -28,84 +46,123 @@ function itemFee(item: OrderItem) {
   return Math.round(perUnit * item.jumlah);
 }
 
-function orderRows(event: JastipEvent): Cell[][] {
-  const header = [
-    'No. pesanan',
-    'Nama',
-    'No. Whatsapp',
-    'Alamat',
-    'Metode pengiriman',
-    'Status pembayaran',
-    'Produk',
-    'Jumlah',
-    'Harga satuan (mata uang asing)',
-    'Harga satuan',
-    'Subtotal barang',
-    'Fee jastip',
-    'Sudah dibeli',
-    'Pembayaran ongkir',
-    'Ongkir',
-    'Total tagihan pesanan',
-  ].map(bold);
-  const rows: Cell[][] = [header];
-  for (const order of event.orders) {
-    order.items.forEach((item, index) => {
-      const first = index === 0;
-      rows.push([
-        order.orderNumber,
-        order.nama,
-        order.whatsapp ? `+62${order.whatsapp}` : '',
-        order.alamat,
-        METODE[order.metodePengiriman] ?? '',
-        order.statusPembayaran === 'lunas' ? 'Lunas' : 'Belum dibayar',
-        item.namaProduk,
-        item.jumlah,
-        item.hargaAsing ?? null,
-        item.harga,
-        item.harga * item.jumlah,
-        itemFee(item),
-        item.dibeli ? 'Ya' : 'Belum',
-        // Order-level figures once per order, so the columns can be summed.
-        first ? ongkirNote(order) : null,
-        first && order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : null,
-        first ? getTotalTagihan(order) : null,
-      ]);
-    });
+const sumTagihan = (orders: Order[]) =>
+  orders.reduce((total, order) => total + getTotalTagihan(order), 0);
+
+/** Places `right` beside `left` from column D on, as in the template. */
+function sideBySide(left: Cell[][], right: Cell[][]): Cell[][] {
+  const rows: Cell[][] = [];
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const l = left[i] ?? [];
+    rows.push([l[0] ?? null, l[1] ?? null, null, ...(right[i] ?? [])]);
   }
   return rows;
 }
 
-function summaryRows(event: JastipEvent): Cell[][] {
+function headerRows(event: JastipEvent): Cell[][] {
   const lunas = event.orders.filter((o) => o.statusPembayaran === 'lunas');
+  const sebagian = event.orders.filter((o) => o.statusPembayaran === 'belumLunas');
   const belum = event.orders.filter((o) => o.statusPembayaran === 'belum');
-  const sum = (orders: Order[]) => orders.reduce((total, o) => total + getTotalTagihan(o), 0);
   const expenses = (event.pengeluaran ?? []).reduce((total, x) => total + x.jumlah, 0);
-  return [
+  const foreign = event.jenis === 'internasional';
+
+  const left: Cell[][] = [
     [bold('Laporan event')],
     ['Nama acara', event.namaAcara],
     ['Kode event', event.kodeEvent],
-    ['Tanggal mulai', event.tanggalDari],
-    ['Tanggal selesai', event.tanggalSampai],
+    ['Tanggal mulai', date(event.tanggalDari)],
+    ['Tanggal selesai', date(event.tanggalSampai)],
     ['Lokasi', event.lokasi],
-    ['Jenis event', event.jenis === 'internasional' ? 'Internasional' : 'Lokal'],
-    ...(event.jenis === 'internasional'
+    ['Jenis event', foreign ? 'Internasional' : 'Lokal'],
+    ...(foreign
       ? ([
           ['Mata uang belanja', event.mataUang ?? ''],
-          ['Kurs ke IDR', event.kurs ?? 0],
+          ['Kurs ke IDR', { value: event.kurs ?? 0, align: 'left' }],
         ] as Cell[][])
       : []),
-    [],
+  ];
+  const right: Cell[][] = [
     [bold('Keuangan')],
-    ['Jastip budget', event.budget ?? 0],
-    ['Pengeluaran', expenses],
-    ['Pesanan', event.totalOrder],
-    ['Revenue', event.revenue],
-    ['Profit', event.profit],
+    ['Jastip budget', money(event.budget ?? 0)],
+    ['Pengeluaran', money(expenses)],
+    ['Pesanan', count(event.totalOrder)],
+    ['Revenue', money(event.revenue)],
+    ['Profit', money(event.profit)],
     [],
     [bold('Status pembayaran'), bold('Jumlah pesanan'), bold('Total tagihan')],
-    ['Lunas', lunas.length, sum(lunas)],
-    ['Belum dibayar', belum.length, sum(belum)],
+    ['Lunas', count(lunas.length), money(sumTagihan(lunas))],
+    ['Belum lunas', count(sebagian.length), money(sumTagihan(sebagian))],
+    ['Belum dibayar', count(belum.length), money(sumTagihan(belum))],
   ];
+  return [
+    [
+      {
+        value: 'Powered by Shopper App. No.1 Apps for Jastiper',
+        fontWeight: 'bold',
+        columnSpan: 3,
+      },
+    ],
+    [],
+    ...sideBySide(left, right),
+    [],
+    [],
+    [],
+  ];
+}
+
+function orderRows(event: JastipEvent): Cell[][] {
+  const foreign = event.jenis === 'internasional';
+  const header = [
+    'Tanggal pesanan',
+    'Nama pelanggan',
+    'Nama produk',
+    'Jumlah',
+    'Harga',
+    'Fee jastip',
+    'Fee jastip (%)',
+    'Fee jastip (IDR)',
+    'Harga + fee jastip',
+    'DP',
+    'Sisa pembayaran',
+    'Payment type',
+    'Status pembayaran',
+    'No. pesanan',
+    'Ongkir',
+    'Total tagihan pesanan',
+    ...(foreign ? [`Harga (${event.mataUang ?? 'mata uang asing'})`] : []),
+  ].map(bold);
+  const rows: Cell[][] = [header];
+  for (const order of event.orders) {
+    const total = getTotalTagihan(order);
+    order.items.forEach((item, index) => {
+      const first = index === 0;
+      const subtotal = item.harga * item.jumlah;
+      const fee = itemFee(item);
+      rows.push([
+        order.dibuat ? date(new Date(order.dibuat)) : null,
+        order.nama,
+        item.namaProduk,
+        item.jumlah,
+        money(item.harga),
+        item.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR',
+        item.feeType === 'percent' ? item.feeValue : null,
+        money(fee),
+        money(subtotal + fee),
+        // Order-level figures once per order, so the columns can be summed.
+        first && order.dp ? money(order.dp) : null,
+        first ? money(getSisaPembayaran(order)) : null,
+        // Payment type isn't recorded in the app yet: left empty for the
+        // jastiper to fill in.
+        null,
+        STATUS_LABEL[order.statusPembayaran] ?? '',
+        order.orderNumber,
+        first && order.pembayaranOngkir === 'awal' ? money(order.ongkir ?? 0) : null,
+        first ? money(total) : null,
+        ...(foreign ? [item.hargaAsing ?? null] : []),
+      ]);
+    });
+  }
+  return rows;
 }
 
 function expenseRows(event: JastipEvent): Cell[][] {
@@ -113,8 +170,8 @@ function expenseRows(event: JastipEvent): Cell[][] {
     ['Deskripsi', 'Tanggal', 'Jumlah'].map(bold),
     ...(event.pengeluaran ?? []).map((x): Cell[] => [
       x.nama,
-      x.tanggal ? new Date(x.tanggal) : null,
-      x.jumlah,
+      x.tanggal ? date(new Date(x.tanggal)) : null,
+      money(x.jumlah),
     ]),
   ];
 }
@@ -128,17 +185,13 @@ export async function downloadEventReport(event: JastipEvent) {
   if (!canExportReport) throw new Error('Report download is only available on web');
   // Loaded on demand: only this action needs the spreadsheet writer.
   const { default: writeExcelFile } = await import('write-excel-file/universal');
-  const dateFormat = 'dd/mm/yyyy';
   const blob = await writeExcelFile([
-    { data: summaryRows(event), sheet: 'Ringkasan', columns: widths(22, 26, 18), dateFormat },
     {
-      data: orderRows(event),
-      sheet: 'Pesanan',
-      columns: widths(13, 20, 17, 30, 18, 18, 28, 9, 18, 14, 16, 12, 13, 22, 12, 22),
-      stickyRowsCount: 1,
-      dateFormat,
+      data: [...headerRows(event), ...orderRows(event)],
+      sheet: 'Laporan',
+      columns: widths(17, 28, 26, 19, 16, 16, 14, 17, 19, 12, 18, 14, 18, 13, 14, 22, 16),
     },
-    { data: expenseRows(event), sheet: 'Pengeluaran', columns: widths(36, 14, 16), dateFormat },
+    { data: expenseRows(event), sheet: 'Pengeluaran', columns: widths(36, 14, 16) },
   ]).toBlob();
 
   const safeName = event.namaAcara.replace(/[^\w\- ]+/g, '').trim() || 'event';

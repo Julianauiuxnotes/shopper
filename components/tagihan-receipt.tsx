@@ -59,16 +59,14 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
           <InfoRow label="Nama acara">{snapshot.ea}</InfoRow>
           <InfoRow label="Tanggal acara">{snapshot.ed}</InfoRow>
           <InfoRow label="Nomor order">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">
-              {snapshot.on}
-            </Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">{snapshot.on}</Text>
           </InfoRow>
           <InfoRow label="Nama customer">{snapshot.cn}</InfoRow>
           <InfoRow label="Alamat">{snapshot.al}</InfoRow>
           <InfoRow label="Total pesanan">{snapshot.it.length} items</InfoRow>
           <InfoRow label="Status pembayaran">
             <Text className="font-inter-bold text-[12px] text-neutral-800">
-              {snapshot.lu ? 'Lunas' : 'Belum bayar'}
+              {snapshot.lu ? 'Lunas' : snapshot.bl ? 'Belum lunas' : 'Belum bayar'}
             </Text>
           </InfoRow>
         </View>
@@ -124,6 +122,27 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
               {formatIDR(snapshot.tt)}
             </Text>
           </View>
+          {/* A DP already paid, and what is left to pay. */}
+          {!snapshot.lu && (snapshot.dp ?? 0) > 0 ? (
+            <>
+              <View className="gap-[6px]">
+                <Text className="font-inter-bold text-[10px] text-neutral-800">
+                  DP sudah dibayar
+                </Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  {formatIDR(snapshot.dp ?? 0)}
+                </Text>
+              </View>
+              <View className="gap-[6px]">
+                <Text className="font-inter-bold text-[10px] text-neutral-800">
+                  Sisa pembayaran
+                </Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  {formatIDR(Math.max(0, snapshot.tt - (snapshot.dp ?? 0)))}
+                </Text>
+              </View>
+            </>
+          ) : null}
           <Text className="font-inter text-[10px] text-[#1e1e1e]">
             *Harga sudah termasuk jastip fee
           </Text>

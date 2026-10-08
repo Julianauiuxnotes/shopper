@@ -9,8 +9,18 @@ import { Pressable, View } from 'react-native';
 // component, so this is hand-built rather than installed.
 const WEEKDAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const MONTH_NAMES = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
 ];
 
 function startOfMonth(date: Date) {
@@ -22,7 +32,13 @@ function startOfDay(date: Date) {
 }
 
 function isSameDay(a?: Date, b?: Date) {
-  return !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    !!a &&
+    !!b &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 type CalendarProps = {
@@ -34,7 +50,9 @@ type CalendarProps = {
 };
 
 function Calendar({ value, onSelect, initialMonth, minDate }: CalendarProps) {
-  const [visibleMonth, setVisibleMonth] = React.useState(() => startOfMonth(initialMonth ?? value ?? new Date()));
+  const [visibleMonth, setVisibleMonth] = React.useState(() =>
+    startOfMonth(initialMonth ?? value ?? new Date())
+  );
 
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth();

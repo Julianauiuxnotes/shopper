@@ -44,7 +44,10 @@ export default function SplashScreen() {
 
   // A logged-in user is sent on to the dashboard by components/auth-gate.tsx.
   return (
-    <View className="flex-1 overflow-hidden bg-[#eaeaea]" style={{ height: windowHeight }} onLayout={handleLayout}>
+    <View
+      className="flex-1 overflow-hidden bg-[#eaeaea]"
+      style={{ height: windowHeight }}
+      onLayout={handleLayout}>
       {ready ? (
         <>
           {/* Photo crop box — node 53:2611 "Rectangle 1": left -33px, top 82px,

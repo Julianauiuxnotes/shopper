@@ -149,7 +149,11 @@ export default function CetakPenandaScreen() {
             <Text className="font-inter text-[12px] text-neutral-800">
               :{' '}
               <Text className="font-inter-bold text-[12px] text-neutral-800">
-                {order.statusPembayaran === 'lunas' ? 'Lunas' : 'Belum bayar'}
+                {order.statusPembayaran === 'lunas'
+                  ? 'Lunas'
+                  : order.statusPembayaran === 'belumLunas'
+                    ? 'Belum lunas'
+                    : 'Belum bayar'}
               </Text>
             </Text>
           </View>

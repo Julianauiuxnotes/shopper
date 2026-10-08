@@ -113,6 +113,8 @@ export default function TambahPesananScreen() {
     'instant'
   );
   const [items, setItems] = React.useState<ItemDraft[]>([blankItem()]);
+  // Down payment already received, digits only. Optional.
+  const [dp, setDp] = React.useState('');
   // What the last "Terapkan" managed to fill, for the note under the
   // box; null until it has been applied (and again once the text changes).
   const [autoFilled, setAutoFilled] = React.useState<string[] | null>(null);
@@ -273,6 +275,7 @@ export default function TambahPesananScreen() {
       alamat,
       whatsapp: `+62${whatsapp}`,
       metodePengiriman,
+      dp: Number(dp) || 0,
       items: validItems.map((it) => ({
         namaProduk: it.namaProduk,
         jumlah: parseNumber(it.jumlah),
@@ -300,7 +303,11 @@ export default function TambahPesananScreen() {
       `Hi! ini pesan konfirmasi dari ${namaJastip}. Kami sudah catat pesananmu ya. ` +
       `Pesananmu ada ${validItems.length} items dengan total pembayaran IDR ` +
       `${totalTagihan.toLocaleString('id-ID')}. ` +
-      `Item pesananmu : ${itemsList}.`;
+      `Item pesananmu : ${itemsList}.` +
+      (Number(dp) > 0
+        ? ` DP yang sudah dibayar IDR ${Number(dp).toLocaleString('id-ID')}, ` +
+          `sisa pembayaran IDR ${Math.max(0, totalTagihan - Number(dp)).toLocaleString('id-ID')}.`
+        : '');
     const phoneDigits = `62${whatsapp.replace(/\D/g, '')}`;
     const waUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
     try {
@@ -310,7 +317,11 @@ export default function TambahPesananScreen() {
       // just continue to Event Detail rather than blocking on this.
     }
 
-    router.replace({ pathname: '/event-detail', params: { id: event.id, tab: 'pesanan' } });
+    // Lands on the chip the new order is listed under.
+    router.replace({
+      pathname: '/event-detail',
+      params: { id: event.id, tab: 'pesanan', status: Number(dp) > 0 ? 'belumLunas' : 'belum' },
+    });
   }
 
   if (!event) {
@@ -654,6 +665,29 @@ export default function TambahPesananScreen() {
               className="items-center rounded-[8px] border border-orange-400 bg-orange-50 px-[10px] py-[10px]">
               <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
             </Pressable>
+          </View>
+
+          {/* Optional: leave empty when the customer hasn't paid anything.
+              An order saved with a DP starts as "Belum lunas". */}
+          <View className="gap-[4px]">
+            <Text className="font-inter text-[12px] text-neutral-800">DP (opsional)</Text>
+            <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+              <Input
+                value={dp ? Number(dp).toLocaleString('id-ID') : ''}
+                onChangeText={(value) => setDp(value.replace(/\D/g, '').slice(0, 12))}
+                placeholder="0"
+                placeholderTextColor="#9ca3af"
+                keyboardType="number-pad"
+                accessibilityLabel="DP"
+                className="h-auto min-h-[35px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+              />
+            </View>
+            <Text className="font-inter text-[10px] text-neutral-700">
+              {Number(dp) > 0
+                ? `Sisa pembayaran ${formatIDR(Math.max(0, totalTagihan - Number(dp)))}. Pesanan akan berstatus Belum lunas.`
+                : 'Isi jika pelanggan sudah membayar uang muka. Boleh dikosongkan.'}
+            </Text>
           </View>
 
           <Pressable

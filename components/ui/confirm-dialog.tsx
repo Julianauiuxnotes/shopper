@@ -8,6 +8,8 @@ type ConfirmDialogProps = {
   message: string;
   confirmLabel: string;
   cancelLabel?: string;
+  /** 'danger' (red, the default) for deletions; 'primary' (orange) otherwise. */
+  tone?: 'danger' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -15,13 +17,14 @@ type ConfirmDialogProps = {
 // A yes/no pop-up for actions that can't be undone. `Alert.alert` isn't
 // used because it does nothing on web (react-native-web's Alert is a
 // no-op). No fade, so it is gone the moment a choice is made. The confirm
-// button is red: every use so far is a deletion.
+// button is red unless `tone` says otherwise: most uses are deletions.
 function ConfirmDialog({
   visible,
   title,
   message,
   confirmLabel,
   cancelLabel = 'Batal',
+  tone = 'danger',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -45,7 +48,11 @@ function ConfirmDialog({
             <Pressable
               onPress={onConfirm}
               accessibilityRole="button"
-              className="flex-1 items-center justify-center rounded-[8px] bg-red-500 p-[10px]">
+              className={
+                tone === 'primary'
+                  ? 'flex-1 items-center justify-center rounded-[8px] bg-orange-500 p-[10px]'
+                  : 'flex-1 items-center justify-center rounded-[8px] bg-red-500 p-[10px]'
+              }>
               <Text className="font-inter-semibold text-[12px] text-white">{confirmLabel}</Text>
             </Pressable>
           </View>

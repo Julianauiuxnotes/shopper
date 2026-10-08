@@ -15,6 +15,8 @@ import {
   type JastipEvent,
   type Order,
   type OrderItem,
+  getSisaPembayaran,
+  type PaymentStatus,
 } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
@@ -136,6 +138,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   const [justSaved, setJustSaved] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
+  const [confirmingLunas, setConfirmingLunas] = React.useState(false);
 
   const isDirty = JSON.stringify(order) !== JSON.stringify(savedOrder);
 
@@ -454,8 +457,26 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
     editOrder((o) => ({ ...o, ongkir }));
   }
 
-  function setStatusPembayaran(status: 'lunas' | 'belum') {
+  function setStatusPembayaran(status: PaymentStatus) {
+    // A partly paid order only becomes Lunas after the jastiper confirms
+    // the rest has really been paid.
+    const partlyPaid = order.statusPembayaran === 'belumLunas' || (order.dp ?? 0) > 0;
+    if (status === 'lunas' && order.statusPembayaran !== 'lunas' && partlyPaid) {
+      setConfirmingLunas(true);
+      return;
+    }
     editOrder((o) => ({ ...o, statusPembayaran: status }));
+  }
+
+  // The status follows the DP unless the order is already Lunas: typing
+  // one makes it "Belum lunas", clearing it puts it back to "Belum bayar".
+  function setDp(text: string) {
+    const dp = Number(text.replace(/\D/g, '').slice(0, 12)) || 0;
+    editOrder((o) => ({
+      ...o,
+      dp: dp > 0 ? dp : undefined,
+      statusPembayaran: o.statusPembayaran === 'lunas' ? 'lunas' : dp > 0 ? 'belumLunas' : 'belum',
+    }));
   }
 
   // What the customer actually owes: goods cost (order.totalPembayaran)
@@ -726,12 +747,37 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
             </Text>
           </View>
 
+          {/* Optional down payment; what's left shows underneath. */}
+          <View className="gap-[6px]">
+            <Text className="font-inter-bold text-[10px] text-neutral-800">DP (opsional)</Text>
+            <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+              <Input
+                value={order.dp ? order.dp.toLocaleString('id-ID') : ''}
+                onChangeText={setDp}
+                placeholder="0"
+                placeholderTextColor="#9ca3af"
+                keyboardType="number-pad"
+                accessibilityLabel="DP"
+                className="h-auto min-h-[35px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+              />
+            </View>
+          </View>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter-bold text-[10px] text-neutral-800">Sisa pembayaran</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              {formatIDR(getSisaPembayaran(order))}
+            </Text>
+          </View>
+
           <View className="gap-[10px]">
             <Text className="font-inter-bold text-[12px] text-neutral-800">Status pembayaran</Text>
             <View className="flex-row gap-[10px]">
               {(
                 [
                   ['lunas', 'Lunas'],
+                  ['belumLunas', 'Belum lunas'],
                   ['belum', 'Belum bayar'],
                 ] as const
               ).map(([value, label]) => {
@@ -831,6 +877,23 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           goToEvent();
         }}
         onCancel={() => setConfirmingDiscard(false)}
+      />
+
+      <ConfirmDialog
+        visible={confirmingLunas}
+        tone="primary"
+        title="Ubah status jadi Lunas?"
+        message={
+          (order.dp ?? 0) > 0
+            ? `Pelanggan ini baru membayar DP ${formatIDR(order.dp ?? 0)}, masih ada sisa ${formatIDR(getSisaPembayaran(order))}. Pastikan sisanya sudah dilunasi sebelum mengubah status menjadi Lunas.`
+            : 'Pesanan ini baru dibayar sebagian. Pastikan pelanggan sudah melunasi sisanya sebelum mengubah status menjadi Lunas.'
+        }
+        confirmLabel="Ya, sudah lunas"
+        onConfirm={() => {
+          setConfirmingLunas(false);
+          editOrder((o) => ({ ...o, statusPembayaran: 'lunas' }));
+        }}
+        onCancel={() => setConfirmingLunas(false)}
       />
 
       <ConfirmDialog
