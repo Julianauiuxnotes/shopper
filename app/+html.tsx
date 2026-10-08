@@ -16,9 +16,13 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        {/* maximum-scale=1: iPhone browsers zoom the page in when a field
+            with text under 16px is focused (ours are 12px) and stay zoomed
+            afterwards, e.g. on the dashboard right after logging in. This
+            stops that; pinch-to-zoom still works on iPhone. */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+          content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
         <meta name="description" content="Kelola jastip tanpa ribet." />
 
