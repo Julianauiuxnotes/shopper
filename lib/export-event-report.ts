@@ -38,6 +38,7 @@ function orderRows(event: JastipEvent): Cell[][] {
     'Status pembayaran',
     'Produk',
     'Jumlah',
+    'Harga satuan (mata uang asing)',
     'Harga satuan',
     'Subtotal barang',
     'Fee jastip',
@@ -59,6 +60,7 @@ function orderRows(event: JastipEvent): Cell[][] {
         order.statusPembayaran === 'lunas' ? 'Lunas' : 'Belum dibayar',
         item.namaProduk,
         item.jumlah,
+        item.hargaAsing ?? null,
         item.harga,
         item.harga * item.jumlah,
         itemFee(item),
@@ -85,6 +87,13 @@ function summaryRows(event: JastipEvent): Cell[][] {
     ['Tanggal mulai', event.tanggalDari],
     ['Tanggal selesai', event.tanggalSampai],
     ['Lokasi', event.lokasi],
+    ['Jenis event', event.jenis === 'internasional' ? 'Internasional' : 'Lokal'],
+    ...(event.jenis === 'internasional'
+      ? ([
+          ['Mata uang belanja', event.mataUang ?? ''],
+          ['Kurs ke IDR', event.kurs ?? 0],
+        ] as Cell[][])
+      : []),
     [],
     [bold('Keuangan')],
     ['Jastip budget', event.budget ?? 0],
@@ -125,7 +134,7 @@ export async function downloadEventReport(event: JastipEvent) {
     {
       data: orderRows(event),
       sheet: 'Pesanan',
-      columns: widths(13, 20, 17, 30, 18, 18, 28, 9, 14, 16, 12, 13, 22, 12, 22),
+      columns: widths(13, 20, 17, 30, 18, 18, 28, 9, 18, 14, 16, 12, 13, 22, 12, 22),
       stickyRowsCount: 1,
       dateFormat,
     },

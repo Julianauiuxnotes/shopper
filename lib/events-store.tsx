@@ -30,6 +30,9 @@ export type OrderItem = {
   namaProduk: string;
   jumlah: number;
   harga: number; // IDR per unit
+  // The price as typed in the event's own currency, for Internasional
+  // events; `harga` is this converted with the event's kurs at that time.
+  hargaAsing?: number;
   feeType: 'percent' | 'flat';
   feeValue: number; // percent (0-100) if feeType 'percent', else flat IDR per unit
   dibeli: boolean; // "sudah dibeli" — purchased by the jastiper yet
@@ -90,6 +93,11 @@ export type JastipEvent = {
   // How much the jastiper plans to spend at this event, IDR. Optional:
   // absent on events created before the field existed, 0 when left empty.
   budget?: number;
+  // Lokal = priced in IDR. Internasional = prices are typed in `mataUang`
+  // and converted to IDR with `kurs` (IDR per 1 unit). Absent = Lokal.
+  jenis?: 'lokal' | 'internasional';
+  mataUang?: string;
+  kurs?: number;
   // The event's own costs, listed on its Laporan tab. Absent when none.
   pengeluaran?: Expense[];
   orders: Order[];
@@ -107,6 +115,9 @@ type NewEventInput = {
   lokasi: string;
   fotoUri: string | null;
   budget?: number;
+  jenis?: 'lokal' | 'internasional';
+  mataUang?: string;
+  kurs?: number;
 };
 
 type NewOrderInput = {

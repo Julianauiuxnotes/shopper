@@ -42,6 +42,9 @@ type EventDoc = {
   lokasi: string;
   budget?: number;
   pengeluaran?: Expense[];
+  jenis?: 'lokal' | 'internasional';
+  mataUang?: string;
+  kurs?: number;
 };
 type OrderDoc = Omit<Order, 'id'>;
 
@@ -70,6 +73,10 @@ function eventDoc(event: JastipEvent): EventDoc {
     // from before the field existed still match their synced snapshot.
     budget: event.budget,
     pengeluaran: event.pengeluaran?.length ? event.pengeluaran : undefined,
+    // Only for Internasional events, so Lokal ones keep their old shape.
+    ...(event.jenis === 'internasional'
+      ? { jenis: event.jenis, mataUang: event.mataUang, kurs: event.kurs }
+      : {}),
   };
 }
 
@@ -248,6 +255,11 @@ function mergeRows(
       lokasi: row.data.lokasi,
       budget: typeof row.data.budget === 'number' ? row.data.budget : undefined,
       pengeluaran: readExpenses(row.data.pengeluaran),
+      ...(row.data.jenis === 'internasional' &&
+      typeof row.data.mataUang === 'string' &&
+      typeof row.data.kurs === 'number'
+        ? { jenis: 'internasional' as const, mataUang: row.data.mataUang, kurs: row.data.kurs }
+        : { jenis: undefined, mataUang: undefined, kurs: undefined }),
     });
     if (!mine) order.push(row.id);
     changed += 1;

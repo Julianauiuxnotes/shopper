@@ -5,6 +5,7 @@ import XCircleOrangeIcon from '@/assets/images/figma/icon-x-circle-orange.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
+import { eventCurrency, formatForeign } from '@/lib/currency';
 import { formatIDR } from '@/lib/format';
 import { useSettings } from '@/lib/settings-store';
 import { parseOrderForm } from '@/lib/parse-order-form';
@@ -78,9 +79,11 @@ function parseNumber(s: string) {
 // Mirrors lib/events-store.tsx's computeItemTotals — kept in sync by
 // hand since this is only a live preview; the store recomputes
 // authoritatively when the order is actually created.
-function itemTotals(item: ItemDraft) {
+// `kurs` turns the typed price into IDR: 1 for a Lokal event, the event's
+// rate for an Internasional one (lib/currency.ts).
+function itemTotals(item: ItemDraft, kurs: number) {
   const jumlah = parseNumber(item.jumlah);
-  const harga = parseNumber(item.harga);
+  const harga = Math.round(parseNumber(item.harga) * kurs);
   const feeValue = parseNumber(item.feeValue);
   const subtotal = harga * jumlah;
   const fee = item.feeType === 'percent' ? subtotal * (feeValue / 100) : feeValue * jumlah;
@@ -99,6 +102,8 @@ export default function TambahPesananScreen() {
   const { userProfile } = useSettings();
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const event = eventId ? getEvent(eventId) : undefined;
+  // Prices are typed in the event's currency and stored in IDR.
+  const currency = eventCurrency(event);
 
   const [orderFormText, setOrderFormText] = React.useState('');
   const [nama, setNama] = React.useState('');
@@ -249,7 +254,7 @@ export default function TambahPesananScreen() {
 
   const totals = items.reduce(
     (acc, it) => {
-      const { subtotal, fee } = itemTotals(it);
+      const { subtotal, fee } = itemTotals(it, currency.kurs);
       return { totalPembelanjaan: acc.totalPembelanjaan + subtotal, profit: acc.profit + fee };
     },
     { totalPembelanjaan: 0, profit: 0 }
@@ -271,7 +276,8 @@ export default function TambahPesananScreen() {
       items: validItems.map((it) => ({
         namaProduk: it.namaProduk,
         jumlah: parseNumber(it.jumlah),
-        harga: parseNumber(it.harga),
+        harga: Math.round(parseNumber(it.harga) * currency.kurs),
+        ...(currency.foreign ? { hargaAsing: parseNumber(it.harga) } : {}),
         feeType: it.feeType,
         feeValue: parseNumber(it.feeValue),
       })),
@@ -562,7 +568,9 @@ export default function TambahPesananScreen() {
                   <View className="w-[100px] gap-[4px]">
                     <Text className="font-inter text-[12px] text-neutral-800">Harga</Text>
                     <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                      <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                      <Text className="font-inter text-[12px] text-neutral-400">
+                        {currency.code}
+                      </Text>
                       <Input
                         value={item.harga}
                         onChangeText={(v) => updateItem(item.key, { harga: v })}
@@ -615,6 +623,16 @@ export default function TambahPesananScreen() {
                     </View>
                   </View>
                 </View>
+
+                {/* Internasional event: what the typed price comes to in
+                    Rupiah, which is what gets saved and billed. */}
+                {currency.foreign && parseNumber(item.harga) > 0 ? (
+                  <Text className="font-inter text-[10px] text-neutral-700">
+                    {formatForeign(parseNumber(item.harga), currency.code)} ≈{' '}
+                    {formatIDR(Math.round(parseNumber(item.harga) * currency.kurs))} per barang
+                    (kurs 1 {currency.code} = {formatIDR(currency.kurs)})
+                  </Text>
+                ) : null}
 
                 {/* Not on the only row: the form always keeps one item to
                     fill in. */}

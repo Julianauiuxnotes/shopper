@@ -263,6 +263,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       namaProduk: confirmDraft.namaProduk.trim(),
       jumlah: parseNumber(confirmDraft.jumlah),
       harga: parseNumber(confirmDraft.harga),
+      // Prices here are edited in IDR, so a foreign price typed in Tambah
+      // pesanan no longer describes the item.
+      hargaAsing: undefined,
       feeType: confirmDraft.feeType,
       feeValue: parseNumber(confirmDraft.feeValue),
       dibeli: true,
