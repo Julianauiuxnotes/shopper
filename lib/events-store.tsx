@@ -33,6 +33,12 @@ export type OrderItem = {
   // The price as typed in the event's own currency, for Internasional
   // events; `harga` is this converted with the event's kurs at that time.
   hargaAsing?: number;
+  // What the product cost at the event before the jastiper's own markup,
+  // IDR per unit (and as typed, for Internasional events). The jastiper's
+  // private note: no total uses it and nothing shown to a customer
+  // (tagihan, receipt link, penanda) may include it.
+  hargaAsli?: number;
+  hargaAsliAsing?: number;
   feeType: 'percent' | 'flat';
   feeValue: number; // percent (0-100) if feeType 'percent', else flat IDR per unit
   dibeli: boolean; // "sudah dibeli" — purchased by the jastiper yet

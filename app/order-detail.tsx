@@ -671,6 +671,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
                           {formatIDR(feePerItem)}
                         </Text>
+                        {/* The jastiper's own note; this page is never shared. */}
+                        {item.hargaAsli ? (
+                          <Text className="font-inter text-[10px] text-neutral-700">
+                            Harga asli: {formatIDR(item.hargaAsli)} (catatan pribadi)
+                          </Text>
+                        ) : null}
                         {/* Figma node 105:5015: once an item is confirmed
                           WITH a receipt photo attached, its row shows the
                           photo thumbnail here instead of nothing. Tapping

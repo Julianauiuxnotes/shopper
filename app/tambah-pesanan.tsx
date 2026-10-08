@@ -56,6 +56,8 @@ type ItemDraft = {
   namaProduk: string;
   jumlah: string;
   harga: string;
+  // The price at the event before the jastiper's markup. Optional.
+  hargaAsli: string;
   feeType: 'percent' | 'flat';
   feeValue: string;
 };
@@ -66,6 +68,7 @@ function blankItem(): ItemDraft {
     namaProduk: '',
     jumlah: '',
     harga: '',
+    hargaAsli: '',
     feeType: 'percent',
     feeValue: '',
   };
@@ -281,6 +284,12 @@ export default function TambahPesananScreen() {
         jumlah: parseNumber(it.jumlah),
         harga: Math.round(parseNumber(it.harga) * currency.kurs),
         ...(currency.foreign ? { hargaAsing: parseNumber(it.harga) } : {}),
+        ...(parseNumber(it.hargaAsli) > 0
+          ? {
+              hargaAsli: Math.round(parseNumber(it.hargaAsli) * currency.kurs),
+              ...(currency.foreign ? { hargaAsliAsing: parseNumber(it.hargaAsli) } : {}),
+            }
+          : {}),
         feeType: it.feeType,
         feeValue: parseNumber(it.feeValue),
       })),
@@ -541,30 +550,23 @@ export default function TambahPesananScreen() {
               <View
                 key={item.key}
                 className={cn('gap-[16px]', index > 0 && 'border-t border-neutral-300 pt-[16px]')}>
-                <View className="gap-[4px]">
-                  <Text className="font-inter text-[12px] text-neutral-800">Nama produk</Text>
-                  <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                    <Input
-                      value={item.namaProduk}
-                      onChangeText={(v) => updateItem(item.key, { namaProduk: v })}
-                      placeholder="item"
-                      placeholderTextColor="#9ca3af"
-                      className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                    />
+                {/* Figma node 231:1111: name and quantity, then the two
+                    prices side by side, then the jastip fee. */}
+                <View className="flex-row items-start gap-[4px]">
+                  <View className="flex-1 gap-[4px]">
+                    <Text className="font-inter text-[12px] text-neutral-800">Nama produk</Text>
+                    <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Input
+                        value={item.namaProduk}
+                        onChangeText={(v) => updateItem(item.key, { namaProduk: v })}
+                        placeholder="Nama produk"
+                        placeholderTextColor="#9ca3af"
+                        className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
                   </View>
-                </View>
-
-                <View className="flex-row items-start gap-[8px]">
-                  <View className="w-[64px] gap-[4px]">
+                  <View className="w-[56px] gap-[4px]">
                     <Text className="font-inter text-[12px] text-neutral-800">Jumlah</Text>
-                    {/* Wrapper View owns the border/padding (matching Harga
-                      and Fee Jastip below) rather than styling Input
-                      directly — a bare bordered Input renders ~3.5px
-                      shorter here (the shared Input component's baked-in
-                      `sm:h-9` fights our `h-auto` override on wide
-                      viewports; the DOM <input> ends up height:36px
-                      either way, but the two container constructions
-                      compute a different box height around it). */}
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={item.jumlah}
@@ -572,27 +574,61 @@ export default function TambahPesananScreen() {
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
+                        accessibilityLabel="Jumlah"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
-                  <View className="w-[100px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Harga</Text>
-                    <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                      <Text className="font-inter text-[12px] text-neutral-400">
-                        {currency.code}
+                </View>
+
+                <View className="gap-[8px]">
+                  <View className="flex-row items-start gap-[8px]">
+                    {/* The price at the event, for the jastiper's own
+                        records only: it takes no part in any total and is
+                        never shown to the customer. */}
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-neutral-800">Harga asli</Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currency.code}
+                        </Text>
+                        <Input
+                          value={item.hargaAsli}
+                          onChangeText={(v) => updateItem(item.key, { hargaAsli: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga asli"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
+                    </View>
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        Harga ke pelanggan
                       </Text>
-                      <Input
-                        value={item.harga}
-                        onChangeText={(v) => updateItem(item.key, { harga: v })}
-                        placeholder="0"
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="numeric"
-                        className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                      />
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currency.code}
+                        </Text>
+                        <Input
+                          value={item.harga}
+                          onChangeText={(v) => updateItem(item.key, { harga: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga ke pelanggan"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
                     </View>
                   </View>
-                  <View className="flex-1 gap-[4px]">
+                  <Text className="font-inter text-[10px] text-neutral-700">
+                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
+                    tagihan pelanggan. Boleh dikosongkan.
+                  </Text>
+
+                  <View className="gap-[4px]">
                     <Text className="font-inter text-[12px] text-neutral-800">Fee Jastip</Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
@@ -601,7 +637,7 @@ export default function TambahPesananScreen() {
                         }}
                         onPress={() => openFeeDropdown(item.key)}
                         className={cn(
-                          'flex-row items-center gap-[4px] rounded-[8px] border bg-white p-[10px]',
+                          'flex-1 flex-row items-center justify-between gap-[4px] rounded-[8px] border bg-white p-[10px]',
                           dropdownAnchor?.key === item.key
                             ? 'border-orange-500'
                             : 'border-neutral-400'
@@ -619,6 +655,9 @@ export default function TambahPesananScreen() {
                         </View>
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        {item.feeType === 'flat' ? (
+                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                        ) : null}
                         <Input
                           value={item.feeValue}
                           onChangeText={(v) => updateItem(item.key, { feeValue: v })}
