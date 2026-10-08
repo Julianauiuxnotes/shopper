@@ -114,6 +114,7 @@ function orderRows(event: JastipEvent): Cell[][] {
   const foreign = event.jenis === 'internasional';
   const header = [
     'Tanggal pesanan',
+    'No. order',
     'Nama pelanggan',
     'Nama produk',
     'Jumlah',
@@ -126,7 +127,6 @@ function orderRows(event: JastipEvent): Cell[][] {
     'Sisa pembayaran',
     'Payment type',
     'Status pembayaran',
-    'No. pesanan',
     'Ongkir',
     'Total tagihan pesanan',
     ...(foreign ? [`Harga (${event.mataUang ?? 'mata uang asing'})`] : []),
@@ -140,6 +140,9 @@ function orderRows(event: JastipEvent): Cell[][] {
       const fee = itemFee(item);
       rows.push([
         order.dibuat ? date(new Date(order.dibuat)) : null,
+        // On every product row, so one customer's rows can be told apart
+        // by order.
+        order.orderNumber,
         order.nama,
         item.namaProduk,
         item.jumlah,
@@ -155,7 +158,6 @@ function orderRows(event: JastipEvent): Cell[][] {
         // jastiper to fill in.
         null,
         STATUS_LABEL[order.statusPembayaran] ?? '',
-        order.orderNumber,
         first && order.pembayaranOngkir === 'awal' ? money(order.ongkir ?? 0) : null,
         first ? money(total) : null,
         ...(foreign ? [item.hargaAsing ?? null] : []),
@@ -189,7 +191,7 @@ export async function downloadEventReport(event: JastipEvent) {
     {
       data: [...headerRows(event), ...orderRows(event)],
       sheet: 'Laporan',
-      columns: widths(17, 28, 26, 19, 16, 16, 14, 17, 19, 12, 18, 14, 18, 13, 14, 22, 16),
+      columns: widths(17, 13, 28, 26, 19, 16, 16, 14, 17, 19, 12, 18, 14, 18, 14, 22, 16),
     },
     { data: expenseRows(event), sheet: 'Pengeluaran', columns: widths(36, 14, 16) },
   ]).toBlob();

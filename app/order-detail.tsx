@@ -640,7 +640,10 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
             <Text className="font-inter-bold text-[14px] text-neutral-800">List pesanan</Text>
             <View className="gap-[11px]">
               {order.items.map((item, index) => {
-                const { fee } = computeItemTotals(item);
+                // computeItemTotals gives the fee for the whole line; the row
+                // is labelled "per item", so it shows the fee for one unit.
+                const feePerItem =
+                  item.jumlah > 0 ? Math.round(computeItemTotals(item).fee / item.jumlah) : 0;
                 return (
                   <View
                     key={item.id}
@@ -666,7 +669,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         </View>
                         <Text className="font-inter text-[12px] text-neutral-800">
                           {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
-                          {formatIDR(fee)}
+                          {formatIDR(feePerItem)}
                         </Text>
                         {/* Figma node 105:5015: once an item is confirmed
                           WITH a receipt photo attached, its row shows the
