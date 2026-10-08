@@ -168,6 +168,8 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       let totalPembayaran = 0;
       let profit = 0;
       for (const item of items) {
+        // Not available at the event: the customer isn't billed for it.
+        if (item.tidakTersedia) continue;
         const { subtotal, fee } = computeItemTotals(item);
         totalPembayaran += subtotal;
         profit += fee;
@@ -730,7 +732,14 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                             </View>
                           ) : null}
                         </View>
-                        <Text className="font-inter text-[12px] text-neutral-800">
+                        <Text
+                          className={cn(
+                            'font-inter text-[12px]',
+                            // Struck through: not counted in the totals.
+                            item.tidakTersedia
+                              ? 'text-neutral-400 line-through'
+                              : 'text-neutral-800'
+                          )}>
                           {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
                           {formatIDR(feePerItem)}
                         </Text>

@@ -78,12 +78,15 @@ export function buildReceiptSnapshot(
     dp: order.dp ?? 0,
     ok: order.pembayaranOngkir ?? null,
     og: order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0,
-    it: order.items.map((item) => {
-      const { fee } = computeItemTotals(item);
-      // Same "price already includes the jastip fee" per-unit figure as
-      // app/cetak-penanda.tsx.
-      return [item.namaProduk, item.jumlah, Math.round(item.harga + fee / item.jumlah)];
-    }),
+    // Products marked Tidak tersedia aren't billed, so they're left off.
+    it: order.items
+      .filter((item) => !item.tidakTersedia)
+      .map((item) => {
+        const { fee } = computeItemTotals(item);
+        // Same "price already includes the jastip fee" per-unit figure as
+        // app/cetak-penanda.tsx.
+        return [item.namaProduk, item.jumlah, Math.round(item.harga + fee / item.jumlah)];
+      }),
     tt: getTotalTagihan(order),
   };
 }

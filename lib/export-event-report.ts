@@ -140,21 +140,23 @@ function orderRows(event: JastipEvent): Cell[][] {
     const total = getTotalTagihan(order);
     order.items.forEach((item, index) => {
       const first = index === 0;
-      const subtotal = item.harga * item.jumlah;
-      const fee = itemFee(item);
+      // Not available at the event: listed, but nothing is charged.
+      const unavailable = item.tidakTersedia === true;
+      const subtotal = unavailable ? 0 : item.harga * item.jumlah;
+      const fee = unavailable ? 0 : itemFee(item);
       rows.push([
         order.dibuat ? date(new Date(order.dibuat)) : null,
         // On every product row, so one customer's rows can be told apart
         // by order.
         order.orderNumber,
         order.nama,
-        item.namaProduk,
+        unavailable ? `${item.namaProduk} (tidak tersedia)` : item.namaProduk,
         item.jumlah,
         // The jastiper's private note of the price before their markup.
         item.hargaAsli ? money(item.hargaAsli) : null,
         money(item.harga),
         // Markup for the whole line; counts towards profit.
-        item.hargaAsli ? money(getItemMarkup(item)) : null,
+        item.hargaAsli && !unavailable ? money(getItemMarkup(item)) : null,
         item.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR',
         item.feeType === 'percent' ? item.feeValue : null,
         money(fee),

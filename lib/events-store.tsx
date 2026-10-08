@@ -44,7 +44,8 @@ export type OrderItem = {
   feeValue: number; // percent (0-100) if feeType 'percent', else flat IDR per unit
   dibeli: boolean; // "sudah dibeli" — purchased by the jastiper yet
   // Marked as sold out / not available at the event. Never true together
-  // with `dibeli`. A label only: it doesn't take the item off the bill.
+  // with `dibeli`. An unavailable item is off the bill: it adds nothing
+  // to the order's totals, profit or tagihan, and is left off receipts.
   tidakTersedia?: boolean;
   fotoStruk: string | null; // local file:// URI of the receipt photo, set on confirm
 };
@@ -96,7 +97,10 @@ export function getTotalTagihan(order: Order) {
  * The jastiper's markup on one line: (harga ke pelanggan - harga asli) x
  * jumlah, 0 when no harga asli was noted. Negative if sold below cost.
  */
-export function getItemMarkup(item: Pick<OrderItem, 'harga' | 'hargaAsli' | 'jumlah'>) {
+export function getItemMarkup(
+  item: Pick<OrderItem, 'harga' | 'hargaAsli' | 'jumlah' | 'tidakTersedia'>
+) {
+  if (item.tidakTersedia) return 0;
   return item.hargaAsli ? (item.harga - item.hargaAsli) * item.jumlah : 0;
 }
 
