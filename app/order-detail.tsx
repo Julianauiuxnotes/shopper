@@ -46,6 +46,9 @@ type ConfirmDraft = {
   namaProduk: string;
   jumlah: string;
   harga: string;
+  // The price at the event before the jastiper's markup: a private note,
+  // optional, never part of a total or of anything a customer sees.
+  hargaAsli: string;
   feeType: 'percent' | 'flat';
   feeValue: string;
 };
@@ -209,6 +212,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       namaProduk: item.namaProduk,
       jumlah: String(item.jumlah),
       harga: String(item.harga),
+      hargaAsli: item.hargaAsli ? String(item.hargaAsli) : '',
       feeType: item.feeType,
       feeValue: String(item.feeValue),
     });
@@ -269,6 +273,8 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       // Prices here are edited in IDR, so a foreign price typed in Tambah
       // pesanan no longer describes the item.
       hargaAsing: undefined,
+      hargaAsli: parseNumber(confirmDraft.hargaAsli) || undefined,
+      hargaAsliAsing: undefined,
       feeType: confirmDraft.feeType,
       feeValue: parseNumber(confirmDraft.feeValue),
       dibeli: true,
@@ -293,6 +299,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
     namaProduk: '',
     jumlah: '',
     harga: '',
+    hargaAsli: '',
     feeType: 'percent',
     feeValue: '',
   });
@@ -306,7 +313,14 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   } | null>(null);
 
   function openAddItem() {
-    setAddItemDraft({ namaProduk: '', jumlah: '', harga: '', feeType: 'percent', feeValue: '' });
+    setAddItemDraft({
+      namaProduk: '',
+      jumlah: '',
+      harga: '',
+      hargaAsli: '',
+      feeType: 'percent',
+      feeValue: '',
+    });
     setAddFotoStrukDraft(null);
     setAddingItem(true);
   }
@@ -360,6 +374,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       namaProduk: addItemDraft.namaProduk.trim(),
       jumlah: parseNumber(addItemDraft.jumlah),
       harga: parseNumber(addItemDraft.harga),
+      ...(parseNumber(addItemDraft.hargaAsli) > 0
+        ? { hargaAsli: parseNumber(addItemDraft.hargaAsli) }
+        : {}),
       feeType: addItemDraft.feeType,
       feeValue: parseNumber(addItemDraft.feeValue),
       dibeli,
@@ -934,20 +951,22 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               </Pressable>
 
               <View className="gap-[16px]">
-                <View className="gap-[4px]">
-                  <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
-                  <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                    <Input
-                      value={confirmDraft.namaProduk}
-                      onChangeText={(v) => updateConfirmDraft({ namaProduk: v })}
-                      placeholderTextColor="#9ca3af"
-                      className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                    />
+                {/* Figma node 231:1111, as on Tambah pesanan: name and
+                    quantity, the two prices side by side, then the fee. */}
+                <View className="flex-row items-start gap-[4px]">
+                  <View className="flex-1 gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                    <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Input
+                        value={confirmDraft.namaProduk}
+                        onChangeText={(v) => updateConfirmDraft({ namaProduk: v })}
+                        placeholder="Nama produk"
+                        placeholderTextColor="#9ca3af"
+                        className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
                   </View>
-                </View>
-
-                <View className="flex-row items-start gap-[8px]">
-                  <View className="w-[47px] gap-[4px]">
+                  <View className="w-[56px] gap-[4px]">
                     <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
@@ -956,38 +975,61 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
+                        accessibilityLabel="Jumlah"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
-                  <View className="w-[92px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga</Text>
-                    <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                      <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
-                      <Input
-                        value={confirmDraft.harga}
-                        onChangeText={(v) => updateConfirmDraft({ harga: v })}
-                        placeholder="0"
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="numeric"
-                        className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                      />
+                </View>
+
+                <View className="gap-[8px]">
+                  <View className="flex-row items-start gap-[8px]">
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga asli</Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Input
+                          value={confirmDraft.hargaAsli}
+                          onChangeText={(v) => updateConfirmDraft({ hargaAsli: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga asli"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
+                    </View>
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        Harga ke pelanggan
+                      </Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Input
+                          value={confirmDraft.harga}
+                          onChangeText={(v) => updateConfirmDraft({ harga: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga ke pelanggan"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
                     </View>
                   </View>
-                  {/* Same field, same interaction, as Tambah Pesanan's own
-                    Fee Jastip: an anchored "Pakai %"/"Pakai IDR" dropdown
-                    trigger (Pressable.measure() + a Modal rendered below,
-                    not a decorative caret) next to an editable value
-                    Input — not Figma's read-only two-box look from the
-                    first pass at this sheet. */}
-                  <View className="flex-1 gap-[4px]">
+                  <Text className="font-inter text-[10px] text-neutral-700">
+                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
+                    tagihan pelanggan. Boleh dikosongkan.
+                  </Text>
+
+                  <View className="gap-[4px]">
                     <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
                         ref={feeTriggerRef}
                         onPress={openFeeDropdown}
                         className={cn(
-                          'flex-row items-center gap-[4px] rounded-[8px] border bg-white p-[10px]',
+                          'flex-1 flex-row items-center justify-between gap-[4px] rounded-[8px] border bg-white p-[10px]',
                           feeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
                         )}>
                         <Text className="font-inter text-[12px] text-neutral-800">
@@ -1001,14 +1043,20 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         </View>
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        {confirmDraft.feeType === 'flat' ? (
+                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                        ) : null}
                         <Input
                           value={confirmDraft.feeValue}
                           onChangeText={(v) => updateConfirmDraft({ feeValue: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
+                        {confirmDraft.feeType === 'percent' ? (
+                          <Text className="font-inter text-[12px] text-neutral-800">%</Text>
+                        ) : null}
                       </View>
                     </View>
                   </View>
@@ -1127,21 +1175,22 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               </Pressable>
 
               <View className="gap-[16px]">
-                <View className="gap-[4px]">
-                  <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
-                  <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                    <Input
-                      value={addItemDraft.namaProduk}
-                      onChangeText={(v) => updateAddItemDraft({ namaProduk: v })}
-                      placeholder="Nama produk"
-                      placeholderTextColor="#9ca3af"
-                      className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                    />
+                {/* Figma node 231:1111, as on Tambah pesanan: name and
+                    quantity, the two prices side by side, then the fee. */}
+                <View className="flex-row items-start gap-[4px]">
+                  <View className="flex-1 gap-[4px]">
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                    <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                      <Input
+                        value={addItemDraft.namaProduk}
+                        onChangeText={(v) => updateAddItemDraft({ namaProduk: v })}
+                        placeholder="Nama produk"
+                        placeholderTextColor="#9ca3af"
+                        className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                      />
+                    </View>
                   </View>
-                </View>
-
-                <View className="flex-row items-start gap-[8px]">
-                  <View className="w-[47px] gap-[4px]">
+                  <View className="w-[56px] gap-[4px]">
                     <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
@@ -1150,32 +1199,61 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
+                        accessibilityLabel="Jumlah"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
-                  <View className="w-[92px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga</Text>
-                    <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                      <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
-                      <Input
-                        value={addItemDraft.harga}
-                        onChangeText={(v) => updateAddItemDraft({ harga: v })}
-                        placeholder="0"
-                        placeholderTextColor="#9ca3af"
-                        keyboardType="numeric"
-                        className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-                      />
+                </View>
+
+                <View className="gap-[8px]">
+                  <View className="flex-row items-start gap-[8px]">
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga asli</Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Input
+                          value={addItemDraft.hargaAsli}
+                          onChangeText={(v) => updateAddItemDraft({ hargaAsli: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga asli"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
+                    </View>
+                    <View className="flex-1 gap-[4px]">
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        Harga ke pelanggan
+                      </Text>
+                      <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Input
+                          value={addItemDraft.harga}
+                          onChangeText={(v) => updateAddItemDraft({ harga: v })}
+                          placeholder="0"
+                          placeholderTextColor="#9ca3af"
+                          keyboardType="numeric"
+                          accessibilityLabel="Harga ke pelanggan"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                        />
+                      </View>
                     </View>
                   </View>
-                  <View className="flex-1 gap-[4px]">
+                  <Text className="font-inter text-[10px] text-neutral-700">
+                    Harga asli hanya catatan untukmu: tidak ikut dihitung dan tidak tampil di
+                    tagihan pelanggan. Boleh dikosongkan.
+                  </Text>
+
+                  <View className="gap-[4px]">
                     <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
                         ref={addFeeTriggerRef}
                         onPress={openAddFeeDropdown}
                         className={cn(
-                          'flex-row items-center gap-[4px] rounded-[8px] border bg-white p-[10px]',
+                          'flex-1 flex-row items-center justify-between gap-[4px] rounded-[8px] border bg-white p-[10px]',
                           addFeeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
                         )}>
                         <Text className="font-inter text-[12px] text-neutral-800">
@@ -1189,14 +1267,20 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         </View>
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                        {addItemDraft.feeType === 'flat' ? (
+                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                        ) : null}
                         <Input
                           value={addItemDraft.feeValue}
                           onChangeText={(v) => updateAddItemDraft({ feeValue: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          className="h-auto flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
+                        {addItemDraft.feeType === 'percent' ? (
+                          <Text className="font-inter text-[12px] text-neutral-800">%</Text>
+                        ) : null}
                       </View>
                     </View>
                   </View>
