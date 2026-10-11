@@ -47,13 +47,13 @@ const SHADER = {
     },
     gradientBalance: 0,
     material: 0,
-    morphSpeed: 3.240000009536743,
+    morphSpeed: 0.8100000023841858,
     detail: 4.980000019073486,
     twist: 0,
     zoom: 2,
     gradientMethod: 1,
     warp: 0.5999999642372131,
-    rotationSpeed: 9,
+    rotationSpeed: 0,
   },
 };
 
