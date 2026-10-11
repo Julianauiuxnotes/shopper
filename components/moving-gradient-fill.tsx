@@ -57,14 +57,56 @@ const SHADER = {
   },
 };
 
+// Safari doesn't know the "device-pixel-content-box" option the runtime
+// passes to ResizeObserver.observe() and throws on it, which took the
+// whole page down on iPhone. The runtime already has a fallback for
+// browsers without that measurement, so where the option is unsupported
+// the same call is retried with the ordinary content box.
+let resizeObserverPatched = false;
+function allowContentBoxFallback() {
+  if (resizeObserverPatched || typeof ResizeObserver === 'undefined') return;
+  resizeObserverPatched = true;
+  const observe = ResizeObserver.prototype.observe;
+  ResizeObserver.prototype.observe = function (target, options) {
+    try {
+      return observe.call(this, target, options);
+    } catch (error) {
+      if (options?.box !== 'device-pixel-content-box') throw error;
+      return observe.call(this, target, { ...options, box: 'content-box' });
+    }
+  };
+}
+
+// The gradient is decoration: if anything in the shader fails, the card
+// must simply keep its plain background rather than break the page.
+class FillBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn('Dashboard gradient disabled', error);
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export function MovingGradientFill({ borderRadius }: { borderRadius: number }) {
   const focused = useIsFocused();
   // Decided after mount: the server-rendered page can't know about WebGPU.
   const [supported, setSupported] = React.useState(false);
   React.useEffect(() => {
-    setSupported(Platform.OS === 'web' && typeof navigator !== 'undefined' && 'gpu' in navigator);
+    const hasWebGpu =
+      Platform.OS === 'web' && typeof navigator !== 'undefined' && 'gpu' in navigator;
+    if (hasWebGpu) allowContentBoxFallback();
+    setSupported(hasWebGpu);
   }, []);
 
   if (!supported || !focused) return null;
-  return <ShaderFill shader={SHADER} style={{ position: 'absolute', inset: 0, borderRadius }} />;
+  return (
+    <FillBoundary>
+      <ShaderFill shader={SHADER} style={{ position: 'absolute', inset: 0, borderRadius }} />
+    </FillBoundary>
+  );
 }
