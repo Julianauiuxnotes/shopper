@@ -4,12 +4,15 @@ import { SideDrawer } from '@/components/ui/side-drawer';
 import { Text } from '@/components/ui/text';
 import { useEvents, getEventProfit } from '@/lib/events-store';
 import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
+import { MovingGradientFill } from '@/components/moving-gradient-fill';
 import { useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
 import { Image, Pressable, ScrollView, View } from 'react-native';
+
+const CARD_SHADOW = { boxShadow: '0px 2px 5.1px rgba(0, 0, 0, 0.25)' };
 
 // Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
 // (section DASHBOARD, fileKey HbQCCdkrJDE9BzznluMmz8). Which one renders
@@ -74,7 +77,11 @@ export default function DashboardScreen() {
           </Pressable>
         </View>
 
-        <View className="gap-[14px] rounded-[12px] bg-orange-200 p-[20px]">
+        {/* Figma node 238:161: the card's fill is an animated gradient
+            where the browser supports it; the plain orange stays as the
+            fallback underneath. */}
+        <View style={CARD_SHADOW} className="gap-[14px] rounded-[12px] bg-orange-200 p-[20px]">
+          <MovingGradientFill borderRadius={12} />
           <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
 
           {/* Two equal columns, so the second row lines up under the first. */}

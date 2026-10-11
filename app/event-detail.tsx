@@ -149,8 +149,6 @@ export default function EventDetailScreen() {
   const belumTotal = belumOrders.reduce((sum, o) => sum + getTotalTagihan(o), 0);
   // For partly paid orders: what is still owed after their DP.
   const sebagianSisa = sebagianOrders.reduce((sum, o) => sum + getSisaPembayaran(o), 0);
-  const refundOrders = event?.orders.filter((o) => getKelebihanBayar(o) > 0) ?? [];
-  const refundTotal = refundOrders.reduce((sum, o) => sum + getKelebihanBayar(o), 0);
   const expenses = event?.pengeluaran ?? [];
   const expenseTotal = expenses.reduce((sum, x) => sum + x.jumlah, 0);
 
@@ -410,17 +408,6 @@ export default function EventDetailScreen() {
                       note={formatIDR(belumTotal)}
                     />
                   </View>
-                  {/* DPs that ended up bigger than their bills. */}
-                  {refundTotal > 0 ? (
-                    <View
-                      accessibilityRole="alert"
-                      className="rounded-[8px] border border-red-300 bg-red-50 p-[10px]">
-                      <Text className="font-inter-semibold text-[12px] text-red-600">
-                        Kelebihan bayar {formatIDR(refundTotal)} dari {refundOrders.length} pesanan
-                        perlu dikembalikan ke pelanggan.
-                      </Text>
-                    </View>
-                  ) : null}
                 </View>
               </View>
 
