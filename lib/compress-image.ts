@@ -77,16 +77,17 @@ export function compressPhoto(source: Source) {
 /**
  * The jastiper's logo. PNGs stay PNG so a transparent background
  * survives; PNG can't trade quality for size, so those shrink by
- * dimensions alone. The logo's largest slot is 101x47 points, so even the
- * smallest step here (360px) is sharp on a 3x screen.
+ * dimensions alone. Never larger than 500px on its longest side (the
+ * limit shown in Pengaturan); the logo's largest slot is 101x47 points,
+ * so even the smallest step here (360px) is sharp on a 3x screen.
  */
 export function compressLogo(source: Source, isPng: boolean) {
   return isPng
     ? compress(
         source,
         [
-          { maxSide: 600, quality: 1 },
-          { maxSide: 480, quality: 1 },
+          { maxSide: 500, quality: 1 },
+          { maxSide: 420, quality: 1 },
           { maxSide: 360, quality: 1 },
         ],
         SaveFormat.PNG
@@ -94,9 +95,9 @@ export function compressLogo(source: Source, isPng: boolean) {
     : compress(
         source,
         [
-          { maxSide: 600, quality: 0.85 },
-          { maxSide: 600, quality: 0.7 },
-          { maxSide: 480, quality: 0.6 },
+          { maxSide: 500, quality: 0.85 },
+          { maxSide: 500, quality: 0.7 },
+          { maxSide: 420, quality: 0.6 },
         ],
         SaveFormat.JPEG
       );

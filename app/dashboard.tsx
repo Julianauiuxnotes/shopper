@@ -9,7 +9,7 @@ import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 
 // Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
 // (section DASHBOARD, fileKey HbQCCdkrJDE9BzznluMmz8). Which one renders
@@ -26,7 +26,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 export default function DashboardScreen() {
   const router = useRouter();
   const { events } = useEvents();
-  const { userProfile } = useSettings();
+  const { userProfile, logoJastip } = useSettings();
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
@@ -51,7 +51,17 @@ export default function DashboardScreen() {
         contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[20px]">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-[6px]">
-            <View className="size-[34px] rounded-full bg-[#d9d9d9]" />
+            {/* The logo from Pengaturan, or the grey placeholder circle. */}
+            {logoJastip ? (
+              <Image
+                source={{ uri: logoJastip }}
+                resizeMode="cover"
+                style={{ width: 34, height: 34, borderRadius: 17 }}
+                accessibilityLabel="Logo jastip"
+              />
+            ) : (
+              <View className="size-[34px] rounded-full bg-[#d9d9d9]" />
+            )}
             <View>
               <Text className="font-inter-bold text-[10px] text-black">Hallo!</Text>
               <Text className="font-inter-semibold text-[16px] text-orange-500">

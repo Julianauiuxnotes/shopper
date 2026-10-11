@@ -11,15 +11,17 @@ import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
-// Logo upload limits. The logo's slot on printed output is 101x47
-// (components/jastiper-logo.tsx): 300x140 px keeps it sharp on a 3x
-// phone screen, and 600x280 px leaves headroom for a paper printout.
+// Logo upload limits: a square-ish image of at least 140x140 px, kept at
+// no more than 500x500 px (bigger pictures are scaled down on upload, see
+// lib/compress-image.ts). It shows in the round avatar on the dashboard
+// and in the logo slot on printed output (components/jastiper-logo.tsx).
 // The size cap matters because the logo is stored on-device as a base64
 // `data:` URI (lib/settings-store.tsx) — 500 KB becomes ~670 KB of
 // text, comfortably under Android AsyncStorage's 2 MB-per-entry limit.
 const LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
-const LOGO_MIN_WIDTH = 300;
+const LOGO_MIN_WIDTH = 140;
 const LOGO_MIN_HEIGHT = 140;
+const LOGO_MAX_SIDE = 500;
 // Picked files are compressed to ~200 KB before storing; this only stops
 // absurdly large inputs from being loaded into memory at all.
 const LOGO_MAX_INPUT_BYTES = 10 * 1024 * 1024;
@@ -185,13 +187,13 @@ export default function SettingsScreen() {
           <View className="gap-[8px]">
             <Text className="font-inter-bold text-[12px] text-neutral-800">Logo Jastip</Text>
             <View className="flex-row items-center gap-[12px]">
-              {/* Same 101:47 proportions as the logo's slot on printouts. */}
-              <View className="h-[70px] w-[150px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
+              {/* Square, like the logo itself. */}
+              <View className="h-[70px] w-[70px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
                 {logoJastip ? (
                   <Image
                     source={{ uri: logoJastip }}
                     resizeMode="contain"
-                    style={{ width: 150, height: 70 }}
+                    style={{ width: 70, height: 70 }}
                     accessibilityLabel="Logo jastip"
                   />
                 ) : (
@@ -223,9 +225,9 @@ export default function SettingsScreen() {
               </View>
             </View>
             <Text className="font-inter text-[10px] text-neutral-500">
-              PNG atau JPG, mendatar (rasio sekitar 2:1). Minimal {LOGO_MIN_WIDTH} x{' '}
-              {LOGO_MIN_HEIGHT} px, disarankan 600 x 280 px. Gambar dikompres otomatis ke sekitar
-              200 KB.
+              PNG atau JPG, persegi (rasio 1:1). Minimal {LOGO_MIN_WIDTH} x {LOGO_MIN_HEIGHT} px,
+              maksimal {LOGO_MAX_SIDE} x {LOGO_MAX_SIDE} px. Gambar yang lebih besar dikecilkan
+              otomatis. Logo tampil di dashboard dan di cetakan.
             </Text>
             {logoError ? (
               <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>
