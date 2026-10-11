@@ -143,6 +143,18 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
               </View>
             </>
           ) : null}
+          {/* The DP came to more than the bill: the difference goes back to
+              the customer. */}
+          {(snapshot.dp ?? 0) > snapshot.tt ? (
+            <View className="gap-[6px]">
+              <Text className="font-inter-bold text-[10px] text-neutral-800">
+                Kelebihan bayar (dikembalikan ke pelanggan)
+              </Text>
+              <Text className="font-inter text-[12px] text-neutral-800">
+                {formatIDR((snapshot.dp ?? 0) - snapshot.tt)}
+              </Text>
+            </View>
+          ) : null}
           <Text className="font-inter text-[10px] text-[#1e1e1e]">
             *Harga sudah termasuk jastip fee
           </Text>
