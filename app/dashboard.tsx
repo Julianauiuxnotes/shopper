@@ -121,7 +121,7 @@ export default function DashboardScreen() {
               <View
                 className={cn(
                   'max-w-full self-start rounded-[12px] px-[10px] py-[2px]',
-                  ongoingEvent ? 'bg-orange-500' : 'bg-white'
+                  ongoingEvent ? 'bg-orange-400' : 'bg-white'
                 )}>
                 <Text
                   numberOfLines={1}

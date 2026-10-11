@@ -7,8 +7,7 @@ import { Platform } from 'react-native';
 // The animated orange gradient behind the dashboard's summary card (Figma
 // node 238:161). It is Figma's own "Moving gradient" shader, run with
 // Figma's shader runtime (lib/custom-effect-runtime, copied as-is), using
-// the settings from the design. Colors are the Orange/300, /100 and /400
-// variables.
+// the settings from the design.
 //
 // Web only, and only in browsers with WebGPU: anywhere else this renders
 // nothing and the card's plain background color shows instead. It is also
@@ -23,13 +22,48 @@ import { Platform } from 'react-native';
 // nothing is drawn. So the real size is put back just before the effect
 // runs; neither Figma file is modified.
 type SizedTexture = { physicalWidth?: number; physicalHeight?: number };
-const renderAtDeviceSize: typeof render = (device, frame) => {
+// The same adapter also fixes how the effect's transparency reaches the
+// page. The "Iridescent" material writes ordinary (straight) alpha, while
+// the runtime's canvas expects colors already multiplied by their alpha;
+// left alone the browser adds the page behind on top at full strength and
+// the card comes out washed out next to Figma's own rendering. So the
+// effect's main pipeline is given a blend that does that multiplication as
+// it writes. Nothing about what the shader computes changes.
+const PREMULTIPLY: GPUBlendState = {
+  color: { srcFactor: 'src-alpha', dstFactor: 'zero', operation: 'add' },
+  alpha: { srcFactor: 'one', dstFactor: 'zero', operation: 'add' },
+};
+const renderAtDeviceSize: typeof render = (device: GPUDevice, frame) => {
   const output = frame.output as (typeof frame.output & SizedTexture) | null;
   if (output?.physicalWidth !== undefined && output.physicalHeight !== undefined) {
     Object.defineProperty(output, 'width', { value: output.physicalWidth, configurable: true });
     Object.defineProperty(output, 'height', { value: output.physicalHeight, configurable: true });
   }
-  return render(device, frame);
+  // Only while the effect runs: it builds its pipelines inside render().
+  const createRenderPipeline = device.createRenderPipeline;
+  device.createRenderPipeline = (descriptor) => {
+    const fragment = descriptor.fragment;
+    const isMainPass = fragment?.entryPoint === 'fs_main';
+    return createRenderPipeline.call(
+      device,
+      isMainPass && fragment
+        ? {
+            ...descriptor,
+            fragment: {
+              ...fragment,
+              targets: Array.from(fragment.targets, (target) =>
+                target ? { ...target, blend: PREMULTIPLY } : target
+              ),
+            },
+          }
+        : descriptor
+    );
+  };
+  try {
+    return render(device, frame);
+  } finally {
+    device.createRenderPipeline = createRenderPipeline;
+  }
 };
 
 const SHADER = {
@@ -37,22 +71,33 @@ const SHADER = {
   render: renderAtDeviceSize,
   manifest,
   params: {
-    intensity: 5,
+    intensity: 1.090000033378601,
     gradient: {
       stops: [
-        { position: 0, color: { r: 1, g: 0.6274510025978088, b: 0.3450980484485626, a: 1 } },
-        { position: 0.5, color: { r: 1, g: 0.8823529481887817, b: 0.7960784435272217, a: 1 } },
-        { position: 1, color: { r: 1, g: 0.46666666865348816, b: 0.05882352963089943, a: 1 } },
+        // Purple/300, Orange/200, Orange/400
+        {
+          position: 0.2163461595773697,
+          color: { r: 0.6941176652908325, g: 0.6039215922355652, b: 0.8549019694328308, a: 1 },
+        },
+        {
+          position: 0.629807710647583,
+          color: { r: 1, g: 0.7607843279838562, b: 0.5803921818733215, a: 1 },
+        },
+        {
+          position: 0.9567307829856873,
+          color: { r: 1, g: 0.46666666865348816, b: 0.05882352963089943, a: 1 },
+        },
       ],
     },
     gradientBalance: 0,
-    material: 0,
-    morphSpeed: 0.8100000023841858,
-    detail: 4.980000019073486,
+    // 4 = "Iridescent": a glassy surface that is partly see-through.
+    material: 4,
+    morphSpeed: 0.6200000047683716,
+    detail: 2,
     twist: 0,
     zoom: 2,
     gradientMethod: 1,
-    warp: 0.5999999642372131,
+    warp: 0,
     rotationSpeed: 0,
   },
 };
@@ -106,7 +151,13 @@ export function MovingGradientFill({ borderRadius }: { borderRadius: number }) {
   if (!supported || !focused) return null;
   return (
     <FillBoundary>
-      <ShaderFill shader={SHADER} style={{ position: 'absolute', inset: 0, borderRadius }} />
+      {/* White behind the canvas, as on the Figma page: the iridescent
+          material is partly transparent, and over the card's own orange
+          it would come out darker than designed. */}
+      <ShaderFill
+        shader={SHADER}
+        style={{ position: 'absolute', inset: 0, borderRadius, backgroundColor: '#ffffff' }}
+      />
     </FillBoundary>
   );
 }
