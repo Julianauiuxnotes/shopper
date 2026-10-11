@@ -84,7 +84,8 @@ export default function DashboardScreen() {
       {/* Everything down to the search box stays put; only the list of
           events underneath scrolls. */}
       <View className="flex-1 bg-white">
-        <View className="gap-[20px] px-[20px] pt-[20px]">
+        {/* The 16px at the bottom is the fixed gap under the search box. */}
+        <View className="gap-[20px] px-[20px] pb-[16px] pt-[20px]">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-[6px]">
               {/* The logo from Pengaturan, or the grey placeholder circle. */}
@@ -210,7 +211,7 @@ export default function DashboardScreen() {
           <ScrollView
             ref={listRef}
             className="flex-1"
-            contentContainerClassName="gap-[12px] px-[20px] pb-[40px] pt-[12px]">
+            contentContainerClassName="gap-[12px] px-[20px] pb-[40px]">
             {shownEvents.length === 0 ? (
               <Text className="font-inter text-[10px] italic text-neutral-800">
                 Tidak ada event yang cocok
