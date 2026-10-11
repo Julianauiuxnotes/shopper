@@ -3,6 +3,7 @@ import '@/global.css';
 import { IncomingOrdersSync } from '@/components/incoming-orders-sync';
 import { AuthGate } from '@/components/auth-gate';
 import { DataSync } from '@/components/data-sync';
+import { LogoSync } from '@/components/logo-sync';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ScreenTransition } from '@/components/screen-transition';
 import { AuthProvider } from '@/lib/auth-store';
@@ -69,6 +70,7 @@ export default function RootLayout() {
             <AuthGate />
             <DataSync />
             <IncomingOrdersSync />
+            <LogoSync />
             {/* Web only: the app is designed for phone widths, but a desktop
               browser window has no such constraint by default. Center it in
               a phone-sized frame so `expo start --web` is a faithful

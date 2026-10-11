@@ -23,6 +23,8 @@ import {
 import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
+import { useSettings } from '@/lib/settings-store';
+import { canPrintShippingLabel, downloadShippingLabel } from '@/lib/shipping-label';
 import { cn } from '@/lib/utils';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -144,6 +146,32 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
   const [confirmingLunas, setConfirmingLunas] = React.useState(false);
+  const { userProfile } = useSettings();
+  const [labelNotice, setLabelNotice] = React.useState('');
+
+  async function handleCetakLabel() {
+    if (!canPrintShippingLabel) {
+      setLabelNotice('Cetak label baru tersedia di versi web.');
+      return;
+    }
+    const withPrefix = (digits: string) => {
+      const local = digits.replace(/^\+?62/, '').replace(/\D/g, '');
+      return local ? `+62${local}` : '';
+    };
+    try {
+      await downloadShippingLabel({
+        namaCustomer: order.nama,
+        alamat: order.alamat,
+        whatsapp: withPrefix(order.whatsapp),
+        pengirim: userProfile.namaJastip || 'Jastip',
+        teleponPengirim: withPrefix(userProfile.telepon ?? ''),
+        fileName: `Label pengiriman ${order.orderNumber} ${order.nama.replace(/[^\w\- ]+/g, '').trim()}.png`,
+      });
+      setLabelNotice('Label pengiriman sudah diunduh.');
+    } catch {
+      setLabelNotice('Label gagal dibuat. Coba lagi.');
+    }
+  }
 
   const isDirty = JSON.stringify(order) !== JSON.stringify(savedOrder);
 
@@ -967,6 +995,40 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               </Pressable>
             </Link>
           )}
+
+          {/* Only once the order is paid in full: saves the shipping label
+              (lib/shipping-label.ts) as an image. Like the bill, it is
+              made from the saved order. */}
+          {order.statusPembayaran === 'lunas' ? (
+            <View className="gap-[8px]">
+              <Pressable
+                onPress={handleCetakLabel}
+                disabled={isDirty}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isDirty }}
+                className={cn(
+                  'w-full items-center justify-center rounded-[12px] border bg-white px-[10px] py-[16px]',
+                  isDirty ? 'border-orange-200' : 'border-orange-500'
+                )}>
+                <Text
+                  className={cn(
+                    'font-inter-semibold text-[14px]',
+                    isDirty ? 'text-orange-300' : 'text-orange-500'
+                  )}>
+                  Cetak label pengiriman
+                </Text>
+              </Pressable>
+              {isDirty ? (
+                <Text className="text-center font-inter text-[10px] text-neutral-500">
+                  Simpan perubahan dulu untuk mencetak label.
+                </Text>
+              ) : labelNotice ? (
+                <Text className="text-center font-inter text-[10px] text-neutral-500">
+                  {labelNotice}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
       </View>
 
