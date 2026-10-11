@@ -58,21 +58,20 @@ export default function DashboardScreen() {
         </View>
 
         <View className="gap-[14px] rounded-[12px] bg-orange-200 p-[20px]">
-          <View className="flex-row justify-between">
-            <View className="gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">
-                Total Revenue (Bulan ini)
-              </Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-800">
-                {formatIDR(totalRevenue)}
-              </Text>
-            </View>
-            <View className="gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Profit</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-800">
-                {formatIDR(totalProfit)}
-              </Text>
-            </View>
+          <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {formatIDR(totalRevenue)}
+            </Text>
+          </View>
+
+          <View className="gap-[6px]">
+            <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {formatIDR(totalProfit)}
+            </Text>
           </View>
 
           <View className="gap-[6px]">
