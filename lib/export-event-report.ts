@@ -4,6 +4,7 @@ import {
   type OrderItem,
   getEventProfit,
   getItemMarkup,
+  getKelebihanBayar,
   getSisaPembayaran,
   getTotalTagihan,
 } from '@/lib/events-store';
@@ -129,6 +130,7 @@ function orderRows(event: JastipEvent): Cell[][] {
     'Harga + fee jastip',
     'DP',
     'Sisa pembayaran',
+    'Kelebihan bayar',
     'Payment type',
     'Status pembayaran',
     'Ongkir',
@@ -164,6 +166,8 @@ function orderRows(event: JastipEvent): Cell[][] {
         // Order-level figures once per order, so the columns can be summed.
         first && order.dp ? money(order.dp) : null,
         first ? money(getSisaPembayaran(order)) : null,
+        // DP above the bill: owed back to the customer.
+        first && getKelebihanBayar(order) > 0 ? money(getKelebihanBayar(order)) : null,
         // Payment type isn't recorded in the app yet: left empty for the
         // jastiper to fill in.
         null,
@@ -201,7 +205,28 @@ export async function downloadEventReport(event: JastipEvent) {
     {
       data: [...headerRows(event), ...orderRows(event)],
       sheet: 'Laporan',
-      columns: widths(17, 13, 28, 26, 19, 16, 19, 15, 16, 14, 17, 19, 12, 18, 14, 18, 14, 22, 16),
+      columns: widths(
+        17,
+        13,
+        28,
+        26,
+        19,
+        16,
+        19,
+        15,
+        16,
+        14,
+        17,
+        19,
+        12,
+        18,
+        17,
+        14,
+        18,
+        14,
+        22,
+        16
+      ),
     },
     { data: expenseRows(event), sheet: 'Pengeluaran', columns: widths(36, 14, 16) },
   ]).toBlob();

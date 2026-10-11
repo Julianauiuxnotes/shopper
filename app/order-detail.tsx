@@ -18,6 +18,7 @@ import {
   getSisaPembayaran,
   type PaymentStatus,
   getOrderProfit,
+  getKelebihanBayar,
 } from '@/lib/events-store';
 import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
@@ -856,6 +857,23 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               {formatIDR(getSisaPembayaran(order))}
             </Text>
           </View>
+
+          {/* The DP is more than the bill (e.g. after a product was marked
+              Tidak tersedia): the difference goes back to the customer. */}
+          {getKelebihanBayar(order) > 0 ? (
+            <View
+              accessibilityRole="alert"
+              className="gap-[4px] rounded-[8px] border border-red-300 bg-red-50 p-[10px]">
+              <Text className="font-inter-bold text-[12px] text-red-600">
+                Kelebihan bayar {formatIDR(getKelebihanBayar(order))}
+              </Text>
+              <Text className="font-inter text-[12px] leading-[17px] text-neutral-800">
+                DP pelanggan ({formatIDR(order.dp ?? 0)}) lebih besar dari total tagihan (
+                {formatIDR(totalTagihan)}). Kembalikan {formatIDR(getKelebihanBayar(order))} ke
+                pelanggan.
+              </Text>
+            </View>
+          ) : null}
 
           <View className="gap-[10px]">
             <Text className="font-inter-bold text-[12px] text-neutral-800">Status pembayaran</Text>

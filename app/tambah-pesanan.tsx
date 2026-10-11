@@ -731,9 +731,11 @@ export default function TambahPesananScreen() {
               />
             </View>
             <Text className="font-inter text-[10px] text-neutral-700">
-              {Number(dp) > 0
-                ? `Sisa pembayaran ${formatIDR(Math.max(0, totalTagihan - Number(dp)))}. Pesanan akan berstatus Belum lunas.`
-                : 'Isi jika pelanggan sudah membayar uang muka. Boleh dikosongkan.'}
+              {Number(dp) > totalTagihan && totalTagihan > 0
+                ? `DP lebih besar dari total tagihan. Kelebihan ${formatIDR(Number(dp) - totalTagihan)} perlu dikembalikan ke pelanggan.`
+                : Number(dp) > 0
+                  ? `Sisa pembayaran ${formatIDR(Math.max(0, totalTagihan - Number(dp)))}. Pesanan akan berstatus Belum lunas.`
+                  : 'Isi jika pelanggan sudah membayar uang muka. Boleh dikosongkan.'}
             </Text>
           </View>
 

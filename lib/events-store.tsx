@@ -125,6 +125,15 @@ export function getSisaPembayaran(order: Order) {
   return Math.max(0, getTotalTagihan(order) - (order.dp ?? 0));
 }
 
+/**
+ * How much of the DP is more than the whole bill, i.e. what the jastiper
+ * owes back to the customer. Happens when the bill shrinks after the DP
+ * was taken, e.g. a product turned out to be Tidak tersedia. 0 otherwise.
+ */
+export function getKelebihanBayar(order: Order) {
+  return Math.max(0, (order.dp ?? 0) - getTotalTagihan(order));
+}
+
 // Something the jastiper spent at an event (parking, packaging, ...).
 export type Expense = {
   id: string;
