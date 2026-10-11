@@ -60,40 +60,44 @@ export default function DashboardScreen() {
         <View className="gap-[14px] rounded-[12px] bg-orange-200 p-[20px]">
           <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
 
-          <View className="gap-[6px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
-            <Text className="font-inter-bold text-[14px] text-neutral-800">
-              {formatIDR(totalRevenue)}
-            </Text>
-          </View>
-
-          <View className="gap-[6px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
-            <Text className="font-inter-bold text-[14px] text-neutral-800">
-              {formatIDR(totalProfit)}
-            </Text>
-          </View>
-
-          <View className="gap-[6px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
-            <View
-              className={cn(
-                'self-start rounded-[12px] px-[10px] py-[2px]',
-                ongoingEvent ? 'bg-orange-500' : 'bg-white'
-              )}>
-              <Text
-                className={cn(
-                  'font-inter text-[12px] italic',
-                  ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
-                )}>
-                {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
+          {/* Two equal columns, so the second row lines up under the first. */}
+          <View className="flex-row gap-[12px]">
+            <View className="flex-1 gap-[6px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-800">
+                {formatIDR(totalRevenue)}
+              </Text>
+            </View>
+            <View className="flex-1 gap-[6px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-800">
+                {formatIDR(totalProfit)}
               </Text>
             </View>
           </View>
 
-          <View className="gap-[6px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
-            <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
+          <View className="flex-row gap-[12px]">
+            <View className="flex-1 gap-[6px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
+              <View
+                className={cn(
+                  'max-w-full self-start rounded-[12px] px-[10px] py-[2px]',
+                  ongoingEvent ? 'bg-orange-500' : 'bg-white'
+                )}>
+                <Text
+                  numberOfLines={1}
+                  className={cn(
+                    'font-inter text-[12px] italic',
+                    ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
+                  )}>
+                  {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
+                </Text>
+              </View>
+            </View>
+            <View className="flex-1 gap-[6px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
+            </View>
           </View>
         </View>
 
