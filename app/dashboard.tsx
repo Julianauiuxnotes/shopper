@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents, getEventProfit } from '@/lib/events-store';
 import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
-import { MovingGradientFill } from '@/components/moving-gradient-fill';
 import { useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
@@ -16,6 +15,13 @@ import * as React from 'react';
 import { Image, Pressable, ScrollView, View } from 'react-native';
 
 const CARD_SHADOW = { boxShadow: '0px 2px 5.1px rgba(0, 0, 0, 0.25)' };
+const CARD_FILL = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+} as const;
 const BUTTON_SHADOW = { boxShadow: '0px 2px 2.55px rgba(0, 0, 0, 0.25)' };
 
 // Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
@@ -92,11 +98,21 @@ export default function DashboardScreen() {
           </Pressable>
         </View>
 
-        {/* Figma node 238:161: the card's fill is an animated gradient
-            where the browser supports it; the plain orange stays as the
-            fallback underneath. */}
-        <View style={CARD_SHADOW} className="gap-[14px] rounded-[12px] bg-orange-200 p-[20px]">
-          <MovingGradientFill borderRadius={12} />
+        {/* Figma node 238:161. The card's fill is a still frame of the
+            design's iridescent "Moving gradient" shader: running the shader
+            itself proved too heavy on phones. The background color is the
+            image's average, shown while it loads. */}
+        <View
+          style={CARD_SHADOW}
+          className="gap-[14px] overflow-hidden rounded-[12px] bg-[#cdb8cc] p-[20px]">
+          <Image
+            source={require('@/assets/images/dashboard-card-gradient.jpg')}
+            resizeMode="cover"
+            accessible={false}
+            // Sized by style: left to its own devices the image takes the
+            // file's pixel size and only a corner of it would show.
+            style={CARD_FILL}
+          />
           <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
 
           {/* Two equal columns, so the second row lines up under the first. */}
