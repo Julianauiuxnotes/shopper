@@ -22,6 +22,7 @@ const CARD_FILL = {
   width: '100%',
   height: '100%',
 } as const;
+const PAGE_SIZE = 10;
 const BUTTON_SHADOW = { boxShadow: '0px 2px 2.55px rgba(0, 0, 0, 0.25)' };
 
 // Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
@@ -54,6 +55,16 @@ export default function DashboardScreen() {
           e.kodeEvent.toLowerCase().includes(needle)
       )
     : events;
+  // The list shows ten events at a time.
+  const [page, setPage] = React.useState(1);
+  const listRef = React.useRef<ScrollView>(null);
+  const pageCount = Math.max(1, Math.ceil(shownEvents.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageEvents = shownEvents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const goToPage = (next: number) => {
+    setPage(Math.min(Math.max(1, next), pageCount));
+    listRef.current?.scrollTo({ y: 0, animated: false });
+  };
 
   // "Jastip bulan ini": the card counts events that take place during the
   // current calendar month, i.e. whose dates fall at least partly in it.
@@ -70,129 +81,142 @@ export default function DashboardScreen() {
 
   return (
     <>
-      <ScrollView
-        className="flex-1 bg-white"
-        contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[20px]">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-[6px]">
-            {/* The logo from Pengaturan, or the grey placeholder circle. */}
-            {logoJastip ? (
-              <Image
-                source={{ uri: logoJastip }}
-                resizeMode="cover"
-                style={{ width: 34, height: 34, borderRadius: 17 }}
-                accessibilityLabel="Logo jastip"
-              />
-            ) : (
-              <View className="size-[34px] rounded-full bg-[#d9d9d9]" />
-            )}
-            <View>
-              <Text className="font-inter-bold text-[10px] text-black">Hallo!</Text>
-              <Text className="font-inter-semibold text-[16px] text-orange-500">
-                {userProfile.namaJastip || 'Jastip by Juli'}
-              </Text>
-            </View>
-          </View>
-          <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
-            <MenuIcon width={24} height={24} />
-          </Pressable>
-        </View>
-
-        {/* Figma node 238:161. The card's fill is a still frame of the
-            design's iridescent "Moving gradient" shader: running the shader
-            itself proved too heavy on phones. The background color is the
-            image's average, shown while it loads. */}
-        <View
-          style={CARD_SHADOW}
-          className="gap-[14px] overflow-hidden rounded-[12px] bg-[#cdb8cc] p-[20px]">
-          <Image
-            source={require('@/assets/images/dashboard-card-gradient.jpg')}
-            resizeMode="cover"
-            accessible={false}
-            // Sized by style: left to its own devices the image takes the
-            // file's pixel size and only a corner of it would show.
-            style={CARD_FILL}
-          />
-          <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
-
-          {/* Two equal columns, so the second row lines up under the first. */}
-          <View className="flex-row gap-[12px]">
-            <View className="flex-1 gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-800">
-                {formatIDR(totalRevenue)}
-              </Text>
-            </View>
-            <View className="flex-1 gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-800">
-                {formatIDR(totalProfit)}
-              </Text>
-            </View>
-          </View>
-
-          <View className="flex-row gap-[12px]">
-            <View className="flex-1 gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
-              <View
-                className={cn(
-                  'max-w-full self-start rounded-[12px] px-[10px] py-[2px]',
-                  ongoingEvent ? 'bg-orange-400' : 'bg-white'
-                )}>
-                <Text
-                  numberOfLines={1}
-                  className={cn(
-                    'font-inter text-[12px] italic',
-                    ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
-                  )}>
-                  {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
+      {/* Everything down to the search box stays put; only the list of
+          events underneath scrolls. */}
+      <View className="flex-1 bg-white">
+        <View className="gap-[20px] px-[20px] pt-[20px]">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-[6px]">
+              {/* The logo from Pengaturan, or the grey placeholder circle. */}
+              {logoJastip ? (
+                <Image
+                  source={{ uri: logoJastip }}
+                  resizeMode="cover"
+                  style={{ width: 34, height: 34, borderRadius: 17 }}
+                  accessibilityLabel="Logo jastip"
+                />
+              ) : (
+                <View className="size-[34px] rounded-full bg-[#d9d9d9]" />
+              )}
+              <View>
+                <Text className="font-inter-bold text-[10px] text-black">Hallo!</Text>
+                <Text className="font-inter-semibold text-[16px] text-orange-500">
+                  {userProfile.namaJastip || 'Jastip by Juli'}
                 </Text>
               </View>
             </View>
-            <View className="flex-1 gap-[6px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
+            <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
+              <MenuIcon width={24} height={24} />
+            </Pressable>
+          </View>
+
+          {/* Figma node 238:161. The card's fill is a still frame of the
+            design's iridescent "Moving gradient" shader: running the shader
+            itself proved too heavy on phones. The background color is the
+            image's average, shown while it loads. */}
+          <View
+            style={CARD_SHADOW}
+            className="gap-[14px] overflow-hidden rounded-[12px] bg-[#cdb8cc] p-[20px]">
+            <Image
+              source={require('@/assets/images/dashboard-card-gradient.jpg')}
+              resizeMode="cover"
+              accessible={false}
+              // Sized by style: left to its own devices the image takes the
+              // file's pixel size and only a corner of it would show.
+              style={CARD_FILL}
+            />
+            <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
+
+            {/* Two equal columns, so the second row lines up under the first. */}
+            <View className="flex-row gap-[12px]">
+              <View className="flex-1 gap-[6px]">
+                <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
+                <Text className="font-inter-bold text-[14px] text-neutral-800">
+                  {formatIDR(totalRevenue)}
+                </Text>
+              </View>
+              <View className="flex-1 gap-[6px]">
+                <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
+                <Text className="font-inter-bold text-[14px] text-neutral-800">
+                  {formatIDR(totalProfit)}
+                </Text>
+              </View>
+            </View>
+
+            <View className="flex-row gap-[12px]">
+              <View className="flex-1 gap-[6px]">
+                <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
+                <View
+                  className={cn(
+                    'max-w-full self-start rounded-[12px] px-[10px] py-[2px]',
+                    ongoingEvent ? 'bg-orange-400' : 'bg-white'
+                  )}>
+                  <Text
+                    numberOfLines={1}
+                    className={cn(
+                      'font-inter text-[12px] italic',
+                      ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
+                    )}>
+                    {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-1 gap-[6px]">
+                <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
+              </View>
             </View>
           </View>
+
+          {/* Figma node 238:216. */}
+          <Link href="/buka-event-jastip" asChild>
+            <Pressable
+              style={BUTTON_SHADOW}
+              className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
+              <BasketIcon width={24} height={24} />
+              <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                Buka event jastip
+              </Text>
+            </Pressable>
+          </Link>
+
+          {/* Figma node 241:35. */}
+          {hasEvents ? (
+            <View className="gap-[12px]">
+              <Text className="font-inter-semibold text-[14px] text-neutral-800">
+                List event jastip
+              </Text>
+              <View className="flex-row items-center gap-[10px] rounded-[8px] border border-[#d9d9d9] bg-white px-[10px]">
+                <MagnifyingGlassIcon width={16} height={16} />
+                <Input
+                  value={query}
+                  onChangeText={(value) => {
+                    setQuery(value);
+                    setPage(1);
+                  }}
+                  placeholder="Ketik nama event, lokasi atau kode event"
+                  placeholderTextColor="#d1d5db"
+                  accessibilityLabel="Cari event"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  className="h-auto min-h-[37px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none placeholder:text-neutral-400"
+                />
+              </View>
+            </View>
+          ) : null}
         </View>
 
-        {/* Figma node 238:216. */}
-        <Link href="/buka-event-jastip" asChild>
-          <Pressable
-            style={BUTTON_SHADOW}
-            className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-            <BasketIcon width={24} height={24} />
-            <Text className="font-inter-semibold text-[14px] text-neutral-50">
-              Buka event jastip
-            </Text>
-          </Pressable>
-        </Link>
-
-        {/* Figma node 241:35. */}
         {hasEvents ? (
-          <View className="gap-[12px]">
-            <Text className="font-inter-semibold text-[14px] text-neutral-800">
-              List event jastip
-            </Text>
-            <View className="flex-row items-center gap-[10px] rounded-[8px] border border-[#d9d9d9] bg-white px-[10px]">
-              <MagnifyingGlassIcon width={16} height={16} />
-              <Input
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Ketik nama event, lokasi atau kode event"
-                placeholderTextColor="#d1d5db"
-                accessibilityLabel="Cari event"
-                autoCapitalize="none"
-                autoCorrect={false}
-                className="h-auto min-h-[37px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none placeholder:text-neutral-400"
-              />
-            </View>
+          <ScrollView
+            ref={listRef}
+            className="flex-1"
+            contentContainerClassName="gap-[12px] px-[20px] pb-[40px] pt-[12px]">
             {shownEvents.length === 0 ? (
               <Text className="font-inter text-[10px] italic text-neutral-800">
                 Tidak ada event yang cocok
               </Text>
             ) : null}
-            {shownEvents.map((event) => (
+            {pageEvents.map((event) => (
               <View
                 key={event.id}
                 className="flex-row gap-[10px] rounded-[12px] border border-dashed border-neutral-500 bg-orange-100 p-[16px]">
@@ -228,9 +252,40 @@ export default function DashboardScreen() {
                 </View>
               </View>
             ))}
-          </View>
+            {/* Ten events to a page. */}
+            {pageCount > 1 ? (
+              <View className="items-center gap-[8px] pt-[8px]">
+                <View className="flex-row flex-wrap items-center justify-center gap-[6px]">
+                  <PageButton
+                    label="‹"
+                    accessibilityLabel="Halaman sebelumnya"
+                    disabled={currentPage === 1}
+                    onPress={() => goToPage(currentPage - 1)}
+                  />
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+                    <PageButton
+                      key={number}
+                      label={String(number)}
+                      accessibilityLabel={`Halaman ${number}`}
+                      active={number === currentPage}
+                      onPress={() => goToPage(number)}
+                    />
+                  ))}
+                  <PageButton
+                    label="›"
+                    accessibilityLabel="Halaman berikutnya"
+                    disabled={currentPage === pageCount}
+                    onPress={() => goToPage(currentPage + 1)}
+                  />
+                </View>
+                <Text className="font-inter text-[10px] text-neutral-700">
+                  Halaman {currentPage} dari {pageCount} · {shownEvents.length} event
+                </Text>
+              </View>
+            ) : null}
+          </ScrollView>
         ) : null}
-      </ScrollView>
+      </View>
 
       {menuOpen ? (
         <SideDrawer onClose={() => setMenuOpen(false)}>
@@ -276,5 +331,41 @@ export default function DashboardScreen() {
         </SideDrawer>
       ) : null}
     </>
+  );
+}
+
+function PageButton({
+  label,
+  accessibilityLabel,
+  active = false,
+  disabled = false,
+  onPress,
+}: {
+  label: string;
+  accessibilityLabel: string;
+  active?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: active, disabled }}
+      className={cn(
+        'h-[32px] min-w-[32px] items-center justify-center rounded-[8px] border px-[8px]',
+        active ? 'border-orange-500 bg-orange-500' : 'border-neutral-400 bg-white',
+        disabled && 'opacity-40'
+      )}>
+      <Text
+        className={cn(
+          'font-inter-semibold text-[12px]',
+          active ? 'text-neutral-50' : 'text-neutral-800'
+        )}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
