@@ -31,10 +31,17 @@ export default function DashboardScreen() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
 
-  const totalRevenue = events.reduce((sum, e) => sum + e.revenue, 0);
-  const totalProfit = events.reduce((sum, e) => sum + getEventProfit(e), 0);
-  const totalOrder = events.reduce((sum, e) => sum + e.totalOrder, 0);
+  // "Jastip bulan ini": the card counts events that take place during the
+  // current calendar month, i.e. whose dates fall at least partly in it.
   const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const eventsThisMonth = events.filter(
+    (e) => e.tanggalDari < nextMonthStart && e.tanggalSampai >= monthStart
+  );
+  const totalRevenue = eventsThisMonth.reduce((sum, e) => sum + e.revenue, 0);
+  const totalProfit = eventsThisMonth.reduce((sum, e) => sum + getEventProfit(e), 0);
+  const totalOrder = eventsThisMonth.reduce((sum, e) => sum + e.totalOrder, 0);
   const ongoingEvent = events.find((e) => isDateInRange(today, e.tanggalDari, e.tanggalSampai));
 
   return (
