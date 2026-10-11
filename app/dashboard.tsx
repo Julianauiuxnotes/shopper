@@ -1,6 +1,9 @@
+import BasketIcon from '@/assets/images/figma/icon-basket.svg';
+import MagnifyingGlassIcon from '@/assets/images/figma/icon-magnifying-glass.svg';
 import MenuIcon from '@/assets/images/figma/icon-menu.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { SideDrawer } from '@/components/ui/side-drawer';
+import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents, getEventProfit } from '@/lib/events-store';
 import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
@@ -13,6 +16,7 @@ import * as React from 'react';
 import { Image, Pressable, ScrollView, View } from 'react-native';
 
 const CARD_SHADOW = { boxShadow: '0px 2px 5.1px rgba(0, 0, 0, 0.25)' };
+const BUTTON_SHADOW = { boxShadow: '0px 2px 2.55px rgba(0, 0, 0, 0.25)' };
 
 // Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
 // (section DASHBOARD, fileKey HbQCCdkrJDE9BzznluMmz8). Which one renders
@@ -33,6 +37,17 @@ export default function DashboardScreen() {
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
+  // Search box over the event list: name, location or event code.
+  const [query, setQuery] = React.useState('');
+  const needle = query.trim().toLowerCase();
+  const shownEvents = needle
+    ? events.filter(
+        (e) =>
+          e.namaAcara.toLowerCase().includes(needle) ||
+          e.lokasi.toLowerCase().includes(needle) ||
+          e.kodeEvent.toLowerCase().includes(needle)
+      )
+    : events;
 
   // "Jastip bulan ini": the card counts events that take place during the
   // current calendar month, i.e. whose dates fall at least partly in it.
@@ -125,23 +140,48 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Figma node 238:216. */}
         <Link href="/buka-event-jastip" asChild>
-          <Pressable className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-            <Text className="font-inter-semibold text-[14px] text-orange-50">
+          <Pressable
+            style={BUTTON_SHADOW}
+            className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
+            <BasketIcon width={24} height={24} />
+            <Text className="font-inter-semibold text-[14px] text-neutral-50">
               Buka event jastip
             </Text>
           </Pressable>
         </Link>
 
+        {/* Figma node 241:35. */}
         {hasEvents ? (
           <View className="gap-[12px]">
             <Text className="font-inter-semibold text-[14px] text-neutral-800">
               List event jastip
             </Text>
-            {events.map((event) => (
-              <View key={event.id} className="gap-[12px] rounded-[12px] bg-orange-100 p-[16px]">
-                <View className="flex-row">
-                  <View className="flex-1 gap-[6px] pr-[12px]">
+            <View className="flex-row items-center gap-[10px] rounded-[8px] border border-[#d9d9d9] bg-white px-[10px]">
+              <MagnifyingGlassIcon width={16} height={16} />
+              <Input
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Ketik nama event, lokasi atau kode event"
+                placeholderTextColor="#d1d5db"
+                accessibilityLabel="Cari event"
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="h-auto min-h-[37px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none placeholder:text-neutral-400"
+              />
+            </View>
+            {shownEvents.length === 0 ? (
+              <Text className="font-inter text-[10px] italic text-neutral-800">
+                Tidak ada event yang cocok
+              </Text>
+            ) : null}
+            {shownEvents.map((event) => (
+              <View
+                key={event.id}
+                className="flex-row gap-[10px] rounded-[12px] border border-dashed border-neutral-500 bg-orange-100 p-[16px]">
+                <View className="flex-1 gap-[8px]">
+                  <View className="gap-[4px]">
                     <Text className="font-inter-semibold text-[14px] text-neutral-800">
                       {event.namaAcara}
                     </Text>
@@ -150,26 +190,26 @@ export default function DashboardScreen() {
                       {formatDateRange(event.tanggalDari, event.tanggalSampai)}
                     </Text>
                   </View>
-                  <View className="w-px bg-neutral-400" />
-                  <View className="gap-[8px] pl-[12px]">
-                    <Text className="font-inter-bold text-[12px] text-neutral-800">
-                      {event.kodeEvent}
-                    </Text>
-                    <View className="gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
-                      <Text className="font-inter-bold text-[12px] text-neutral-800">
-                        {event.totalOrder}
+                  <Link href={{ pathname: '/event-detail', params: { id: event.id } }} asChild>
+                    <Pressable className="w-full items-center justify-center rounded-[8px] bg-orange-500 px-[10px] py-[6px]">
+                      <Text className="font-inter-semibold text-[10px] text-neutral-50">
+                        Lihat detail
                       </Text>
-                    </View>
+                    </Pressable>
+                  </Link>
+                </View>
+                <View className="h-[76px] w-px self-center bg-neutral-800" />
+                <View className="w-[89px] gap-[20px]">
+                  <Text className="font-inter-bold text-[12px] text-neutral-800">
+                    {event.kodeEvent}
+                  </Text>
+                  <View className="gap-[4px]">
+                    <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                    <Text className="font-inter-bold text-[12px] text-neutral-800">
+                      {event.totalOrder}
+                    </Text>
                   </View>
                 </View>
-                <Link href={{ pathname: '/event-detail', params: { id: event.id } }} asChild>
-                  <Pressable className="w-full items-center justify-center rounded-[8px] bg-orange-500 px-[10px] py-[6px]">
-                    <Text className="font-inter-semibold text-[10px] text-neutral-50">
-                      Lihat detail
-                    </Text>
-                  </Pressable>
-                </Link>
               </View>
             ))}
           </View>
