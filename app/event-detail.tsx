@@ -60,6 +60,7 @@ export default function EventDetailScreen() {
     adminWhatsapp,
     orderInbox,
     ensureOrderInbox,
+    publikasiOpening,
     ready: settingsReady,
   } = useSettings();
   const {
@@ -179,16 +180,39 @@ export default function EventDetailScreen() {
     }
   }
 
+  // The message that goes out with the link: the same layout as the
+  // preview on Pengaturan Publikasi — the jastiper's own opening sentence,
+  // the event's details, then the link. *...* is WhatsApp's bold.
+  function buildShareMessage() {
+    if (!event) return '';
+    const opening = publikasiOpening.trim() || `Yuk order di ${event.namaAcara}!`;
+    return [
+      opening,
+      '',
+      `*Nama acara*: ${event.namaAcara}`,
+      `*Tanggal acara:* ${formatDateRange(event.tanggalDari, event.tanggalSampai)}`,
+      `*Lokasi:* ${event.lokasi}`,
+      '',
+      '*Klik link dibawah ini untuk pemesanan:*',
+      shareLink,
+    ].join('\n');
+  }
+
   async function handleShare() {
     if (!shareLink || !event) return;
+    const message = buildShareMessage();
     try {
-      await Share.share({
-        message: `Yuk order di ${event.namaAcara}! Isi form pesanan di sini:\n${shareLink}`,
-      });
+      await Share.share({ message });
     } catch {
-      // No share sheet (most desktop browsers) or dismissed; copying is
-      // the useful fallback either way.
-      handleCopyLink();
+      // No share sheet (most desktop browsers) or dismissed; copying the
+      // whole message is the useful fallback either way.
+      try {
+        await Clipboard.setStringAsync(message);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2500);
+      } catch {
+        // clipboard blocked too — nothing more to try.
+      }
     }
   }
 
