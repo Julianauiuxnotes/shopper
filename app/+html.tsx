@@ -30,6 +30,12 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
         <meta name="description" content="Kelola jastip tanpa ribet." />
+        {/* Asks search engines and AI crawlers not to index this app or use
+            it for training. Honoured only by crawlers that choose to; the
+            binding terms are in LICENSE. */}
+        <meta name="robots" content="noindex, nofollow, noarchive, noai, noimageai" />
+        <meta name="googlebot" content="noindex, nofollow" />
+        <meta name="copyright" content="© 2026 Juliana Eka Putri. All rights reserved." />
 
         {/* Installable web app: "Add to Home Screen" opens it full-screen
             (no browser bars) with the brand colour on the status bar. */}
