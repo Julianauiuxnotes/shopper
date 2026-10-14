@@ -66,8 +66,11 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       className="flex-1 bg-white"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View className="items-center gap-[10px] px-[10px] pt-[60px]">
-        <ShopperLogo width={220} height={35} />
+      {/* Figma node 49:878 "Login / empty state", updated with panel
+          308:205: a larger wordmark, and a panel rounded like the splash
+          screen's with the form at the top and the buttons at the bottom. */}
+      <View className="items-center gap-[13px] px-[10px] pt-[57px]">
+        <ShopperLogo width={255.723} height={40.779} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
           Kelola jastip tanpa ribet!
         </Text>
@@ -76,91 +79,97 @@ export default function LoginScreen() {
       {/* Same scroll-wrapped card pattern as sign-up.tsx — the error
           state's extra message line makes the card taller than the
           space below the header. */}
-      <View className="mt-[64px] flex-1 overflow-hidden rounded-t-[32px] bg-orange-500">
+      <View className="mt-[54px] flex-1 overflow-hidden rounded-t-[110px] bg-orange-500">
         <ScrollView
           className="flex-1"
-          contentContainerClassName="items-center px-[10px] pb-[32px] pt-[32px]"
+          contentContainerClassName="grow items-center px-[10px] pb-[32px] pt-[85px]"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View className="w-full max-w-[271px] gap-[14px]">
-            <Text className="font-inter-bold text-[16px] text-neutral-50">Selamat Datang!</Text>
-            <Text className="font-inter-bold text-[14px] text-neutral-50">Login dengan akun</Text>
+          {/* The form sits at the top of the panel and the buttons at its
+              bottom; on a short screen the panel scrolls instead. */}
+          <View className="w-full max-w-[271px] flex-1 justify-between gap-[32px]">
+            <View className="w-full gap-[21px]">
+              <Text className="font-inter-bold text-[16px] text-neutral-50">Selamat Datang!</Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-50">Login dengan akun</Text>
 
-            <View className="w-full gap-[10px]">
-              <FormField
-                label="Email"
-                value={email}
-                onChangeText={handleChangeEmail}
-                placeholder="Email"
-                keyboardType="email-address"
-                hasError={loginError !== null}
-                tintErrorText={false}
-              />
-              <FormField
-                label="Password"
-                value={password}
-                onChangeText={handleChangePassword}
-                placeholder="Password"
-                secureTextEntry={!showPassword}
-                onToggleSecure={() => setShowPassword((s) => !s)}
-                hasError={loginError !== null}
-                tintErrorText={false}
-                // `notice`: why this device was logged out, if it was.
-                errorMessage={loginError ?? notice ?? undefined}
-              />
+              <View className="w-full gap-[10px]">
+                <FormField
+                  label="Email"
+                  value={email}
+                  onChangeText={handleChangeEmail}
+                  placeholder="Email"
+                  keyboardType="email-address"
+                  hasError={loginError !== null}
+                  tintErrorText={false}
+                />
+                <FormField
+                  label="Password"
+                  value={password}
+                  onChangeText={handleChangePassword}
+                  placeholder="Password"
+                  secureTextEntry={!showPassword}
+                  onToggleSecure={() => setShowPassword((s) => !s)}
+                  hasError={loginError !== null}
+                  tintErrorText={false}
+                  // `notice`: why this device was logged out, if it was.
+                  errorMessage={loginError ?? notice ?? undefined}
+                />
+              </View>
+
+              {/* Not in the Figma LOGIN section — styled to match the card's
+                existing neutral-50-on-orange-500 treatment. */}
+              <Pressable
+                onPress={() => setKeepLoggedIn((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: keepLoggedIn }}
+                hitSlop={8}
+                className="flex-row items-center gap-[8px] self-start">
+                <View
+                  className={cn(
+                    'h-[18px] w-[18px] items-center justify-center rounded-[4px] border border-neutral-50',
+                    keepLoggedIn && 'bg-neutral-50'
+                  )}>
+                  {/* A text tick, not a lucide icon: importing one icon from
+                    lucide-react-native bundles the whole library on web. */}
+                  {keepLoggedIn ? (
+                    <Text className="font-inter-bold text-[12px] leading-[14px] text-orange-500">
+                      ✓
+                    </Text>
+                  ) : null}
+                </View>
+                <Text className="font-inter text-[12px] text-neutral-50">Tetap masuk</Text>
+              </Pressable>
             </View>
 
-            {/* Not in the Figma LOGIN section — styled to match the card's
-                existing neutral-50-on-orange-500 treatment. */}
-            <Pressable
-              onPress={() => setKeepLoggedIn((v) => !v)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: keepLoggedIn }}
-              hitSlop={8}
-              className="flex-row items-center gap-[8px] self-start">
-              <View
+            <View className="w-full gap-[21px]">
+              <Pressable
+                onPress={() => handleSubmit()}
+                disabled={!isValid}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !isValid }}
                 className={cn(
-                  'h-[18px] w-[18px] items-center justify-center rounded-[4px] border border-neutral-50',
-                  keepLoggedIn && 'bg-neutral-50'
+                  'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                  isValid ? 'bg-orange-50' : 'bg-orange-600'
                 )}>
-                {/* A text tick, not a lucide icon: importing one icon from
-                    lucide-react-native bundles the whole library on web. */}
-                {keepLoggedIn ? (
-                  <Text className="font-inter-bold text-[12px] leading-[14px] text-orange-500">
-                    ✓
-                  </Text>
-                ) : null}
-              </View>
-              <Text className="font-inter text-[12px] text-neutral-50">Tetap masuk</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleSubmit()}
-              disabled={!isValid}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !isValid }}
-              className={cn(
-                'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
-                isValid ? 'bg-orange-50' : 'bg-orange-600'
-              )}>
-              <Text
-                className={cn(
-                  'font-inter-semibold text-[14px]',
-                  isValid ? 'text-orange-500' : 'text-orange-700'
-                )}>
-                {submitting ? 'Memproses...' : 'Login'}
-              </Text>
-            </Pressable>
-
-            <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
-              Belum punya akun?
-            </Text>
-
-            <Link href="/sign-up" asChild>
-              <Pressable className="w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px] py-[16px]">
-                <Text className="font-inter-semibold text-[14px] text-neutral-50">Daftar</Text>
+                <Text
+                  className={cn(
+                    'font-inter-semibold text-[14px]',
+                    isValid ? 'text-orange-500' : 'text-orange-700'
+                  )}>
+                  {submitting ? 'Memproses...' : 'Login'}
+                </Text>
               </Pressable>
-            </Link>
+
+              <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
+                Belum punya akun?
+              </Text>
+
+              <Link href="/sign-up" asChild>
+                <Pressable className="w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px] py-[16px]">
+                  <Text className="font-inter-semibold text-[14px] text-neutral-50">Daftar</Text>
+                </Pressable>
+              </Link>
+            </View>
           </View>
         </ScrollView>
       </View>
