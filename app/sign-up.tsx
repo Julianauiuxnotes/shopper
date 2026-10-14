@@ -83,8 +83,9 @@ export default function SignUpScreen() {
     <KeyboardAvoidingView
       className="flex-1 bg-white"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View className="items-center gap-[10px] px-[10px] pt-[60px]">
-        <ShopperLogo width={220} height={35} />
+      {/* Same header and panel as the login page (app/login.tsx). */}
+      <View className="items-center gap-[13px] px-[10px] pt-[57px]">
+        <ShopperLogo width={255.723} height={40.779} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
           Kelola jastip tanpa ribet!
         </Text>
@@ -93,10 +94,10 @@ export default function SignUpScreen() {
       {/* The card's content (5 fields + heading + 2 buttons) is often
           taller than the space below the header, so it needs to scroll —
           a plain View here clipped/overflowed content past the frame. */}
-      <View className="mt-[64px] flex-1 overflow-hidden rounded-t-[32px] bg-orange-500">
+      <View className="mt-[54px] flex-1 overflow-hidden rounded-t-[110px] bg-orange-500">
         <ScrollView
           className="flex-1"
-          contentContainerClassName="items-center px-[10px] pb-[32px] pt-[32px]"
+          contentContainerClassName="items-center px-[10px] pb-[32px] pt-[85px]"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View className="w-full max-w-[271px] gap-[14px]">
