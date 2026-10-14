@@ -1,46 +1,42 @@
 import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
-import SplashDecoration from '@/assets/images/figma/splash-decoration.svg';
+import SplashTagline from '@/assets/images/figma/splash-tagline.svg';
 import { Text } from '@/components/ui/text';
 import { useSettings } from '@/lib/settings-store';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
 import * as React from 'react';
 import { Image, type LayoutChangeEvent, Pressable, useWindowDimensions, View } from 'react-native';
 
-const HERO_IMAGE = require('@/assets/images/figma/splash-hero.png');
-// All positions below are fractions of this screen's own rendered box,
-// turned into pixel values from a size measured via onLayout — NOT CSS
-// percentage strings. Derived from Figma's 390x927 reference frame
-// (node 19:282), re-pulled 2026-09-29. This screen is a single
-// full-bleed photo with everything else absolutely positioned on top of
-// it, not separate header/hero/CTA sections.
-//
-// This used to be plain CSS percentages (`left: '-8.46%'` etc.), the
-// textbook-correct way to do this — but it produced a visible,
-// viewport-size-dependent gap on one edge of the hero photo on web
-// (reported twice live: a vertical gap, then later a horizontal one at
-// a different browser window size). RN-Web apparently doesn't resolve
-// percentage insets against a `flex`-sized parent with pixel-perfect
-// consistency at every aspect ratio. Measuring the actual rendered
-// container via `onLayout` and computing literal pixel values
-// sidesteps that rounding entirely — same fix pattern already proven
-// for the BottomSheet's `max-h-[85%]` bug.
+// Figma node 308:174 "Splash screen". The photo is the design's own,
+// cropped to the part the frame shows and compressed (the Figma original
+// is a 12 MB, 4096 px image).
+const PHOTO = require('@/assets/images/splash-photo.jpg');
 
-// Figma node 19:282 "Splash screen ". The "List" menu icon in that node
-// sits at x=404 inside a 390px-wide frame — off-canvas / clipped in the
-// original design — so it's intentionally not rendered here.
+// The design is a 390 x 927 frame. Phones differ in both width and
+// height, so the parts are anchored the way they read: the photo and the
+// wordmark from the top, the orange panel with its tagline and buttons
+// from the bottom, all centred as the 390 px frame would be. On a short
+// screen the panel simply covers more of the photo's lower half.
+//
+// Pixel positions come from the screen's measured size (onLayout) rather
+// than CSS percentages, which RN-Web didn't resolve consistently here.
+const FRAME_WIDTH = 390;
+const FRAME_HEIGHT = 927;
+
 export default function SplashScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const [size, setSize] = React.useState({ width: 0, height: 0 });
+  const { ready: settingsReady } = useSettings();
 
   function handleLayout(e: LayoutChangeEvent) {
     const { width, height } = e.nativeEvent.layout;
     setSize({ width, height });
   }
 
-  const { ready: settingsReady } = useSettings();
-
   const ready = size.width > 0 && size.height > 0 && settingsReady;
+  // How far the 390 px frame sits from the left edge of this screen.
+  const dx = (size.width - FRAME_WIDTH) / 2;
+  // Distance of a point near the bottom of the frame from its bottom edge.
+  const fromBottom = (frameTop: number) => FRAME_HEIGHT - frameTop;
 
   // A logged-in user is sent on to the dashboard by components/auth-gate.tsx.
   return (
@@ -50,79 +46,49 @@ export default function SplashScreen() {
       onLayout={handleLayout}>
       {ready ? (
         <>
-          {/* Photo crop box — node 53:2611 "Rectangle 1": left -33px, top 82px,
-              w 456px, h 845px of the 390x927 frame. `cover`'s default centering
-              lands within ~4% of Figma's own nested-crop focal point, which is
-              used here since replicating the exact nested percentage crop
-              (left -55.72%, top 19.64%, w 227.62%, h 81.95%) didn't render
-              reliably via NativeWind/RN-Web (percentage width/height +
-              resizeMode="stretch" on a nested absolute Image). */}
-          <View
-            className="absolute overflow-hidden"
-            style={{
-              left: size.width * -0.0846,
-              top: size.height * 0.0885,
-              width: size.width * 1.1692,
-              height: size.height * 0.9115,
-            }}>
-            <Image
-              source={HERO_IMAGE}
-              resizeMode="cover"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-            />
-          </View>
-
-          {/* Darkening scrim — node 116:12, a top-to-bottom gradient from
-              5%-opacity white at 29.4% down to 50%-opacity black at 75.2%,
-              so the buttons/wordmark near the bottom stay legible. */}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.05)', 'rgba(0,0,0,0.5)']}
-            locations={[0.29437, 0.75172]}
-            style={{ position: 'absolute', inset: 0 }}
+          {/* Node 308:177: the photo, at the size and place the frame shows it. */}
+          <Image
+            source={PHOTO}
+            resizeMode="stretch"
+            accessible={false}
+            style={{ position: 'absolute', left: dx - 33, top: -7, width: 456, height: 679 }}
           />
 
-          <View className="absolute left-0 top-0 w-full items-center px-[10px] py-[20px]">
-            <Text className="font-poppins text-[15px] text-neutral-800">Version 1.0</Text>
+          {/* Node 308:179: the SHOPPER wordmark, top right. */}
+          <View className="absolute" style={{ left: dx + 235, top: 34 }}>
+            <ShopperLogo width={121.723} height={19.411} />
           </View>
 
+          {/* Node 308:189: the orange panel, rounded at the top. */}
           <View
+            className="absolute bottom-0 left-0 right-0 rounded-tl-[110px] rounded-tr-[110px] bg-orange-500"
+            style={{ height: fromBottom(540) }}
+          />
+
+          {/* Node 308:178: "KELOLA SAT SET JASTIP ANTI RIBET". */}
+          <View
+            accessible
+            accessibilityLabel="Kelola sat set, jastip anti ribet"
             className="absolute"
-            style={{
-              left: size.width * 0.1887,
-              top: size.height * 0.2458,
-              width: size.width * 0.7808,
-              aspectRatio: 304.53 / 200.18,
-            }}>
-            <SplashDecoration width="100%" height="100%" />
+            style={{ left: dx + 87.61, top: size.height - fromBottom(585) }}>
+            <SplashTagline width={205.385} height={97.822} />
           </View>
 
-          {/* Small "SHOPPER" wordmark — node 49:55, sits just below the button
-              block near the bottom-right corner. */}
+          {/* Node 308:190: the buttons. */}
           <View
-            className="absolute"
-            style={{ bottom: size.height * 0.032, right: size.width * 0.057 }}>
-            <ShopperLogo width={122} height={19.41} />
-          </View>
-
-          {/* Button block — node 116:11, added to the Figma file after this
-              screen was first built here: "Buat akun" (primary), "Atau"
-              divider, "Login" (secondary), overlaid directly on the photo. */}
-          <View
-            className="absolute gap-[5px]"
-            style={{
-              left: size.width * 0.145,
-              width: size.width * 0.71,
-              bottom: size.height * 0.081,
-            }}>
+            className="absolute w-[277px] gap-[16px]"
+            style={{ left: dx + 52, bottom: fromBottom(745) - (46.333 * 2 + 16 * 2 + 12.333) }}>
             <Link href="/sign-up" asChild>
-              <Pressable className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-                <Text className="font-inter-semibold text-[14px] text-neutral-50">Buat akun</Text>
+              <Pressable className="h-[46.333px] w-full items-center justify-center rounded-[12px] border border-orange-500 bg-[#f5f7fa] px-[10px]">
+                <Text className="font-inter-semibold text-[14px] text-orange-500">Daftar</Text>
               </Pressable>
             </Link>
-            <Text className="w-full text-center font-inter text-[12px] text-neutral-50">Atau</Text>
+            <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
+              Atau sudah punya akun?
+            </Text>
             <Link href="/login" asChild>
-              <Pressable className="w-full items-center justify-center rounded-[12px] border border-orange-500 bg-[#f5f7fa] px-[10px] py-[16px]">
-                <Text className="font-inter-semibold text-[14px] text-orange-500">Login</Text>
+              <Pressable className="h-[46.333px] w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px]">
+                <Text className="font-inter-semibold text-[14px] text-neutral-50">Masuk</Text>
               </Pressable>
             </Link>
           </View>
