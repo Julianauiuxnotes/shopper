@@ -95,9 +95,45 @@ export default function SignUpScreen() {
           taller than the space below the header, so it needs to scroll —
           a plain View here clipped/overflowed content past the frame. */}
       <View className="mt-[54px] flex-1 overflow-hidden rounded-t-[110px] bg-orange-500">
+        {/* The headings (and, on step 2, the chosen plan) stay put; the
+            rest of the panel scrolls underneath them. */}
+        {!awaitingConfirmation ? (
+          <View className="items-center px-[10px] pb-[14px] pt-[85px]">
+            <View className="w-full max-w-[271px] gap-[14px]">
+              <Text className="font-inter-bold text-[16px] text-neutral-50">Gabung Sekarang!</Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-50">Daftar akun baru</Text>
+              {step === 'form' ? (
+                <>
+                  {/* Step 2: the account form. The chosen plan stays in
+                        view and can still be changed. */}
+                  <View className="w-full flex-row items-center justify-between gap-[10px] rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
+                    <Text className="flex-1 font-inter text-[12px] text-neutral-50">
+                      Paket trial:{' '}
+                      <Text className="font-inter-bold text-[12px] text-neutral-50">
+                        {PLAN_OPTIONS.find((option) => option.value === plan)?.label}
+                      </Text>
+                    </Text>
+                    <Pressable
+                      onPress={() => setStep('paket')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Ubah paket trial"
+                      hitSlop={8}>
+                      <Text className="font-inter-semibold text-[12px] text-neutral-50 underline">
+                        Ubah
+                      </Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
         <ScrollView
           className="flex-1"
-          contentContainerClassName="items-center px-[10px] pb-[32px] pt-[85px]"
+          contentContainerClassName={cn(
+            'items-center px-[10px] pb-[32px]',
+            awaitingConfirmation ? 'pt-[85px]' : 'pt-0'
+          )}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View className="w-full max-w-[271px] gap-[14px]">
@@ -116,13 +152,6 @@ export default function SignUpScreen() {
               </>
             ) : (
               <>
-                <Text className="font-inter-bold text-[16px] text-neutral-50">
-                  Gabung Sekarang!
-                </Text>
-                <Text className="font-inter-bold text-[14px] text-neutral-50">
-                  Daftar akun baru
-                </Text>
-
                 {step === 'paket' ? (
                   <>
                     {/* Step 1: the trial plan, chosen on purpose before
@@ -182,26 +211,6 @@ export default function SignUpScreen() {
                   </>
                 ) : (
                   <>
-                    {/* Step 2: the account form. The chosen plan stays in
-                        view and can still be changed. */}
-                    <View className="w-full flex-row items-center justify-between gap-[10px] rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
-                      <Text className="flex-1 font-inter text-[12px] text-neutral-50">
-                        Paket trial:{' '}
-                        <Text className="font-inter-bold text-[12px] text-neutral-50">
-                          {PLAN_OPTIONS.find((option) => option.value === plan)?.label}
-                        </Text>
-                      </Text>
-                      <Pressable
-                        onPress={() => setStep('paket')}
-                        accessibilityRole="button"
-                        accessibilityLabel="Ubah paket trial"
-                        hitSlop={8}>
-                        <Text className="font-inter-semibold text-[12px] text-neutral-50 underline">
-                          Ubah
-                        </Text>
-                      </Pressable>
-                    </View>
-
                     <View className="w-full gap-[10px]">
                       <FormField
                         label="Nama"
