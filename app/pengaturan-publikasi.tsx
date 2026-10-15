@@ -21,7 +21,7 @@ const SAMPLE_EVENT = {
   namaAcara: 'Warehouse Sales',
   tanggalAcara: '1-4 October 2026',
   lokasi: 'Bandung',
-  link: 'https://www.shopper.app/jastiper-order-form/DRM-0110001',
+  link: 'https://www.justipers.app/jastiper-order-form/DRM-0110001',
 };
 
 // Figma node 161:377 "Pengaturan publikasi". Two corrections from the

@@ -1,6 +1,6 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents } from '@/lib/events-store';
@@ -207,7 +207,7 @@ export default function CetakPenandaScreen() {
 
         <View className="items-center gap-[2px]">
           <Text className="font-poppins text-[12px] text-neutral-400">Powered by:</Text>
-          <ShopperLogo width={110} height={18} />
+          <BrandLogo width={63.56} height={22} />
         </View>
 
         <Pressable

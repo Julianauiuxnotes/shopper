@@ -187,8 +187,8 @@ function TeamSection() {
             </Pressable>
           </View>
           <Text className="font-inter text-[10px] text-neutral-500">
-            Belum ada email undangan otomatis. Minta anggota mendaftar di Shopper dengan email ini,
-            dan ia akan langsung masuk ke toko kamu.
+            Belum ada email undangan otomatis. Minta anggota mendaftar di Justipers dengan email
+            ini, dan ia akan langsung masuk ke toko kamu.
           </Text>
         </View>
       ) : null}

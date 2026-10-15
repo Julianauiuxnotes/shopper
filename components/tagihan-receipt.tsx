@@ -1,5 +1,5 @@
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { Text } from '@/components/ui/text';
 import { formatIDR, formatPrintTimestamp } from '@/lib/format';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
@@ -165,7 +165,7 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
 
       <View className="items-center">
         <Text className="font-poppins text-[12px] text-neutral-500">Powered by:</Text>
-        <ShopperLogo width={143.723} height={22.919} />
+        <BrandLogo width={80.89} height={28} />
       </View>
     </View>
   );

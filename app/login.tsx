@@ -1,4 +1,4 @@
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { ActiveElsewhereError, AuthError, useAuth } from '@/lib/auth-store';
@@ -70,7 +70,7 @@ export default function LoginScreen() {
           308:205: a larger wordmark, and a panel rounded like the splash
           screen's with the form at the top and the buttons at the bottom. */}
       <View className="items-center gap-[13px] px-[10px] pt-[57px]">
-        <ShopperLogo width={255.723} height={40.779} />
+        <BrandLogo width={161.78} height={56} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
           Kelola jastip tanpa ribet!
         </Text>

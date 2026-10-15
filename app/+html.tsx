@@ -29,7 +29,7 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
-        <meta name="description" content="Kelola jastip tanpa ribet." />
+        <meta name="description" content="Justipers: kelola jastip tanpa ribet." />
         {/* Asks search engines and AI crawlers not to index this app or use
             it for training. Honoured only by crawlers that choose to; the
             binding terms are in LICENSE. */}
@@ -43,7 +43,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#e36200" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="Shopper" />
+        <meta name="apple-mobile-web-app-title" content="Justipers" />
         <link rel="apple-touch-icon" href={`${BASE_URL}/icon-192.png`} />
 
         {/*

@@ -1,4 +1,4 @@
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { AuthError, type Plan, useAuth } from '@/lib/auth-store';
@@ -85,7 +85,7 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Same header and panel as the login page (app/login.tsx). */}
       <View className="items-center gap-[13px] px-[10px] pt-[57px]">
-        <ShopperLogo width={255.723} height={40.779} />
+        <BrandLogo width={161.78} height={56} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
           Kelola jastip tanpa ribet!
         </Text>
@@ -142,7 +142,7 @@ export default function SignUpScreen() {
                 <Text className="font-inter-bold text-[16px] text-neutral-50">Cek email kamu</Text>
                 <Text className="font-inter text-[12px] text-neutral-50">
                   Kami mengirim link konfirmasi ke {email.trim()}. Buka link itu, lalu login untuk
-                  mulai memakai Shopper.
+                  mulai memakai Justipers.
                 </Text>
                 <Link href="/login" asChild>
                   <Pressable className="w-full items-center justify-center rounded-[12px] bg-neutral-50 px-[10px] py-[16px]">

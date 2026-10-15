@@ -838,7 +838,7 @@ export default function TambahPesananScreen() {
                     Kamu bisa modifikasi form pesanan dibawah ini tapi pastikan form pesanan
                     memiliki komponen data Nama, Alamat, No.Whatsapp, dan List pesanan seperti
                     dibawah ini agar data bisa tersalin secara otomatis dan tepat ke form di
-                    aplikasi Shopper.
+                    aplikasi Justipers.
                   </Text>
                 </View>
                 <View className="w-full">

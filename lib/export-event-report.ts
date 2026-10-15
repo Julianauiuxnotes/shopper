@@ -100,7 +100,7 @@ function headerRows(event: JastipEvent): Cell[][] {
   return [
     [
       {
-        value: 'Powered by Shopper App. No.1 Apps for Jastiper',
+        value: 'Powered by Justipers. No.1 Apps for Jastiper',
         fontWeight: 'bold',
         columnSpan: 3,
       },

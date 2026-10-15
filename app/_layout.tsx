@@ -60,7 +60,7 @@ export default function RootLayout() {
           ahead of the one in +html.tsx, so it has to be set through Head. */}
       {Platform.OS === 'web' ? (
         <Head>
-          <title>Shopper</title>
+          <title>Justipers</title>
         </Head>
       ) : null}
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
@@ -81,7 +81,7 @@ export default function RootLayout() {
               }>
               <OfflineBanner />
               <Stack
-                screenOptions={{ headerShown: false, title: 'Shopper' }}
+                screenOptions={{ headerShown: false, title: 'Justipers' }}
                 screenLayout={({ children, route }) => (
                   <ScreenTransition routeName={route.name}>{children}</ScreenTransition>
                 )}

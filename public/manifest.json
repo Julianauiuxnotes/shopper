@@ -1,6 +1,6 @@
 {
-  "name": "Shopper",
-  "short_name": "Shopper",
+  "name": "Justipers",
+  "short_name": "Justipers",
   "description": "Kelola jastip tanpa ribet.",
   "lang": "id",
   "start_url": ".",
@@ -10,7 +10,15 @@
   "background_color": "#ffffff",
   "theme_color": "#e36200",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }

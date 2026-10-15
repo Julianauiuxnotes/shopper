@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "Shopper",
+    "name": "Justipers",
     "slug": "shopper",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "shopper",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.julianaekaputri.shopper"
@@ -39,14 +41,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Shopper uses your photo library so you can attach a cover photo when opening a jastip event."
+          "photosPermission": "Justipers uses your photo library so you can attach a cover photo when opening a jastip event."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Shopper uses your photo library so you can save a downloaded receipt photo.",
-          "savePhotosPermission": "Shopper saves receipt photos to your photo library when you download them.",
+          "photosPermission": "Justipers uses your photo library so you can save a downloaded receipt photo.",
+          "savePhotosPermission": "Justipers saves receipt photos to your photo library when you download them.",
           "isAccessMediaLocationEnabled": false
         }
       ]

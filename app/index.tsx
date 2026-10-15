@@ -1,4 +1,4 @@
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import SplashTagline from '@/assets/images/figma/splash-tagline.svg';
 import { Text } from '@/components/ui/text';
 import { useSettings } from '@/lib/settings-store';
@@ -54,9 +54,9 @@ export default function SplashScreen() {
             style={{ position: 'absolute', left: dx - 33, top: -7, width: 456, height: 679 }}
           />
 
-          {/* Node 308:179: the SHOPPER wordmark, top right. */}
-          <View className="absolute" style={{ left: dx + 235, top: 34 }}>
-            <ShopperLogo width={121.723} height={19.411} />
+          {/* Node 317:85: the Justipers logo, top right. */}
+          <View className="absolute" style={{ left: dx + 221, top: 41 }}>
+            <BrandLogo width={130} height={45} />
           </View>
 
           {/* Node 308:189: the orange panel, rounded at the top. */}

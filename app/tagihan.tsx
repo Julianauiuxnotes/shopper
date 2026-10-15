@@ -63,7 +63,7 @@ export default function TagihanScreen() {
   );
 
   // The customer opens this link to see the same receipt on a public page
-  // (app/r.tsx) — no Shopper account needed, see lib/receipt-link.ts.
+  // (app/r.tsx) — no Justipers account needed, see lib/receipt-link.ts.
   function buildShareMessage() {
     return (
       `Hi ${order!.nama}! Ini tagihan pesananmu dari ${snapshot.nj} ` +

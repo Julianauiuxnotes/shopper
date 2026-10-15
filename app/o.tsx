@@ -1,7 +1,7 @@
 import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.svg';
 import PaperPlaneTiltIcon from '@/assets/images/figma/icon-paper-plane-tilt.svg';
 import SparkleIcon from '@/assets/images/figma/icon-sparkle.svg';
-import ShopperLogo from '@/assets/images/figma/shopper-logo.svg';
+import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { decodeOrderFormInfo, type OrderFormInfo } from '@/lib/order-form-link';
@@ -40,7 +40,7 @@ function PoweredBy({ className }: { className?: string }) {
   return (
     <View className={cn('items-end', className)}>
       <Text className="font-poppins text-[7px] leading-[10px] text-orange-500">Powered by:</Text>
-      <ShopperLogo width={72.314} height={11.532} />
+      <BrandLogo width={46.22} height={16} />
     </View>
   );
 }
@@ -438,7 +438,7 @@ export default function CustomerOrderFormScreen() {
 
           <View className="items-center pt-[16px]">
             <Text className="font-poppins text-[12px] text-orange-500">Powered by:</Text>
-            <ShopperLogo width={143.723} height={22.919} />
+            <BrandLogo width={80.89} height={28} />
           </View>
         </ScrollView>
       ) : null}
