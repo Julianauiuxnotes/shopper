@@ -204,7 +204,9 @@ type EventsContextValue = {
   // For lib/sync.ts: replaces the whole list after merging in changes
   // pulled from the server (or re-keying local data before the first sync).
   replaceEvents: (updater: (prev: JastipEvent[]) => JastipEvent[]) => void;
-  addEvent: (input: NewEventInput) => JastipEvent;
+  // `id` is given when the event's token was already paid for under that
+  // id (lib/auth-store.tsx openEvent); otherwise a new one is made.
+  addEvent: (input: NewEventInput, id?: string) => JastipEvent;
   updateEvent: (id: string, input: NewEventInput) => void;
   addExpense: (eventId: string, input: Omit<Expense, 'id'>) => void;
   deleteExpense: (eventId: string, expenseId: string) => void;
@@ -327,14 +329,14 @@ function EventsProvider({ children }: { children: React.ReactNode }) {
   }, [events, ready]);
 
   const addEvent = React.useCallback(
-    (input: NewEventInput): JastipEvent => {
+    (input: NewEventInput, id?: string): JastipEvent => {
       const highest = Math.max(0, ...events.map((e) => trailingNumber(e.kodeEvent, 3)));
       eventSeqRef.current = Math.max(eventSeqRef.current, highest) + 1;
       storage.set('eventSeq', eventSeqRef.current);
       const ddmm = `${pad2(input.tanggalDari.getDate())}${pad2(input.tanggalDari.getMonth() + 1)}`;
       const kodeEvent = `DRM-${ddmm}${String(eventSeqRef.current).padStart(3, '0')}`;
       const created: JastipEvent = {
-        id: newId('e'),
+        id: id ?? newId('e'),
         kodeEvent,
         orders: [],
         totalOrder: 0,

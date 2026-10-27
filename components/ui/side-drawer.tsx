@@ -4,7 +4,7 @@ import { Animated, Platform, Pressable, useWindowDimensions, View } from 'react-
 
 const DURATION_IN = 300;
 const DURATION_OUT = 220;
-const DRAWER_WIDTH = 248;
+const DRAWER_WIDTH = 300;
 
 type SideDrawerProps = {
   onClose: () => void;

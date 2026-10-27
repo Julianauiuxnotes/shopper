@@ -2,7 +2,6 @@ import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.sv
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { compressLogo } from '@/lib/compress-image';
-import { TeamSection } from '@/components/team-section';
 import { AuthError, useAuth } from '@/lib/auth-store';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
@@ -348,8 +347,6 @@ export default function SettingsScreen() {
           </Text>
         ) : null}
 
-        <View className="h-px w-full bg-neutral-300" />
-        <TeamSection />
       </ScrollView>
     </KeyboardAvoidingView>
   );

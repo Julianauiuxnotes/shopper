@@ -1,6 +1,9 @@
+import DividerVertical from '@/assets/images/figma/divider-vertical-44.svg';
+import AlignLeftLine from '@/assets/images/figma/icon-align-left-line.svg';
+import AlignLeftLineShort from '@/assets/images/figma/icon-align-left-line-short.svg';
 import BasketIcon from '@/assets/images/figma/icon-basket.svg';
+import InfinityIcon from '@/assets/images/figma/icon-infinity.svg';
 import MagnifyingGlassIcon from '@/assets/images/figma/icon-magnifying-glass.svg';
-import MenuIcon from '@/assets/images/figma/icon-menu.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { SideDrawer } from '@/components/ui/side-drawer';
 import { Input } from '@/components/ui/input';
@@ -22,11 +25,21 @@ const CARD_FILL = {
   width: '100%',
   height: '100%',
 } as const;
+// The coin artwork is cropped slightly inside its 28x27 frame (Figma
+// node 323:365).
+const COIN_IMAGE = {
+  position: 'absolute',
+  left: -1.01,
+  top: -1.22,
+  width: 31.5,
+  height: 31.5,
+} as const;
 const PAGE_SIZE = 10;
 const BUTTON_SHADOW = { boxShadow: '0px 2px 2.55px rgba(0, 0, 0, 0.25)' };
 
-// Figma node 31:458 "Dashboard Empty" / 53:3182 "Dashboard Filled"
-// (section DASHBOARD, fileKey HbQCCdkrJDE9BzznluMmz8). Which one renders
+// Figma node 31:458 "Dashboard Empty" / 322:61 "Dashboard Filled"
+// (section DASHBOARD, fileKey HbQCCdkrJDE9BzznluMmz8; 322:61 replaced
+// 53:3182 and added the token card). Which one renders
 // depends on the shared events store (lib/events-store.tsx) — empty
 // before any event is created, filled once one exists, matching what the
 // user asked for ("when there is an event created"). The avatar (a flat
@@ -41,7 +54,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { events } = useEvents();
   const { userProfile, logoJastip } = useSettings();
-  const { signOut } = useAuth();
+  const { shop, prices, beta, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
   // Search box over the event list: name, location or event code.
@@ -85,59 +98,111 @@ export default function DashboardScreen() {
           events underneath scrolls. */}
       <View className="flex-1 bg-white">
         {/* The 16px at the bottom is the fixed gap under the search box. */}
-        <View className="gap-[20px] px-[20px] pb-[16px] pt-[20px]">
+        <View className="gap-[16px] px-[20px] pb-[16px] pt-[20px]">
+          {/* Figma node 323:323. */}
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-[6px]">
+            <View className="flex-row items-center gap-[12px]">
               {/* The logo from Pengaturan, or the grey placeholder circle. */}
               {logoJastip ? (
                 <Image
                   source={{ uri: logoJastip }}
                   resizeMode="cover"
-                  style={{ width: 34, height: 34, borderRadius: 17 }}
+                  style={{ width: 51, height: 51, borderRadius: 25.5 }}
                   accessibilityLabel="Logo jastip"
                 />
               ) : (
-                <View className="size-[34px] rounded-full bg-[#d9d9d9]" />
+                <View className="size-[51px] rounded-full bg-[#d9d9d9]" />
               )}
               <View>
-                <Text className="font-inter-bold text-[10px] text-black">Hallo!</Text>
-                <Text className="font-inter-semibold text-[16px] text-orange-500">
+                <Text className="font-inter-bold text-[10px] text-neutral-800">Hallo!</Text>
+                <Text className="font-inter-semibold text-[16px] text-neutral-800">
                   {userProfile.namaJastip || 'Jastip by Juli'}
                 </Text>
               </View>
             </View>
-            <Pressable onPress={() => setMenuOpen(true)} hitSlop={8}>
-              <MenuIcon width={24} height={24} />
+            {/* "align-left": three stroked lines, the last one shorter. */}
+            <Pressable
+              onPress={() => setMenuOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Buka menu"
+              className="w-[44px] items-center justify-center p-[10px]">
+              <View className="h-[22px] w-[24px] gap-[5px] px-[3px] py-[6px]">
+                <MenuLine width={20} />
+                <MenuLine width={20} />
+                <MenuLine width={15} short />
+              </View>
             </Pressable>
           </View>
+
+          {/* Not in the Figma design: tells users the app is in beta. */}
+          <View className="flex-row items-center gap-[8px] rounded-[8px] bg-orange-50 px-[10px] py-[8px]">
+            <View className="rounded-full bg-orange-500 px-[6px] py-[1px]">
+              <Text className="font-inter-bold text-[10px] text-white">BETA</Text>
+            </View>
+            <Text className="flex-1 font-inter text-[10px] text-neutral-700">
+              Justipers sedang dalam masa beta. Semua fitur gratis selama beta.
+            </Text>
+          </View>
+
+          {/* Figma node 323:335: the shop's token balance; opens
+              Pengaturan Subscription. */}
+          <Pressable
+            onPress={() => router.push('/pengaturan-subscription')}
+            accessibilityRole="button"
+            accessibilityLabel={
+              beta ? 'Token tersedia: tidak terbatas' : `Token tersedia: ${shop?.tokenBalance ?? 0} token`
+            }
+            className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] border border-dashed border-orange-200 bg-orange-50 py-[10px]">
+            <View className="h-[27px] w-[28px] overflow-hidden">
+              <Image
+                source={require('@/assets/images/token-coin.png')}
+                resizeMode="stretch"
+                accessible={false}
+                style={COIN_IMAGE}
+              />
+            </View>
+            <View className="min-w-[84px]">
+              <Text className="font-inter text-[12px] text-neutral-800">Token tersedia</Text>
+              <Text className="font-inter-semibold text-[16px] text-neutral-800">
+                {beta ? '∞ Tidak terbatas' : `${shop?.tokenBalance ?? 0} token`}
+              </Text>
+            </View>
+          </Pressable>
 
           {/* Figma node 238:161. The card's fill is a still frame of the
             design's iridescent "Moving gradient" shader: running the shader
             itself proved too heavy on phones. The background color is the
-            image's average, shown while it loads. */}
+            image's average, shown while it loads. The fill sits at 80% opacity;
+            the text on top stays fully opaque. */}
           <View
             style={CARD_SHADOW}
-            className="gap-[14px] overflow-hidden rounded-[12px] bg-[#cdb8cc] p-[20px]">
-            <Image
-              source={require('@/assets/images/dashboard-card-gradient.jpg')}
-              resizeMode="cover"
-              accessible={false}
-              // Sized by style: left to its own devices the image takes the
-              // file's pixel size and only a corner of it would show.
-              style={CARD_FILL}
-            />
+            className="gap-[17px] overflow-hidden rounded-[12px] p-[20px]">
+            <View style={CARD_FILL} className="bg-[#cdb8cc] opacity-80">
+              <Image
+                source={require('@/assets/images/dashboard-card-gradient.jpg')}
+                resizeMode="cover"
+                accessible={false}
+                // Sized by style: left to its own devices the image takes the
+                // file's pixel size and only a corner of it would show.
+                style={CARD_FILL}
+              />
+            </View>
             <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
 
-            {/* Two equal columns, so the second row lines up under the first. */}
+            {/* The right-hand column is the same width in both rows, so
+                Profit and Total order line up (Figma node 322:73 / 322:80). */}
             <View className="flex-row gap-[12px]">
               <View className="flex-1 gap-[6px]">
-                <Text className="font-inter text-[12px] text-neutral-800">Total Revenue</Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  Total Revenue (Bulan ini)
+                </Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">
                   {formatIDR(totalRevenue)}
                 </Text>
               </View>
-              <View className="flex-1 gap-[6px]">
-                <Text className="font-inter text-[12px] text-neutral-800">Total Profit</Text>
+              <View className="w-[110px] gap-[6px]">
+                <Text className="font-inter text-[12px] text-neutral-800">Profit</Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">
                   {formatIDR(totalProfit)}
                 </Text>
@@ -145,45 +210,54 @@ export default function DashboardScreen() {
             </View>
 
             <View className="flex-row gap-[12px]">
-              <View className="flex-1 gap-[6px]">
+              <View className="flex-1 gap-[8px]">
                 <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
                 <View
                   className={cn(
-                    'max-w-full self-start rounded-[12px] px-[10px] py-[2px]',
+                    'max-w-[146px] self-start rounded-[12px] px-[10px] py-[2px]',
                     ongoingEvent ? 'bg-orange-400' : 'bg-white'
                   )}>
                   <Text
                     numberOfLines={1}
                     className={cn(
-                      'font-inter text-[12px] italic',
+                      'font-inter-medium text-[12px] italic',
                       ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
                     )}>
                     {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
                   </Text>
                 </View>
               </View>
-              <View className="flex-1 gap-[6px]">
+              <View className="w-[110px] gap-[6px]">
                 <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
               </View>
             </View>
           </View>
 
-          {/* Figma node 238:216. */}
+          {/* Figma node 323:367. Under the label: what opening an event
+              costs; the infinity sign while it's free (the beta). */}
           <Link href="/buka-event-jastip" asChild>
             <Pressable
               style={BUTTON_SHADOW}
-              className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
+              className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-400 px-[10px] py-[16px]">
               <BasketIcon width={24} height={24} />
-              <Text className="font-inter-semibold text-[14px] text-neutral-50">
-                Buka event jastip
-              </Text>
+              <View className="justify-center">
+                <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                  Buka event jastip
+                </Text>
+                <View className="flex-row items-center gap-[2px]">
+                  {prices.openEvent === 0 ? <InfinityIcon width={16} height={16} /> : null}
+                  <Text className="font-inter text-[10px] text-neutral-50">
+                    {prices.openEvent === 0 ? 'token' : `${prices.openEvent} token`}
+                  </Text>
+                </View>
+              </View>
             </Pressable>
           </Link>
 
           {/* Figma node 241:35. */}
           {hasEvents ? (
-            <View className="gap-[12px]">
+            <View className="gap-[16px]">
               <Text className="font-inter-semibold text-[14px] text-neutral-800">
                 List event jastip
               </Text>
@@ -218,11 +292,12 @@ export default function DashboardScreen() {
               </Text>
             ) : null}
             {pageEvents.map((event) => (
+              // Figma node 323:403.
               <View
                 key={event.id}
-                className="flex-row gap-[10px] rounded-[12px] border border-dashed border-neutral-500 bg-orange-100 p-[16px]">
-                <View className="flex-1 gap-[8px]">
-                  <View className="gap-[4px]">
+                className="gap-[10px] rounded-[12px] border border-dashed border-neutral-500 bg-orange-100 p-[16px]">
+                <View className="flex-row items-start gap-[10px]">
+                  <View className="flex-1 gap-[4px]">
                     <Text className="font-inter-semibold text-[14px] text-neutral-800">
                       {event.namaAcara}
                     </Text>
@@ -231,26 +306,31 @@ export default function DashboardScreen() {
                       {formatDateRange(event.tanggalDari, event.tanggalSampai)}
                     </Text>
                   </View>
-                  <Link href={{ pathname: '/event-detail', params: { id: event.id } }} asChild>
-                    <Pressable className="w-full items-center justify-center rounded-[8px] bg-orange-500 px-[10px] py-[6px]">
-                      <Text className="font-inter-semibold text-[10px] text-neutral-50">
-                        Lihat detail
-                      </Text>
-                    </Pressable>
-                  </Link>
-                </View>
-                <View className="h-[76px] w-px self-center bg-neutral-800" />
-                <View className="w-[89px] gap-[20px]">
-                  <Text className="font-inter-bold text-[12px] text-neutral-800">
-                    {event.kodeEvent}
-                  </Text>
-                  <View className="gap-[4px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                  {/* A 44px rule drawn horizontally, turned upright. */}
+                  <View className="h-[44px] w-0 items-center justify-center">
+                    <View style={{ transform: [{ rotate: '90deg' }] }}>
+                      <DividerVertical width={44} height={1} />
+                    </View>
+                  </View>
+                  <View className="w-[89px] gap-[4px]">
                     <Text className="font-inter-bold text-[12px] text-neutral-800">
-                      {event.totalOrder}
+                      {event.kodeEvent}
                     </Text>
+                    <View className="gap-[4px]">
+                      <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                      <Text className="font-inter-bold text-[12px] text-neutral-800">
+                        {event.totalOrder}
+                      </Text>
+                    </View>
                   </View>
                 </View>
+                <Link href={{ pathname: '/event-detail', params: { id: event.id } }} asChild>
+                  <Pressable className="w-full items-center justify-center rounded-[8px] bg-orange-400 px-[10px] py-[6px]">
+                    <Text className="font-inter-semibold text-[10px] text-neutral-50">
+                      Lihat detail
+                    </Text>
+                  </Pressable>
+                </Link>
               </View>
             ))}
             {/* Ten events to a page. */}
@@ -292,7 +372,7 @@ export default function DashboardScreen() {
         <SideDrawer onClose={() => setMenuOpen(false)}>
           {(close) => (
             <View className="flex-1 items-end justify-between">
-              <View className="w-full gap-[16px]">
+              <View className="w-full gap-[4px]">
                 <View className="h-[84px] w-full items-end justify-start p-[4px]">
                   <Pressable onPress={() => close()} hitSlop={8}>
                     <XCircleIcon width={32} height={32} />
@@ -301,15 +381,23 @@ export default function DashboardScreen() {
 
                 <Pressable
                   onPress={() => close(() => router.push('/settings'))}
-                  className="w-full items-start px-[10px] py-[16px]">
+                  className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
                     Pengaturan Akun
                   </Text>
                 </Pressable>
 
                 <Pressable
+                  onPress={() => close(() => router.push('/pengaturan-subscription'))}
+                  className="w-full items-start px-[10px] py-[10px]">
+                  <Text className="font-inter-semibold text-[16px] text-white">
+                    Pengaturan Subscription
+                  </Text>
+                </Pressable>
+
+                <Pressable
                   onPress={() => close(() => router.push('/pengaturan-publikasi'))}
-                  className="w-full items-start px-[10px] py-[16px]">
+                  className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
                     Pengaturan Publikasi
                   </Text>
@@ -323,7 +411,7 @@ export default function DashboardScreen() {
                     signOut();
                     close();
                   }}
-                  className="w-full items-start px-[10px] py-[16px]">
+                  className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">Keluar</Text>
                 </Pressable>
               </View>
@@ -332,6 +420,19 @@ export default function DashboardScreen() {
         </SideDrawer>
       ) : null}
     </>
+  );
+}
+
+// One line of the menu icon. The SVG's stroke reaches 1px past its
+// slot on every side, as in the design.
+function MenuLine({ width, short = false }: { width: number; short?: boolean }) {
+  const Line = short ? AlignLeftLineShort : AlignLeftLine;
+  return (
+    <View style={{ width: width - 2, height: 0 }}>
+      <View style={{ position: 'absolute', left: -1, top: -1 }}>
+        <Line width={width} height={2} />
+      </View>
+    </View>
   );
 }
 

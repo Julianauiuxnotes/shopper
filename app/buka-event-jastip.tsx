@@ -5,7 +5,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { CURRENCIES, parseDecimal } from '@/lib/currency';
-import { type JastipEvent, useEvents } from '@/lib/events-store';
+import { AuthError, costLabel, useAuth } from '@/lib/auth-store';
+import { type JastipEvent, newId, useEvents } from '@/lib/events-store';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { compressPhoto } from '@/lib/compress-image';
@@ -89,6 +90,16 @@ function JenisOption({
 function EventForm({ editing }: { editing?: JastipEvent }) {
   const router = useRouter();
   const { addEvent, updateEvent } = useEvents();
+  const { shop, isAdmin, prices, openEvent } = useAuth();
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const balance = shop?.tokenBalance ?? 0;
+  // A new event costs tokens (none during the beta), which only an admin can spend.
+  const canPay = !!editing || (isAdmin && balance >= prices.openEvent);
+  // Once an event has orders, or has started, its dates can't change:
+  // otherwise one paid event could be moved forward and reused.
+  const dateLocked =
+    !!editing && (editing.orders.length > 0 || startOfDay(editing.tanggalDari) <= new Date());
   const [namaAcara, setNamaAcara] = React.useState(editing?.namaAcara ?? '');
   const [tanggalDari, setTanggalDari] = React.useState<Date | undefined>(editing?.tanggalDari);
   const [tanggalSampai, setTanggalSampai] = React.useState<Date | undefined>(
@@ -151,8 +162,8 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
     }
   }
 
-  function handleSimpan() {
-    if (!isValid || !tanggalDari || !tanggalSampai) return;
+  async function handleSimpan() {
+    if (!isValid || !tanggalDari || !tanggalSampai || saving) return;
     if (editing) {
       updateEvent(editing.id, {
         namaAcara,
@@ -166,22 +177,35 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
       router.back();
       return;
     }
-    // TODO: persist the event (and upload fotoUri, if set) via Supabase
-    // once the backend (fymscirqwnnlubepymgc.supabase.co) is
-    // unpaused/reconnected — for now it only lives in the in-memory
-    // events store (lib/events-store.tsx), shared with Dashboard and
-    // Event Detail so they all reflect the same data. A local file://
-    // URI isn't meaningful data to persist without a real upload, so
-    // fotoUri travels with the event object but nothing uploads it yet.
-    const created = addEvent({
-      namaAcara,
-      tanggalDari,
-      tanggalSampai,
-      lokasi,
-      fotoUri,
-      budget: Number(budget) || 0,
-      ...jenisFields,
-    });
+    if (!canPay) return;
+    // The token is spent on the server first, under the id the event will
+    // have; only then is the event created (and later synced, which the
+    // server allows only for paid events). Needs a connection.
+    const id = newId('e');
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await openEvent(id);
+    } catch (error) {
+      setSaveError(
+        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+      );
+      setSaving(false);
+      return;
+    }
+    // fotoUri stays on this device; photos aren't uploaded yet.
+    const created = addEvent(
+      {
+        namaAcara,
+        tanggalDari,
+        tanggalSampai,
+        lokasi,
+        fotoUri,
+        budget: Number(budget) || 0,
+        ...jenisFields,
+      },
+      id
+    );
     router.replace({ pathname: '/event-detail', params: { id: created.id } });
   }
 
@@ -350,7 +374,11 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                           <Text className="font-inter text-[12px] text-neutral-800">Dari:</Text>
                           <Pressable
                             onPress={() => setActivePicker('dari')}
-                            className="flex-row items-center gap-[10px] rounded-[8px] bg-white p-[10px]">
+                            disabled={dateLocked}
+                            className={cn(
+                              'flex-row items-center gap-[10px] rounded-[8px] bg-white p-[10px]',
+                              dateLocked && 'opacity-50'
+                            )}>
                             <CalendarIcon width={24} height={24} />
                             <Text
                               className={cn(
@@ -365,7 +393,11 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                           <Text className="font-inter text-[12px] text-neutral-800">Sampai:</Text>
                           <Pressable
                             onPress={() => setActivePicker('sampai')}
-                            className="flex-row items-center gap-[10px] rounded-[8px] bg-white p-[10px]">
+                            disabled={dateLocked}
+                            className={cn(
+                              'flex-row items-center gap-[10px] rounded-[8px] bg-white p-[10px]',
+                              dateLocked && 'opacity-50'
+                            )}>
                             <CalendarIcon width={24} height={24} />
                             <Text
                               className={cn(
@@ -377,6 +409,13 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                           </Pressable>
                         </View>
                       </View>
+                      {dateLocked ? (
+                        <Text className="font-inter text-[10px] text-neutral-700">
+                          {editing && editing.orders.length > 0
+                            ? 'Tanggal tidak bisa diubah karena event ini sudah punya pesanan.'
+                            : 'Tanggal tidak bisa diubah karena event ini sudah dimulai.'}
+                        </Text>
+                      ) : null}
                     </View>
 
                     <View className="gap-[4px]">
@@ -438,21 +477,39 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                     </View>
                   </View>
 
+                  {!editing ? (
+                    <TokenCostNote
+                      isAdmin={isAdmin}
+                      balance={balance}
+                      price={prices.openEvent}
+                      onBuy={() => router.replace('/pengaturan-subscription')}
+                    />
+                  ) : null}
+                  {saveError ? (
+                    <Text className="text-center font-inter text-[12px] text-red-500">
+                      {saveError}
+                    </Text>
+                  ) : null}
+
                   <Pressable
                     onPress={handleSimpan}
-                    disabled={!isValid}
+                    disabled={!isValid || !canPay || saving}
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: !isValid }}
+                    accessibilityState={{ disabled: !isValid || !canPay || saving, busy: saving }}
                     className={cn(
                       'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
-                      isValid ? 'bg-orange-500' : 'bg-orange-200'
+                      isValid && canPay ? 'bg-orange-500' : 'bg-orange-200'
                     )}>
                     <Text
                       className={cn(
                         'font-inter-semibold text-[14px]',
-                        isValid ? 'text-orange-50' : 'text-orange-300'
+                        isValid && canPay ? 'text-orange-50' : 'text-orange-300'
                       )}>
-                      Simpan
+                      {saving
+                        ? 'Memproses...'
+                        : editing
+                          ? 'Simpan'
+                          : `Buka event · ${costLabel(prices.openEvent)}`}
                     </Text>
                   </Pressable>
                 </>
@@ -487,5 +544,64 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+function startOfDay(date: Date) {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
+// Above "Buka event": what it costs and what the shop has, or why it
+// can't be paid for.
+function TokenCostNote({
+  isAdmin,
+  balance,
+  price,
+  onBuy,
+}: {
+  isAdmin: boolean;
+  balance: number;
+  price: number;
+  onBuy: () => void;
+}) {
+  const short = balance < price;
+  return (
+    <View className="gap-[4px] rounded-[8px] bg-orange-50 p-[10px]">
+      <View className="flex-row items-center justify-between">
+        <Text className="font-inter text-[12px] text-neutral-800">
+          Biaya buka event:{' '}
+          <Text className="font-inter-semibold text-[12px] text-neutral-800">
+            {costLabel(price)}
+          </Text>
+        </Text>
+        <Text className="font-inter text-[12px] text-neutral-700">
+          Saldo: {price === 0 ? 'tidak terbatas' : `${balance} token`}
+        </Text>
+      </View>
+      {!isAdmin ? (
+        <Text className="font-inter text-[10px] text-red-500">
+          Hanya admin yang bisa membuka event. Minta pemilik toko menjadikanmu admin.
+        </Text>
+      ) : short ? (
+        <Pressable onPress={onBuy} accessibilityRole="button" hitSlop={8}>
+          <Text className="font-inter text-[10px] text-red-500">
+            Token tidak cukup.{' '}
+            <Text className="font-inter-semibold text-[10px] text-orange-500 underline">
+              Beli token
+            </Text>
+          </Text>
+        </Pressable>
+      ) : price === 0 ? (
+        <Text className="font-inter text-[10px] text-neutral-700">
+          Gratis selama masa beta Justipers.
+        </Text>
+      ) : (
+        <Text className="font-inter text-[10px] text-neutral-700">
+          Token dikembalikan kalau event dihapus sebelum tanggal acara dan belum ada pesanan.
+        </Text>
+      )}
+    </View>
   );
 }

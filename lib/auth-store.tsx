@@ -17,33 +17,75 @@ import { resetSyncState } from './sync';
 // with the invited address), and password reset isn't built, since both
 // need an email service this project doesn't have yet.
 //
+// Justipers tokens (supabase/migrations/0007_shopper_tokens.sql): the shop's
+// balance, which events have been paid for, and the actions that spend
+// tokens all live here. The server enforces every rule; the app only shows
+// them.
+//
 // The rest of the app keeps reading names and settings from
 // lib/settings-store.tsx; this provider fills that store from the server
 // after login and writes changes back.
 
-export type Plan = 'solo' | 'team';
-export type Role = 'owner' | 'member';
+export type Role = 'owner' | 'admin' | 'member';
 
 export type Shop = {
   id: string;
   name: string;
-  plan: Plan;
   telepon: string;
   adminWhatsapp: string;
   publikasiOpening: string;
+  tokenBalance: number;
 };
 
 export type ShopMember = { userId: string; role: Role; nama: string; email: string };
 export type ShopInvite = { id: string; email: string };
 
-type ShopState = { shop: Shop; role: Role; members: ShopMember[]; invites: ShopInvite[] };
+/** Ids of events opened / whose order form was published. `openedPaid`:
+ * opened for a price (not free during the beta) and not refunded yet. */
+export type EventCharges = { opened: string[]; published: string[]; openedPaid: string[] };
+
+export type TokenEntry = {
+  id: string;
+  delta: number;
+  balanceAfter: number;
+  kind: string;
+  eventId: string | null;
+  email: string | null;
+  note: string;
+  createdAt: string;
+};
+
+/** What each action costs, in tokens. Read from the server's
+ * shopper_token_prices; all 0 while Justipers is in beta. */
+export type TokenPrices = { openEvent: number; publishEvent: number; memberSlot: number };
+/** The prices once the beta ends; shown only until the server's have loaded. */
+const LIST_PRICES: TokenPrices = { openEvent: 1, publishEvent: 1, memberSlot: 5 };
+
+function isBeta(prices: TokenPrices) {
+  return prices.openEvent === 0 && prices.publishEvent === 0 && prices.memberSlot === 0;
+}
+
+/** "Gratis" for a free action, otherwise "N token". */
+export function costLabel(tokens: number) {
+  return tokens === 0 ? 'Gratis' : `${tokens} token`;
+}
+/** People a shop can have besides its owner (members plus pending invites). */
+export const MEMBER_LIMIT = 10;
+
+type ShopState = {
+  shop: Shop;
+  role: Role;
+  members: ShopMember[];
+  invites: ShopInvite[];
+  charges: EventCharges;
+  prices: TokenPrices;
+};
 
 type SignUpInput = {
   nama: string;
   namaJastip: string;
   email: string;
   password: string;
-  plan: Plan;
 };
 
 type AuthContextValue = {
@@ -58,8 +100,14 @@ type AuthContextValue = {
   userId: string | null;
   shop: Shop | null;
   role: Role | null;
+  /** Owner or admin: may spend the shop's tokens. */
+  isAdmin: boolean;
   members: ShopMember[];
   invites: ShopInvite[];
+  charges: EventCharges;
+  prices: TokenPrices;
+  /** The beta: every price is 0, so the shop's tokens are effectively unlimited. */
+  beta: boolean;
   /** 'confirm_email' = the account exists but must be confirmed by email before logging in. */
   signUp: (input: SignUpInput) => Promise<'signed_in' | 'confirm_email'>;
   /**
@@ -69,16 +117,28 @@ type AuthContextValue = {
   signIn: (email: string, password: string, remember: boolean, takeOver?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   /** Owner only. Saves shop settings to the server and the local store. */
-  updateShop: (patch: Partial<Omit<Shop, 'id' | 'plan'>>) => Promise<void>;
+  updateShop: (patch: Partial<Omit<Shop, 'id' | 'tokenBalance'>>) => Promise<void>;
   updateMyName: (nama: string) => Promise<void>;
   changePassword: (password: string) => Promise<void>;
-  setPlan: (plan: Plan) => Promise<void>;
-  inviteMember: (email: string) => Promise<void>;
+  /** Admins only. Spends prices.openEvent for the event that will have this id; must succeed before the event is created. */
+  openEvent: (eventId: string) => Promise<void>;
+  /** Admins only. Spends prices.publishEvent the first time an event's order form is published. */
+  publishEvent: (eventId: string) => Promise<void>;
+  /** Returns the event's "Buka event" token if it still qualifies; true when it did. */
+  refundEvent: (eventId: string) => Promise<boolean>;
+  /** Admins only. Spends prices.memberSlot and invites this email. */
+  buyMemberSlot: (email: string) => Promise<void>;
+  /** Owner only. */
+  setAdmin: (userId: string, admin: boolean) => Promise<void>;
   cancelInvite: (inviteId: string) => Promise<void>;
   removeMember: (userId: string) => Promise<void>;
+  /** The shop's latest token movements, newest first. */
+  loadTokenHistory: () => Promise<TokenEntry[]>;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
+
+const NO_CHARGES: EventCharges = { opened: [], published: [], openedPaid: [] };
 
 // Shown on the login screen of a device that was logged out because the
 // account was taken over, or found active, on another one.
@@ -156,13 +216,20 @@ function toAuthError(error: unknown): AuthError {
     return new AuthError('Alamat email tidak valid.');
   if (has('rate limit', 'over_email_send_rate_limit', 'too many'))
     return new AuthError('Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.');
-  if (has('not_team_plan')) return new AuthError('Undang anggota hanya tersedia di paket Team.');
-  if (has('seat_limit'))
-    return new AuthError('Paket Team saat ini hanya untuk 2 orang (kamu dan 1 anggota).');
+  if (has('insufficient_tokens'))
+    return new AuthError('Token tidak cukup. Beli token dulu di Pengaturan Subscription.');
+  if (has('beta_no_invites'))
+    return new AuthError('Menambah anggota akan tersedia saat Justipers versi lengkap dirilis.');
+  if (has('member_limit'))
+    return new AuthError(`Toko ini sudah mencapai batas ${MEMBER_LIMIT} anggota.`);
   if (has('already_member')) return new AuthError('Email ini sudah menjadi anggota sebuah toko.');
   if (has('already_invited')) return new AuthError('Email ini sudah diundang.');
-  if (has('has_members'))
-    return new AuthError('Hapus anggota atau undangan dulu sebelum pindah ke paket Solo.');
+  if (has('is_owner')) return new AuthError('Pemilik toko tidak bisa dihapus.');
+  if (has('is_admin'))
+    return new AuthError(
+      'Admin tidak bisa dihapus. Minta pemilik toko mencabut status admin dulu.'
+    );
+  if (has('not_admin')) return new AuthError('Hanya admin yang bisa memakai token toko.');
   if (has('not_owner')) return new AuthError('Hanya pemilik toko yang bisa melakukan ini.');
   if (has('failed to fetch', 'network request failed', 'networkerror', 'load failed'))
     return new AuthError('Tidak bisa terhubung ke server. Cek koneksi internet, lalu coba lagi.');
@@ -183,7 +250,7 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
   const shops = check(
     await supabase
       .from('shops')
-      .select('id, name, plan, telepon, admin_whatsapp, publikasi_opening')
+      .select('id, name, telepon, admin_whatsapp, publikasi_opening, token_balance')
       .limit(1)
   );
   const row = shops?.[0];
@@ -194,25 +261,45 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
   const invites = check(
     await supabase.from('shop_invites').select('id, email').order('created_at')
   );
+  const charges = check(await supabase.from('shop_event_charges').select('event_id, kind, tokens, refunded_at'));
+  const prices = check(await supabase.from('shopper_token_prices').select('kind, tokens'));
+  const price = (kind: string, fallback: number) =>
+    (prices ?? []).find((p) => p.kind === kind)?.tokens ?? fallback;
   const mine = (members ?? []).find((m) => m.user_id === userId);
   return {
     shop: {
       id: row.id,
       name: row.name,
-      plan: row.plan === 'team' ? 'team' : 'solo',
       telepon: row.telepon,
       adminWhatsapp: row.admin_whatsapp,
       publikasiOpening: row.publikasi_opening,
+      tokenBalance: row.token_balance ?? 0,
     },
-    role: mine?.role === 'owner' ? 'owner' : 'member',
+    role: toRole(mine?.role),
     members: (members ?? []).map((m) => ({
       userId: m.user_id,
-      role: m.role === 'owner' ? 'owner' : 'member',
+      role: toRole(m.role),
       nama: m.nama,
       email: m.email,
     })),
     invites: (invites ?? []).map((i) => ({ id: i.id, email: i.email })),
+    charges: {
+      opened: (charges ?? []).filter((c) => c.kind === 'open').map((c) => c.event_id),
+      published: (charges ?? []).filter((c) => c.kind === 'publish').map((c) => c.event_id),
+      openedPaid: (charges ?? [])
+        .filter((c) => c.kind === 'open' && c.tokens > 0 && !c.refunded_at)
+        .map((c) => c.event_id),
+    },
+    prices: {
+      openEvent: price('open_event', LIST_PRICES.openEvent),
+      publishEvent: price('publish_event', LIST_PRICES.publishEvent),
+      memberSlot: price('member_slot', LIST_PRICES.memberSlot),
+    },
   };
+}
+
+function toRole(value: unknown): Role {
+  return value === 'owner' || value === 'admin' ? value : 'member';
 }
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -254,7 +341,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.rpc('shopper_bootstrap', {
           p_nama: typeof meta.nama === 'string' ? meta.nama : '',
           p_shop_name: typeof meta.nama_jastip === 'string' ? meta.nama_jastip : '',
-          p_plan: meta.plan === 'team' ? 'team' : 'solo',
+          // Plans are gone (0007); the server ignores this.
+          p_plan: '',
         })
       );
       const next = await loadShopState(current.user.id);
@@ -312,7 +400,14 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         // Show the last known shop straight away (and when offline), then
         // refresh it from the server.
         const cached = await storage.get<ShopState | null>('authShopCache', null);
-        if (cached && !cancelled) setState(cached);
+        // Caches written before tokens existed lack the newer fields.
+        if (cached && !cancelled)
+          setState({
+            ...cached,
+            shop: { ...cached.shop, tokenBalance: cached.shop.tokenBalance ?? 0 },
+            charges: { ...NO_CHARGES, ...cached.charges },
+            prices: cached.prices ?? LIST_PRICES,
+          });
         establish(current).catch(() => {});
       }
       setSessionRead(true);
@@ -401,7 +496,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           // Kept with the account so the shop can be created at first
           // login even when email confirmation delays it.
           options: {
-            data: { nama: input.nama, nama_jastip: input.namaJastip, plan: input.plan },
+            data: { nama: input.nama, nama_jastip: input.namaJastip },
           },
         })
       );
@@ -493,8 +588,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       userId: session?.user.id ?? null,
       shop: state?.shop ?? null,
       role: state?.role ?? null,
+      isAdmin: state?.role === 'owner' || state?.role === 'admin',
       members: state?.members ?? [],
       invites: state?.invites ?? [],
+      charges: state?.charges ?? NO_CHARGES,
+      prices: state?.prices ?? LIST_PRICES,
+      beta: isBeta(state?.prices ?? LIST_PRICES),
       signUp,
       signIn,
       signOut,
@@ -503,12 +602,38 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       changePassword: async (password) => {
         check(await supabase.auth.updateUser({ password }));
       },
-      setPlan: (plan) => call('shopper_set_plan', { p_plan: plan }),
-      inviteMember: (email) => call('shopper_invite_member', { p_email: email }),
+      openEvent: (eventId) => call('shopper_open_event', { p_event_id: eventId }),
+      publishEvent: (eventId) => call('shopper_publish_event', { p_event_id: eventId }),
+      refundEvent: async (eventId) => {
+        const refunded = check(await supabase.rpc('shopper_refund_event', { p_event_id: eventId }));
+        await refresh();
+        return refunded === true;
+      },
+      buyMemberSlot: (email) => call('shopper_buy_member_slot', { p_email: email }),
+      setAdmin: (userId, admin) => call('shopper_set_admin', { p_user_id: userId, p_admin: admin }),
       cancelInvite: (inviteId) => call('shopper_cancel_invite', { p_invite_id: inviteId }),
       removeMember: (userId) => call('shopper_remove_member', { p_user_id: userId }),
+      loadTokenHistory: async () => {
+        const rows = check(
+          await supabase
+            .from('shop_token_ledger')
+            .select('id, delta, balance_after, kind, event_id, email, note, created_at')
+            .order('created_at', { ascending: false })
+            .limit(50)
+        );
+        return (rows ?? []).map((r) => ({
+          id: r.id,
+          delta: r.delta,
+          balanceAfter: r.balance_after,
+          kind: r.kind,
+          eventId: r.event_id,
+          email: r.email,
+          note: r.note,
+          createdAt: r.created_at,
+        }));
+      },
     }),
-    [sessionRead, notice, session, state, signUp, signIn, signOut, updateShop, call]
+    [sessionRead, notice, session, state, signUp, signIn, signOut, updateShop, call, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

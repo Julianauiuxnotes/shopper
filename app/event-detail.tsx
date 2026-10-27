@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { MoreMenu } from '@/components/ui/more-menu';
 import { Text } from '@/components/ui/text';
-import { useAuth } from '@/lib/auth-store';
+import { AuthError, costLabel, useAuth } from '@/lib/auth-store';
 import { canExportReport, downloadEventReport } from '@/lib/export-event-report';
 import {
   type Expense,
@@ -54,7 +54,11 @@ export default function EventDetailScreen() {
     order.nama.toLowerCase().includes(needle) ||
     order.orderNumber.toLowerCase().includes(needle) ||
     order.items.some((item) => item.namaProduk.toLowerCase().includes(needle));
-  const { shop } = useAuth();
+  const { shop, isAdmin, charges, prices, publishEvent, refundEvent } = useAuth();
+  const [confirmingPublish, setConfirmingPublish] = React.useState(false);
+  const [tokenBusy, setTokenBusy] = React.useState(false);
+  // Result of publishing or deleting, shown under the order-form box.
+  const [tokenNotice, setTokenNotice] = React.useState<string | null>(null);
   const {
     userProfile,
     adminWhatsapp,
@@ -151,6 +155,59 @@ export default function EventDetailScreen() {
   const sebagianSisa = sebagianOrders.reduce((sum, o) => sum + getSisaPembayaran(o), 0);
   const expenses = event?.pengeluaran ?? [];
   const expenseTotal = expenses.reduce((sum, x) => sum + x.jumlah, 0);
+
+  // The order form costs a token, once per event; until then there's no
+  // link to share.
+  const published = !!event && charges.published.includes(event.id);
+  // Deleting gives the "Buka event" tokens back while the event has no
+  // orders and hasn't started (the server makes the final call). Events
+  // opened free during the beta have nothing to give back.
+  const refundable =
+    !!event &&
+    charges.openedPaid.includes(event.id) &&
+    event.orders.length === 0 &&
+    startOfDay(event.tanggalDari) > new Date();
+
+  async function handlePublish() {
+    if (!event || tokenBusy) return;
+    setConfirmingPublish(false);
+    setTokenBusy(true);
+    setTokenNotice(null);
+    try {
+      await publishEvent(event.id);
+    } catch (error) {
+      setTokenNotice(
+        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+      );
+    } finally {
+      setTokenBusy(false);
+    }
+  }
+
+  async function handleDeleteEvent() {
+    if (!event || tokenBusy) return;
+    setConfirmingDelete(false);
+    if (refundable) {
+      // The refund needs the server, so it happens before the event goes;
+      // if it can't be reached, nothing is deleted.
+      setTokenBusy(true);
+      try {
+        await refundEvent(event.id);
+      } catch (error) {
+        setTokenBusy(false);
+        setTokenNotice(
+          error instanceof AuthError
+            ? `${error.message} Event belum dihapus.`
+            : 'Terjadi kesalahan. Event belum dihapus.'
+        );
+        return;
+      }
+    }
+    // Leaves the screen first, then deletes: the event this screen is
+    // showing must not vanish from under it.
+    router.replace('/dashboard');
+    deleteEvent(event.id);
+  }
 
   async function handleCopyLink() {
     if (!shareLink) return;
@@ -252,9 +309,9 @@ export default function EventDetailScreen() {
           <Text className="font-inter-semibold text-[14px] text-black">{event.kodeEvent}</Text>
         </View>
 
-        {/* The customer order form is a Team feature. Tap the link to copy
-            it; the icon opens the share sheet. */}
-        {shop?.plan === 'team' ? (
+        {/* Once published, tap the link to copy it; the icon opens the
+            share sheet. Before that, an admin can publish it for a token. */}
+        {published ? (
           <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
             <Text className="font-inter-semibold text-[10px] text-neutral-50">
               Bagikan form order jastip
@@ -279,16 +336,40 @@ export default function EventDetailScreen() {
             </View>
           </View>
         ) : (
-          <View className="gap-[4px] rounded-[10px] border border-orange-300 bg-orange-50 p-[10px]">
-            <Text className="font-inter-semibold text-[10px] text-orange-600">
-              Form order untuk customer
-            </Text>
-            <Text className="font-inter text-[10px] text-neutral-700">
-              Tersedia di paket Team. Ganti paket di Pengaturan Akun untuk membagikan link form
-              order ke customer.
-            </Text>
+          <View className="gap-[8px] rounded-[10px] border border-orange-300 bg-orange-50 p-[10px]">
+            <View className="gap-[4px]">
+              <Text className="font-inter-semibold text-[10px] text-orange-600">
+                Form order untuk customer
+              </Text>
+              <Text className="font-inter text-[10px] text-neutral-700">
+                Publikasikan form order supaya customer bisa memesan lewat link.{' '}
+                {prices.publishEvent === 0
+                  ? 'Gratis selama masa beta.'
+                  : `Biaya ${prices.publishEvent} token, sekali per event. Saldo: ${shop?.tokenBalance ?? 0} token.`}
+              </Text>
+            </View>
+            {isAdmin ? (
+              <Pressable
+                onPress={() => setConfirmingPublish(true)}
+                disabled={tokenBusy}
+                accessibilityRole="button"
+                className="items-center rounded-[8px] bg-orange-500 px-[10px] py-[8px]">
+                <Text className="font-inter-semibold text-[12px] text-white">
+                  {tokenBusy
+                    ? 'Memproses...'
+                    : `Publikasikan form order · ${costLabel(prices.publishEvent)}`}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text className="font-inter text-[10px] text-neutral-700">
+                Minta admin toko untuk mempublikasikan form order.
+              </Text>
+            )}
           </View>
         )}
+        {tokenNotice ? (
+          <Text className="font-inter text-[12px] text-red-500">{tokenNotice}</Text>
+        ) : null}
 
         {/* Figma node 221:900: date and place over the event's own photo,
             darkened so the text stays readable; just the dark panel when
@@ -575,26 +656,48 @@ export default function EventDetailScreen() {
       <ConfirmDialog
         visible={confirmingDelete}
         title="Hapus event?"
-        message={
+        message={[
           event.orders.length > 0
             ? `Event "${event.namaAcara}" dan ${event.orders.length} pesanan di dalamnya akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`
-            : `Event "${event.namaAcara}" akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`
-        }
+            : `Event "${event.namaAcara}" akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`,
+          refundable
+            ? 'Token buka event akan dikembalikan ke saldo toko.'
+            : !charges.openedPaid.includes(event.id)
+              ? null
+              : event.orders.length > 0
+                ? 'Token tidak dikembalikan karena event ini sudah punya pesanan.'
+                : 'Token tidak dikembalikan karena event ini sudah dimulai.',
+        ]
+          .filter(Boolean)
+          .join('\n\n')}
         confirmLabel="Hapus"
-        onConfirm={() => {
-          // Leaves the screen first, then deletes: the event this screen
-          // is showing must not vanish from under it.
-          setConfirmingDelete(false);
-          router.replace('/dashboard');
-          deleteEvent(event.id);
-        }}
+        onConfirm={handleDeleteEvent}
         onCancel={() => setConfirmingDelete(false)}
+      />
+      <ConfirmDialog
+        visible={confirmingPublish}
+        title="Publikasikan form order?"
+        message={
+          prices.publishEvent === 0
+            ? 'Gratis selama masa beta. Setelah itu link form order bisa dibagikan ke customer.'
+            : `${prices.publishEvent} token akan dipakai dari saldo toko (saldo sekarang ${shop?.tokenBalance ?? 0} token). Setelah itu link form order bisa dibagikan ke customer, dan membagikannya lagi tidak dikenai biaya.`
+        }
+        confirmLabel="Publikasikan"
+        tone="primary"
+        onConfirm={handlePublish}
+        onCancel={() => setConfirmingPublish(false)}
       />
     </View>
   );
 }
 
 type EventTab = 'laporan' | 'pesanan';
+
+function startOfDay(date: Date) {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
 
 const BANNER_SHADOW = { boxShadow: '0px 4px 6.1px rgba(0, 0, 0, 0.25)' };
 // Both spellings: `backgroundImage` is what the web build reads, the

@@ -1,24 +1,11 @@
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { AuthError, type Plan, useAuth } from '@/lib/auth-store';
+import { AuthError, useAuth } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-
-const PLAN_OPTIONS: Array<{ value: Plan; label: string; description: string }> = [
-  {
-    value: 'solo',
-    label: 'Solo',
-    description: 'Untuk jastiper yang bekerja sendiri di satu perangkat.',
-  },
-  {
-    value: 'team',
-    label: 'Team',
-    description: 'Untuk tim jastip: undang 1 anggota dan bagikan form order ke customer.',
-  },
-];
 
 // Figma section OPENING & SIGN UP, node 19:263 (empty) / 53:2671 (filled) /
 // 53:2717 (error). The "List" menu icon (x=404 in a 390px frame) is
@@ -33,11 +20,6 @@ export default function SignUpScreen() {
   const [verifikasi, setVerifikasi] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
   const [showVerifikasi, setShowVerifikasi] = React.useState(false);
-  // Which plan to trial. Nothing is pre-selected: the choice changes what
-  // the account can do, so it should be made on purpose.
-  const [plan, setPlan] = React.useState<Plan | null>(null);
-  // Two steps: pick the trial plan first, then fill in the account form.
-  const [step, setStep] = React.useState<'paket' | 'form'>('paket');
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   // Set when the server wants the email confirmed before the first login.
@@ -50,14 +32,14 @@ export default function SignUpScreen() {
     email.trim().length > 0 &&
     password.length > 0 &&
     verifikasi.length > 0 &&
-    !passwordMismatch &&
-    plan !== null;
+    !passwordMismatch;
 
   // Creates the account and its shop (lib/auth-store.tsx). An email that
-  // a Team owner has invited joins that owner's shop instead, whatever
-  // plan and shop name were entered here.
+  // a shop has invited joins that shop instead, whatever shop name was
+  // entered here. A new shop starts with 3 free tokens (and during the
+  // beta nothing costs tokens).
   async function handleSubmit() {
-    if (!isValid || !plan || submitting) return;
+    if (!isValid || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -66,7 +48,6 @@ export default function SignUpScreen() {
         namaJastip: namaJastip.trim(),
         email: email.trim(),
         password,
-        plan,
       });
       if (result === 'confirm_email') setAwaitingConfirmation(true);
       else router.replace('/dashboard');
@@ -95,36 +76,20 @@ export default function SignUpScreen() {
           taller than the space below the header, so it needs to scroll —
           a plain View here clipped/overflowed content past the frame. */}
       <View className="mt-[54px] flex-1 overflow-hidden rounded-t-[110px] bg-orange-500">
-        {/* The headings (and, on step 2, the chosen plan) stay put; the
-            rest of the panel scrolls underneath them. */}
+        {/* The headings stay put; the rest of the panel scrolls
+            underneath them. */}
         {!awaitingConfirmation ? (
           <View className="items-center px-[10px] pb-[14px] pt-[85px]">
             <View className="w-full max-w-[271px] gap-[14px]">
               <Text className="font-inter-bold text-[16px] text-neutral-50">Gabung Sekarang!</Text>
               <Text className="font-inter-bold text-[14px] text-neutral-50">Daftar akun baru</Text>
-              {step === 'form' ? (
-                <>
-                  {/* Step 2: the account form. The chosen plan stays in
-                        view and can still be changed. */}
-                  <View className="w-full flex-row items-center justify-between gap-[10px] rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
-                    <Text className="flex-1 font-inter text-[12px] text-neutral-50">
-                      Paket trial:{' '}
-                      <Text className="font-inter-bold text-[12px] text-neutral-50">
-                        {PLAN_OPTIONS.find((option) => option.value === plan)?.label}
-                      </Text>
-                    </Text>
-                    <Pressable
-                      onPress={() => setStep('paket')}
-                      accessibilityRole="button"
-                      accessibilityLabel="Ubah paket trial"
-                      hitSlop={8}>
-                      <Text className="font-inter-semibold text-[12px] text-neutral-50 underline">
-                        Ubah
-                      </Text>
-                    </Pressable>
-                  </View>
-                </>
-              ) : null}
+              <View className="w-full rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
+                <Text className="font-inter text-[12px] text-neutral-50">
+                  Justipers sedang dalam{' '}
+                  <Text className="font-inter-bold text-[12px] text-neutral-50">masa beta</Text>:
+                  semua fitur gratis dipakai selama beta.
+                </Text>
+              </View>
             </View>
           </View>
         ) : null}
@@ -152,134 +117,69 @@ export default function SignUpScreen() {
               </>
             ) : (
               <>
-                {step === 'paket' ? (
-                  <>
-                    {/* Step 1: the trial plan, chosen on purpose before
-                        anything else (nothing is pre-selected). */}
-                    <View className="w-full gap-[6px]">
-                      <Text className="font-inter-bold text-[10px] text-neutral-50">
-                        Pilih paket trial
-                      </Text>
-                      {PLAN_OPTIONS.map((option) => {
-                        const selected = plan === option.value;
-                        return (
-                          <Pressable
-                            key={option.value}
-                            onPress={() => setPlan(option.value)}
-                            accessibilityRole="radio"
-                            accessibilityState={{ selected }}
-                            className={cn(
-                              'w-full gap-[2px] rounded-[8px] border border-neutral-50 p-[10px]',
-                              selected && 'bg-neutral-50'
-                            )}>
-                            <Text
-                              className={cn(
-                                'font-inter-bold text-[12px]',
-                                selected ? 'text-orange-500' : 'text-neutral-50'
-                              )}>
-                              {option.label}
-                            </Text>
-                            <Text
-                              className={cn(
-                                'font-inter text-[10px]',
-                                selected ? 'text-neutral-800' : 'text-neutral-50'
-                              )}>
-                              {option.description}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                <View className="w-full gap-[10px]">
+                  <FormField
+                    label="Nama"
+                    value={nama}
+                    onChangeText={setNama}
+                    placeholder="Nama Lengkap"
+                  />
+                  <FormField
+                    label="Nama Jastip"
+                    value={namaJastip}
+                    onChangeText={setNamaJastip}
+                    placeholder="Nama Jastip"
+                  />
+                  <FormField
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email"
+                    keyboardType="email-address"
+                  />
+                  <FormField
+                    label="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Password"
+                    secureTextEntry={!showPassword}
+                    onToggleSecure={() => setShowPassword((s) => !s)}
+                  />
+                  <FormField
+                    label="Verifikasi Password"
+                    value={verifikasi}
+                    onChangeText={setVerifikasi}
+                    placeholder="Password"
+                    secureTextEntry={!showVerifikasi}
+                    onToggleSecure={() => setShowVerifikasi((s) => !s)}
+                    hasError={passwordMismatch}
+                    errorMessage={passwordMismatch ? "Password doesn't match!" : undefined}
+                  />
+                </View>
 
-                    <Pressable
-                      onPress={() => setStep('form')}
-                      disabled={plan === null}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: plan === null }}
-                      className={cn(
-                        'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
-                        plan !== null ? 'bg-neutral-50 shadow-md shadow-black/15' : 'bg-orange-600'
-                      )}>
-                      <Text
-                        className={cn(
-                          'font-inter-semibold text-[14px]',
-                          plan !== null ? 'text-orange-500' : 'text-orange-700'
-                        )}>
-                        Lanjut
-                      </Text>
-                    </Pressable>
-                  </>
-                ) : (
-                  <>
-                    <View className="w-full gap-[10px]">
-                      <FormField
-                        label="Nama"
-                        value={nama}
-                        onChangeText={setNama}
-                        placeholder="Nama Lengkap"
-                      />
-                      <FormField
-                        label="Nama Jastip"
-                        value={namaJastip}
-                        onChangeText={setNamaJastip}
-                        placeholder="Nama Jastip"
-                      />
-                      <FormField
-                        label="Email"
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="Email"
-                        keyboardType="email-address"
-                      />
-                      <FormField
-                        label="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="Password"
-                        secureTextEntry={!showPassword}
-                        onToggleSecure={() => setShowPassword((s) => !s)}
-                      />
-                      <FormField
-                        label="Verifikasi Password"
-                        value={verifikasi}
-                        onChangeText={setVerifikasi}
-                        placeholder="Password"
-                        secureTextEntry={!showVerifikasi}
-                        onToggleSecure={() => setShowVerifikasi((s) => !s)}
-                        hasError={passwordMismatch}
-                        errorMessage={passwordMismatch ? "Password doesn't match!" : undefined}
-                      />
-                    </View>
-                  </>
-                )}
-
-                {step === 'form' ? (
-                  <>
-                    {submitError ? (
-                      <Text className="w-full font-inter-semibold text-[10px] text-neutral-50">
-                        {submitError}
-                      </Text>
-                    ) : null}
-
-                    <Pressable
-                      onPress={handleSubmit}
-                      disabled={!isValid || submitting}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: !isValid || submitting, busy: submitting }}
-                      className={cn(
-                        'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
-                        isValid ? 'bg-neutral-50 shadow-md shadow-black/15' : 'bg-orange-600'
-                      )}>
-                      <Text
-                        className={cn(
-                          'font-inter-semibold text-[14px]',
-                          isValid ? 'text-orange-500' : 'text-orange-700'
-                        )}>
-                        {submitting ? 'Memproses...' : 'Daftar'}
-                      </Text>
-                    </Pressable>
-                  </>
+                {submitError ? (
+                  <Text className="w-full font-inter-semibold text-[10px] text-neutral-50">
+                    {submitError}
+                  </Text>
                 ) : null}
+
+                <Pressable
+                  onPress={handleSubmit}
+                  disabled={!isValid || submitting}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !isValid || submitting, busy: submitting }}
+                  className={cn(
+                    'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+                    isValid ? 'bg-neutral-50 shadow-md shadow-black/15' : 'bg-orange-600'
+                  )}>
+                  <Text
+                    className={cn(
+                      'font-inter-semibold text-[14px]',
+                      isValid ? 'text-orange-500' : 'text-orange-700'
+                    )}>
+                    {submitting ? 'Memproses...' : 'Daftar'}
+                  </Text>
+                </Pressable>
 
                 <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
                   Sudah punya akun?
