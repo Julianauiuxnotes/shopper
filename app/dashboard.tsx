@@ -2,7 +2,6 @@ import DividerVertical from '@/assets/images/figma/divider-vertical-44.svg';
 import AlignLeftLine from '@/assets/images/figma/icon-align-left-line.svg';
 import AlignLeftLineShort from '@/assets/images/figma/icon-align-left-line-short.svg';
 import BasketIcon from '@/assets/images/figma/icon-basket.svg';
-import InfinityIcon from '@/assets/images/figma/icon-infinity.svg';
 import MagnifyingGlassIcon from '@/assets/images/figma/icon-magnifying-glass.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { SideDrawer } from '@/components/ui/side-drawer';
@@ -54,7 +53,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { events } = useEvents();
   const { userProfile, logoJastip } = useSettings();
-  const { shop, prices, beta, signOut } = useAuth();
+  const { shop, beta, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const hasEvents = events.length > 0;
   // Search box over the event list: name, location or event code.
@@ -224,24 +223,15 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Figma node 323:367. Under the label: what opening an event
-              costs; the infinity sign while it's free (the beta). */}
+          {/* Figma node 323:367, without the token cost under the label. */}
           <Link href="/buka-event-jastip" asChild>
             <Pressable
               style={BUTTON_SHADOW}
               className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-400 px-[10px] py-[16px]">
               <BasketIcon width={24} height={24} />
-              <View className="justify-center">
-                <Text className="font-inter-semibold text-[14px] text-neutral-50">
-                  Buka event jastip
-                </Text>
-                <View className="flex-row items-center gap-[2px]">
-                  {prices.openEvent === 0 ? <InfinityIcon width={16} height={16} /> : null}
-                  <Text className="font-inter text-[10px] text-neutral-50">
-                    {prices.openEvent === 0 ? 'token' : `${prices.openEvent} token`}
-                  </Text>
-                </View>
-              </View>
+              <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                Buka event jastip
+              </Text>
             </Pressable>
           </Link>
 

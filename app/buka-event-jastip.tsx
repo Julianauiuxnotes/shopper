@@ -599,7 +599,7 @@ function TokenCostNote({
         </Text>
       ) : (
         <Text className="font-inter text-[10px] text-neutral-700">
-          Token dikembalikan kalau event dihapus sebelum tanggal acara dan belum ada pesanan.
+          Token dikembalikan jika event dihapus sebelum tanggal acara dan belum ada pesanan.
         </Text>
       )}
     </View>
