@@ -135,16 +135,6 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
-          {/* Not in the Figma design: tells users the app is in beta. */}
-          <View className="flex-row items-center gap-[8px] rounded-[8px] bg-orange-50 px-[10px] py-[8px]">
-            <View className="rounded-full bg-orange-500 px-[6px] py-[1px]">
-              <Text className="font-inter-bold text-[10px] text-white">BETA</Text>
-            </View>
-            <Text className="flex-1 font-inter text-[10px] text-neutral-700">
-              Justipers sedang dalam masa beta. Semua fitur gratis selama beta.
-            </Text>
-          </View>
-
           {/* Figma node 323:335: the shop's token balance; opens
               Pengaturan Subscription. */}
           <Pressable

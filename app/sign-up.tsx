@@ -36,8 +36,7 @@ export default function SignUpScreen() {
 
   // Creates the account and its shop (lib/auth-store.tsx). An email that
   // a shop has invited joins that shop instead, whatever shop name was
-  // entered here. A new shop starts with 3 free tokens (and during the
-  // beta nothing costs tokens).
+  // entered here. A new shop starts with 5 free tokens.
   async function handleSubmit() {
     if (!isValid || submitting) return;
     setSubmitting(true);
@@ -85,9 +84,9 @@ export default function SignUpScreen() {
               <Text className="font-inter-bold text-[14px] text-neutral-50">Daftar akun baru</Text>
               <View className="w-full rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
                 <Text className="font-inter text-[12px] text-neutral-50">
-                  Justipers sedang dalam{' '}
-                  <Text className="font-inter-bold text-[12px] text-neutral-50">masa beta</Text>:
-                  semua fitur gratis dipakai selama beta.
+                  Akun baru dapat{' '}
+                  <Text className="font-inter-bold text-[12px] text-neutral-50">5 token gratis</Text>{' '}
+                  untuk mencoba Justipers.
                 </Text>
               </View>
             </View>
