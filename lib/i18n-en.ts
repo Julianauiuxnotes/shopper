@@ -65,7 +65,7 @@ export const en: Record<string, string | [string, string]> = {
     'We sent a confirmation link to {email}. Open it, then log in to start using Justipers.',
   Nama: 'Name',
   'Nama Lengkap': 'Full name',
-  'Nama Jastip': 'Shop name',
+  'Nama Jastip': 'Business name',
   'Verifikasi Password': 'Confirm password',
   "Password doesn't match!": "Password doesn't match!",
   'Sudah punya akun?': 'Already have an account?',
@@ -481,10 +481,10 @@ export const en: Record<string, string | [string, string]> = {
     "The logo couldn't be read. Try another image.",
   'No. Telepon Jastip': 'Shop phone number',
   'Ditampilkan di tagihan customer, di bawah nama jastip.':
-    "Shown on customer bills, under the shop's name.",
+    'Shown on customer bills, under the business name.',
   'Ganti password': 'Change password',
   'Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.':
-    "Only the shop owner can change the shop's name and phone number.",
+    'Only the shop owner can change the business name and phone number.',
   'Bahasa / Language': 'Language / Bahasa',
   'Berlaku untuk aplikasi di perangkat ini.': 'Applies to the app on this device.',
   'Ganti Password': 'Change Password',
