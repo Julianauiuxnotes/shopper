@@ -20,11 +20,20 @@ import {
   getOrderProfit,
   getKelebihanBayar,
 } from '@/lib/events-store';
-import { formatIDR } from '@/lib/format';
 import { compressPhoto } from '@/lib/compress-image';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import { useSettings } from '@/lib/settings-store';
 import { canPrintShippingLabel, downloadShippingLabel } from '@/lib/shipping-label';
+import { useT } from '@/lib/i18n';
+import {
+  amountKeyboard,
+  cleanAmountInput,
+  currencyLabel,
+  formatAmountInput,
+  formatMoney,
+  parseAmount,
+  roundMoney,
+} from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -38,7 +47,7 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 // built to match that screen exactly, not just visually.
 const FEE_TYPE_OPTIONS = [
   ['percent', 'Pakai %'],
-  ['flat', 'Pakai IDR'],
+  ['flat', 'Pakai {currency}'],
 ] as const;
 
 function parseNumber(s: string) {
@@ -107,6 +116,7 @@ type ConfirmDraft = {
 export default function OrderDetailScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
+  const t = useT();
   const { eventId, orderId } = useLocalSearchParams<{ eventId?: string; orderId?: string }>();
   const event = eventId ? getEvent(eventId) : undefined;
   const order = eventId && orderId ? getOrder(eventId, orderId) : undefined;
@@ -115,11 +125,11 @@ export default function OrderDetailScreen() {
     return (
       <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
         <Text className="font-inter-bold text-[16px] text-neutral-900">
-          Pesanan tidak ditemukan
+          {t('Pesanan tidak ditemukan')}
         </Text>
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Text className="font-inter-semibold text-[14px] text-orange-500">
-            Kembali ke Dashboard
+            {t('Kembali ke Dashboard')}
           </Text>
         </Pressable>
       </View>
@@ -141,6 +151,7 @@ export default function OrderDetailScreen() {
 function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; order: Order }) {
   const router = useRouter();
   const { saveOrder, deleteOrder } = useEvents();
+  const t = useT();
   const [order, setOrder] = React.useState(savedOrder);
   const [justSaved, setJustSaved] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
@@ -151,7 +162,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
   async function handleCetakLabel() {
     if (!canPrintShippingLabel) {
-      setLabelNotice('Cetak label baru tersedia di versi web.');
+      setLabelNotice(t('Cetak label baru tersedia di versi web.'));
       return;
     }
     const withPrefix = (digits: string) => {
@@ -165,11 +176,11 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
         whatsapp: withPrefix(order.whatsapp),
         pengirim: userProfile.namaJastip || 'Jastip',
         teleponPengirim: withPrefix(userProfile.telepon ?? ''),
-        fileName: `Label pengiriman ${order.orderNumber} ${order.nama.replace(/[^\w\- ]+/g, '').trim()}.png`,
+        fileName: `${t('Label pengiriman')} ${order.orderNumber} ${order.nama.replace(/[^\w\- ]+/g, '').trim()}.png`,
       });
-      setLabelNotice('Label pengiriman sudah diunduh.');
+      setLabelNotice(t('Label pengiriman sudah diunduh.'));
     } catch {
-      setLabelNotice('Label gagal dibuat. Coba lagi.');
+      setLabelNotice(t('Label gagal dibuat. Coba lagi.'));
     }
   }
 
@@ -181,7 +192,10 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   const dirtyRef = React.useRef(isDirty);
   dirtyRef.current = isDirty;
   React.useEffect(() => {
-    if (!dirtyRef.current) setOrder(savedOrder);
+    if (dirtyRef.current) return;
+    setOrder(savedOrder);
+    setOngkirText(savedOrder.ongkir ? String(savedOrder.ongkir) : '');
+    setDpText(savedOrder.dp ? String(savedOrder.dp) : '');
   }, [savedOrder]);
 
   function editOrder(updater: (order: Order) => Order) {
@@ -302,7 +316,10 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   async function handlePickFotoStruk() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin dibutuhkan', 'Aktifkan akses foto di pengaturan untuk memilih foto struk.');
+      Alert.alert(
+        t('Izin dibutuhkan'),
+        t('Aktifkan akses foto di pengaturan untuk memilih foto struk.')
+      );
       return;
     }
 
@@ -314,7 +331,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
     const asset = result.assets[0];
     if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType)) {
-      Alert.alert('Format tidak didukung', 'Pilih foto berformat JPG, JPEG, atau PNG.');
+      Alert.alert(t('Format tidak didukung'), t('Pilih foto berformat JPG, JPEG, atau PNG.'));
       return;
     }
 
@@ -323,7 +340,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       const compressed = await compressPhoto(asset);
       setFotoStrukDraft(compressed.uri);
     } catch {
-      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+      Alert.alert(t('Gagal'), t('Foto tidak berhasil diproses. Coba pilih foto lain.'));
     }
   }
 
@@ -407,7 +424,10 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   async function handlePickAddFotoStruk() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin dibutuhkan', 'Aktifkan akses foto di pengaturan untuk memilih foto struk.');
+      Alert.alert(
+        t('Izin dibutuhkan'),
+        t('Aktifkan akses foto di pengaturan untuk memilih foto struk.')
+      );
       return;
     }
 
@@ -419,7 +439,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
     const asset = result.assets[0];
     if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType)) {
-      Alert.alert('Format tidak didukung', 'Pilih foto berformat JPG, JPEG, atau PNG.');
+      Alert.alert(t('Format tidak didukung'), t('Pilih foto berformat JPG, JPEG, atau PNG.'));
       return;
     }
 
@@ -428,7 +448,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       const compressed = await compressPhoto(asset);
       setAddFotoStrukDraft(compressed.uri);
     } catch {
-      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+      Alert.alert(t('Gagal'), t('Foto tidak berhasil diproses. Coba pilih foto lain.'));
     }
   }
 
@@ -490,14 +510,14 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
     const MediaLibrary = await import('expo-media-library');
     const permission = await MediaLibrary.requestPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin dibutuhkan', 'Aktifkan akses galeri untuk menyimpan foto struk.');
+      Alert.alert(t('Izin dibutuhkan'), t('Aktifkan akses galeri untuk menyimpan foto struk.'));
       return;
     }
     try {
       await MediaLibrary.saveToLibraryAsync(previewPhoto);
-      Alert.alert('Berhasil', 'Foto struk tersimpan ke galeri.');
+      Alert.alert(t('Berhasil'), t('Foto struk tersimpan ke galeri.'));
     } catch {
-      Alert.alert('Gagal', 'Foto struk tidak berhasil disimpan.');
+      Alert.alert(t('Gagal'), t('Foto struk tidak berhasil disimpan.'));
     }
   }
 
@@ -533,9 +553,17 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
     }));
   }
 
+  // Typed amounts are kept as text while editing, so a decimal point
+  // ("12.") isn't lost before its cents are typed (lib/money.ts).
+  const [ongkirText, setOngkirText] = React.useState(
+    savedOrder.ongkir ? String(savedOrder.ongkir) : ''
+  );
+  const [dpText, setDpText] = React.useState(savedOrder.dp ? String(savedOrder.dp) : '');
+
   function setOngkir(text: string) {
-    const ongkir = Number(text.replace(/\D/g, '')) || 0;
-    editOrder((o) => ({ ...o, ongkir }));
+    const cleaned = cleanAmountInput(text).slice(0, 12);
+    setOngkirText(cleaned);
+    editOrder((o) => ({ ...o, ongkir: parseAmount(cleaned) }));
   }
 
   function setStatusPembayaran(status: PaymentStatus) {
@@ -552,7 +580,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   // The status follows the DP unless the order is already Lunas: typing
   // one makes it "Belum lunas", clearing it puts it back to "Belum bayar".
   function setDp(text: string) {
-    const dp = Number(text.replace(/\D/g, '').slice(0, 12)) || 0;
+    const cleaned = cleanAmountInput(text).slice(0, 12);
+    setDpText(cleaned);
+    const dp = parseAmount(cleaned);
     editOrder((o) => ({
       ...o,
       dp: dp > 0 ? dp : undefined,
@@ -581,12 +611,14 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
             hitSlop={8}>
             <CaretCircleLeftIcon width={24} height={24} />
           </Pressable>
-          <Text className="flex-1 font-inter-bold text-[14px] text-[#5d5d5d]">Detil pesanan</Text>
+          <Text className="flex-1 font-inter-bold text-[14px] text-[#5d5d5d]">
+            {t('Detil pesanan')}
+          </Text>
           <MoreMenu
-            label="Menu pesanan"
+            label={t('Menu pesanan')}
             items={[
               {
-                label: 'Hapus pesanan',
+                label: t('Hapus pesanan'),
                 destructive: true,
                 onPress: () => setConfirmingDelete(true),
               },
@@ -596,12 +628,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
         <ScrollView contentContainerClassName="gap-[16px] px-[20px] pb-[40px] pt-[20px]">
           <View className="gap-[0px]">
-            <Text className="font-inter text-[10px] text-neutral-800">Nomor order</Text>
+            <Text className="font-inter text-[10px] text-neutral-800">{t('Nomor order')}</Text>
             <Text className="font-inter-bold text-[14px] text-black">{order.orderNumber}</Text>
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[10px] text-neutral-800">Nama</Text>
+            <Text className="font-inter text-[10px] text-neutral-800">{t('Nama')}</Text>
             <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Input
                 value={order.nama}
@@ -613,7 +645,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[10px] text-neutral-800">Alamat</Text>
+            <Text className="font-inter text-[10px] text-neutral-800">{t('Alamat')}</Text>
             <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Input
                 value={order.alamat}
@@ -627,7 +659,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[10px] text-neutral-800">No. Whatsapp</Text>
+            <Text className="font-inter text-[10px] text-neutral-800">{t('No. Whatsapp')}</Text>
             <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
               <Input
@@ -641,7 +673,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           </View>
 
           <View className="gap-[10px]">
-            <Text className="font-inter-bold text-[14px] text-neutral-800">Metode pengiriman</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {t('Metode pengiriman')}
+            </Text>
             <View className="flex-row gap-[10px]">
               {(
                 [
@@ -663,7 +697,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         'font-inter text-[10px]',
                         selected ? 'text-white' : 'text-[#5d5d5d]'
                       )}>
-                      {label}
+                      {t(label)}
                     </Text>
                   </Pressable>
                 );
@@ -675,7 +709,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 the Default frame has the label + helper-line rows (181:558);
                 the same row layout is used for the ticked states too. */}
             <Text className="font-inter-semibold text-[12px] text-neutral-800">
-              Pembayaran ongkos kirim
+              {t('Pembayaran ongkos kirim')}
             </Text>
             {ONGKIR_OPTIONS.map(({ value, label, info }) => {
               const checked = order.pembayaranOngkir === value;
@@ -692,21 +726,27 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       <View className="h-[10px] w-[10px] rounded-[2px] border border-[#5d5d5d]" />
                     )}
                     <View className="shrink justify-center gap-[2px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
-                      <Text className="font-inter text-[12px] text-neutral-500">{info}</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        {t(label, { currency: currencyLabel() })}
+                      </Text>
+                      <Text className="font-inter text-[12px] text-neutral-500">{t(info)}</Text>
                     </View>
                   </Pressable>
                   {value === 'awal' && checked ? (
                     <View className="w-[96px] gap-[4px]">
-                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Ongkos kirim</Text>
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        {t('Ongkos kirim')}
+                      </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currencyLabel()}
+                        </Text>
                         <Input
-                          value={order.ongkir ? order.ongkir.toLocaleString('id-ID') : ''}
+                          value={formatAmountInput(ongkirText)}
                           onChangeText={setOngkir}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
-                          keyboardType="number-pad"
+                          keyboardType={amountKeyboard()}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-[#5a5959] shadow-none"
                         />
                       </View>
@@ -718,13 +758,15 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           </View>
 
           <View className="gap-[13px]">
-            <Text className="font-inter-bold text-[14px] text-neutral-800">List pesanan</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {t('List pesanan')}
+            </Text>
             <View className="gap-[11px]">
               {order.items.map((item, index) => {
                 // computeItemTotals gives the fee for the whole line; the row
                 // is labelled "per item", so it shows the fee for one unit.
                 const feePerItem =
-                  item.jumlah > 0 ? Math.round(computeItemTotals(item).fee / item.jumlah) : 0;
+                  item.jumlah > 0 ? roundMoney(computeItemTotals(item).fee / item.jumlah) : 0;
                 return (
                   <View
                     key={item.id}
@@ -750,13 +792,13 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           {item.tidakTersedia ? (
                             <View className="rounded-[4px] bg-red-100 px-[6px] py-[2px]">
                               <Text className="font-inter-semibold text-[10px] text-red-600">
-                                Tidak tersedia
+                                {t('Tidak tersedia')}
                               </Text>
                             </View>
                           ) : item.dibeli ? (
                             <View className="rounded-[4px] bg-green-100 px-[6px] py-[2px]">
                               <Text className="font-inter-semibold text-[10px] text-green-700">
-                                Sudah dibeli
+                                {t('Sudah dibeli')}
                               </Text>
                             </View>
                           ) : null}
@@ -769,13 +811,15 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                               ? 'text-neutral-400 line-through'
                               : 'text-neutral-800'
                           )}>
-                          {item.jumlah} x {formatIDR(item.harga)} | Jastip fee (per item):{' '}
-                          {formatIDR(feePerItem)}
+                          {item.jumlah} x {formatMoney(item.harga)} | {t('Jastip fee (per item):')}{' '}
+                          {formatMoney(feePerItem)}
                         </Text>
                         {/* The jastiper's own note; this page is never shared. */}
                         {item.hargaAsli ? (
                           <Text className="font-inter text-[10px] text-neutral-700">
-                            Harga asli: {formatIDR(item.hargaAsli)} (catatan pribadi)
+                            {t('Harga asli: {amount} (catatan pribadi)', {
+                              amount: formatMoney(item.hargaAsli),
+                            })}
                           </Text>
                         ) : null}
                         {/* Figma node 105:5015: once an item is confirmed
@@ -806,14 +850,16 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                             onPress={() => openMark(item.id)}
                             className="items-center justify-center rounded-[4px] border border-orange-500 px-[10px] py-[4px]">
                             <Text className="font-inter text-[10px] text-orange-500">
-                              Edit penanda
+                              {t('Edit penanda')}
                             </Text>
                           </Pressable>
                           <Pressable
                             onPress={() => handleCetakPenanda(item.id)}
                             className="flex-row items-center justify-center gap-[4px] rounded-[4px] border border-[#5d5d5d] px-[10px] py-[4px]">
                             <PrinterIcon width={18} height={18} />
-                            <Text className="font-inter text-[10px] text-black">Cetak penanda</Text>
+                            <Text className="font-inter text-[10px] text-black">
+                              {t('Cetak penanda')}
+                            </Text>
                           </Pressable>
                         </View>
                       ) : (
@@ -822,7 +868,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           accessibilityRole="button"
                           className="items-center justify-center rounded-[4px] border border-[#5d5d5d] bg-white px-[10px] py-[6px]">
                           <Text className="font-inter text-[10px] text-black">
-                            {item.dibeli || item.tidakTersedia ? 'Edit penanda' : 'Beri tanda'}
+                            {item.dibeli || item.tidakTersedia
+                              ? t('Edit penanda')
+                              : t('Beri tanda')}
                           </Text>
                         </Pressable>
                       )}
@@ -835,44 +883,48 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
             <Pressable
               onPress={openAddItem}
               className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
-              <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+              <Text className="font-inter text-[12px] text-orange-500">{t('+Tambah')}</Text>
             </Pressable>
           </View>
 
           <View className="gap-[6px]">
-            <Text className="font-inter-bold text-[10px] text-neutral-800">Total pembelanjaan</Text>
+            <Text className="font-inter-bold text-[10px] text-neutral-800">
+              {t('Total pembelanjaan')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(order.totalPembayaran)}
+              {formatMoney(order.totalPembayaran)}
             </Text>
           </View>
 
           <View className="gap-[6px]">
-            <Text className="font-inter-bold text-[10px] text-neutral-800">Profit</Text>
+            <Text className="font-inter-bold text-[10px] text-neutral-800">{t('Profit')}</Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(getOrderProfit(order))}
+              {formatMoney(getOrderProfit(order))}
             </Text>
           </View>
 
           <View className="gap-[6px]">
             <Text className="font-inter-bold text-[10px] text-neutral-800">
-              Total tagihan ke pelanggan
+              {t('Total tagihan ke pelanggan')}
             </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(totalTagihan)}
+              {formatMoney(totalTagihan)}
             </Text>
           </View>
 
           {/* Optional down payment; what's left shows underneath. */}
           <View className="gap-[6px]">
-            <Text className="font-inter-bold text-[10px] text-neutral-800">DP (opsional)</Text>
+            <Text className="font-inter-bold text-[10px] text-neutral-800">
+              {t('DP (opsional)')}
+            </Text>
             <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
-              <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+              <Text className="font-inter text-[12px] text-neutral-400">{currencyLabel()}</Text>
               <Input
-                value={order.dp ? order.dp.toLocaleString('id-ID') : ''}
+                value={formatAmountInput(dpText)}
                 onChangeText={setDp}
                 placeholder="0"
                 placeholderTextColor="#9ca3af"
-                keyboardType="number-pad"
+                keyboardType={amountKeyboard()}
                 accessibilityLabel="DP"
                 className="h-auto min-h-[35px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
               />
@@ -880,9 +932,11 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
           </View>
 
           <View className="gap-[6px]">
-            <Text className="font-inter-bold text-[10px] text-neutral-800">Sisa pembayaran</Text>
+            <Text className="font-inter-bold text-[10px] text-neutral-800">
+              {t('Sisa pembayaran')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(getSisaPembayaran(order))}
+              {formatMoney(getSisaPembayaran(order))}
             </Text>
           </View>
 
@@ -893,18 +947,20 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               accessibilityRole="alert"
               className="gap-[4px] rounded-[8px] border border-red-300 bg-red-50 p-[10px]">
               <Text className="font-inter-bold text-[12px] text-red-600">
-                Kelebihan bayar {formatIDR(getKelebihanBayar(order))}
+                Kelebihan bayar {formatMoney(getKelebihanBayar(order))}
               </Text>
               <Text className="font-inter text-[12px] leading-[17px] text-neutral-800">
-                DP pelanggan ({formatIDR(order.dp ?? 0)}) lebih besar dari total tagihan (
-                {formatIDR(totalTagihan)}). Kembalikan {formatIDR(getKelebihanBayar(order))} ke
+                DP pelanggan ({formatMoney(order.dp ?? 0)}) lebih besar dari total tagihan (
+                {formatMoney(totalTagihan)}). Kembalikan {formatMoney(getKelebihanBayar(order))} ke
                 pelanggan.
               </Text>
             </View>
           ) : null}
 
           <View className="gap-[10px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Status pembayaran</Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">
+              {t('Status pembayaran')}
+            </Text>
             <View className="flex-row gap-[10px]">
               {(
                 [
@@ -927,7 +983,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         'font-inter text-[10px]',
                         selected ? 'text-white' : 'text-[#5d5d5d]'
                       )}>
-                      {label}
+                      {t(label)}
                     </Text>
                   </Pressable>
                 );
@@ -952,12 +1008,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                   'font-inter-semibold text-[14px]',
                   isDirty ? 'text-white' : 'text-orange-300'
                 )}>
-                Simpan
+                {t('Simpan')}
               </Text>
             </Pressable>
             {justSaved && !isDirty ? (
               <Text className="text-center font-inter text-[12px] text-orange-500">
-                ✓ Tersimpan
+                {t('✓ Tersimpan')}
               </Text>
             ) : null}
           </View>
@@ -974,11 +1030,11 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 accessibilityState={{ disabled: true }}
                 className="w-full items-center justify-center rounded-[12px] border border-orange-200 bg-white px-[10px] py-[16px]">
                 <Text className="font-inter-semibold text-[14px] text-orange-300">
-                  Cetak tagihan customer
+                  {t('Cetak tagihan customer')}
                 </Text>
               </View>
               <Text className="text-center font-inter text-[10px] text-neutral-500">
-                Simpan perubahan dulu untuk mencetak tagihan.
+                {t('Simpan perubahan dulu untuk mencetak tagihan.')}
               </Text>
             </View>
           ) : (
@@ -990,7 +1046,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               asChild>
               <Pressable className="w-full items-center justify-center rounded-[12px] border border-orange-500 bg-white px-[10px] py-[16px]">
                 <Text className="font-inter-semibold text-[14px] text-orange-500">
-                  Cetak tagihan customer
+                  {t('Cetak tagihan customer')}
                 </Text>
               </Pressable>
             </Link>
@@ -1015,12 +1071,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     'font-inter-semibold text-[14px]',
                     isDirty ? 'text-orange-300' : 'text-orange-500'
                   )}>
-                  Cetak label pengiriman
+                  {t('Cetak label pengiriman')}
                 </Text>
               </Pressable>
               {isDirty ? (
                 <Text className="text-center font-inter text-[10px] text-neutral-500">
-                  Simpan perubahan dulu untuk mencetak label.
+                  {t('Simpan perubahan dulu untuk mencetak label.')}
                 </Text>
               ) : labelNotice ? (
                 <Text className="text-center font-inter text-[10px] text-neutral-500">
@@ -1034,10 +1090,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
       <ConfirmDialog
         visible={confirmingDiscard}
-        title="Buang perubahan?"
-        message="Perubahan di pesanan ini belum disimpan. Kalau kamu keluar sekarang, perubahannya hilang."
-        confirmLabel="Buang"
-        cancelLabel="Lanjut edit"
+        title={t('Buang perubahan?')}
+        message={t(
+          'Perubahan di pesanan ini belum disimpan. Kalau kamu keluar sekarang, perubahannya hilang.'
+        )}
+        confirmLabel={t('Buang')}
+        cancelLabel={t('Lanjut edit')}
         onConfirm={() => {
           setConfirmingDiscard(false);
           goToEvent();
@@ -1048,13 +1106,18 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
       <ConfirmDialog
         visible={confirmingLunas}
         tone="primary"
-        title="Ubah status jadi Lunas?"
+        title={t('Ubah status jadi Lunas?')}
         message={
           (order.dp ?? 0) > 0
-            ? `Pelanggan ini baru membayar DP ${formatIDR(order.dp ?? 0)}, masih ada sisa ${formatIDR(getSisaPembayaran(order))}. Pastikan sisanya sudah dilunasi sebelum mengubah status menjadi Lunas.`
-            : 'Pesanan ini baru dibayar sebagian. Pastikan pelanggan sudah melunasi sisanya sebelum mengubah status menjadi Lunas.'
+            ? t(
+                'Pelanggan ini baru membayar DP {dp}, masih ada sisa {rest}. Pastikan sisanya sudah dilunasi sebelum mengubah status menjadi Lunas.',
+                { dp: formatMoney(order.dp ?? 0), rest: formatMoney(getSisaPembayaran(order)) }
+              )
+            : t(
+                'Pesanan ini baru dibayar sebagian. Pastikan pelanggan sudah melunasi sisanya sebelum mengubah status menjadi Lunas.'
+              )
         }
-        confirmLabel="Ya, sudah lunas"
+        confirmLabel={t('Ya, sudah lunas')}
         onConfirm={() => {
           setConfirmingLunas(false);
           editOrder((o) => ({ ...o, statusPembayaran: 'lunas' }));
@@ -1064,9 +1127,12 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
 
       <ConfirmDialog
         visible={confirmingDelete}
-        title="Hapus pesanan?"
-        message={`Pesanan ${order.orderNumber} atas nama ${order.nama || 'customer'} akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`}
-        confirmLabel="Hapus"
+        title={t('Hapus pesanan?')}
+        message={t(
+          'Pesanan {order} atas nama {name} akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.',
+          { order: order.orderNumber, name: order.nama || 'customer' }
+        )}
+        confirmLabel={t('Hapus')}
         onConfirm={handleDeleteOrder}
         onCancel={() => setConfirmingDelete(false)}
       />
@@ -1077,7 +1143,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
             <View className="gap-[24px] px-[31px] pb-[32px] pt-[24.5px]">
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
-                <Text className="font-inter-semibold text-[16px] text-black">Beri tanda</Text>
+                <Text className="font-inter-semibold text-[16px] text-black">
+                  {t('Beri tanda')}
+                </Text>
               </Pressable>
 
               <View accessibilityRole="radiogroup" className="gap-[10px]">
@@ -1110,10 +1178,10 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       </View>
                       <View className="flex-1 gap-[4px]">
                         <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                          {title}
+                          {t(title)}
                         </Text>
                         <Text className="font-inter text-[12px] text-neutral-700">
-                          {description}
+                          {t(description)}
                         </Text>
                       </View>
                     </Pressable>
@@ -1135,7 +1203,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     'font-inter-semibold text-[14px]',
                     markChoice ? 'text-white' : 'text-orange-300'
                   )}>
-                  {markChoice === 'dibeli' ? 'Next' : 'Simpan'}
+                  {markChoice === 'dibeli' ? t('Next') : t('Simpan')}
                 </Text>
               </Pressable>
             </View>
@@ -1158,7 +1226,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
                 <Text className="font-inter-semibold text-[16px] text-black">
-                  Konfirmasi barang sudah dibeli
+                  {t('Konfirmasi barang sudah dibeli')}
                 </Text>
               </Pressable>
 
@@ -1167,19 +1235,21 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     quantity, the two prices side by side, then the fee. */}
                 <View className="flex-row items-start gap-[4px]">
                   <View className="flex-1 gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                      {t('Nama produk')}
+                    </Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={confirmDraft.namaProduk}
                         onChangeText={(v) => updateConfirmDraft({ namaProduk: v })}
-                        placeholder="Nama produk"
+                        placeholder={t('Nama produk')}
                         placeholderTextColor="#9ca3af"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
                   <View className="w-[56px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Jumlah')}</Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={confirmDraft.jumlah}
@@ -1187,7 +1257,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
-                        accessibilityLabel="Jumlah"
+                        accessibilityLabel={t('Jumlah')}
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
@@ -1197,46 +1267,52 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 <View className="gap-[8px]">
                   <View className="flex-row items-start gap-[8px]">
                     <View className="flex-1 gap-[4px]">
-                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga asli</Text>
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        {t('Harga asli')}
+                      </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currencyLabel()}
+                        </Text>
                         <Input
                           value={confirmDraft.hargaAsli}
                           onChangeText={(v) => updateConfirmDraft({ hargaAsli: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga asli"
+                          accessibilityLabel={t('Harga asli')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                     <View className="flex-1 gap-[4px]">
                       <Text className="font-inter text-[12px] text-[#1e1e1e]">
-                        Harga ke pelanggan
+                        {t('Harga ke pelanggan')}
                       </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currencyLabel()}
+                        </Text>
                         <Input
                           value={confirmDraft.harga}
                           onChangeText={(v) => updateConfirmDraft({ harga: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga ke pelanggan"
+                          accessibilityLabel={t('Harga ke pelanggan')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
-                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
-                    dikosongkan.
+                    {t(
+                      'Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh dikosongkan.'
+                    )}
                   </Text>
 
                   <View className="gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Fee Jastip')}</Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
                         ref={feeTriggerRef}
@@ -1246,7 +1322,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           feeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
                         )}>
                         <Text className="font-inter text-[12px] text-neutral-800">
-                          {confirmDraft.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR'}
+                          {confirmDraft.feeType === 'percent'
+                            ? t('Pakai %')
+                            : t('Pakai {currency}', { currency: currencyLabel() })}
                         </Text>
                         <View
                           style={{
@@ -1257,7 +1335,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                         {confirmDraft.feeType === 'flat' ? (
-                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {currencyLabel()}
+                          </Text>
                         ) : null}
                         <Input
                           value={confirmDraft.feeValue}
@@ -1276,7 +1356,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 </View>
 
                 <View className="gap-[4px]">
-                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">Foto struk</Text>
+                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">
+                    {t('Foto struk')}
+                  </Text>
                   {fotoStrukDraft ? (
                     <View className="gap-[8px]">
                       <Pressable
@@ -1292,7 +1374,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         onPress={handlePickFotoStruk}
                         className="h-[34px] w-[190px] items-center justify-center rounded-[8px] border border-orange-500">
                         <Text className="font-inter-semibold text-[14px] text-orange-500">
-                          Ganti foto struk
+                          {t('Ganti foto struk')}
                         </Text>
                       </Pressable>
                     </View>
@@ -1302,7 +1384,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       className="w-[160px] flex-row items-center gap-[2px] rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                       <CameraIcon width={18} height={18} />
                       <Text className="font-inter text-[12px] text-orange-500">
-                        Tambah foto struk
+                        {t('Tambah foto struk')}
                       </Text>
                     </Pressable>
                   )}
@@ -1323,7 +1405,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     'font-inter-semibold text-[14px]',
                     isConfirmValid ? 'text-white' : 'text-orange-300'
                   )}>
-                  Tandai sudah beli
+                  {t('Tandai sudah beli')}
                 </Text>
               </Pressable>
             </ScrollView>
@@ -1357,7 +1439,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     setFeeDropdownAnchor(null);
                   }}
                   className={cn('px-[12px] py-[10px]', index > 0 && 'border-t border-neutral-300')}>
-                  <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                  <Text className="font-inter text-[12px] text-neutral-800">
+                    {t(label, { currency: currencyLabel() })}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -1383,7 +1467,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
                 <Text className="font-inter-semibold text-[16px] text-black">
-                  Tambah list pesanan
+                  {t('Tambah list pesanan')}
                 </Text>
               </Pressable>
 
@@ -1392,19 +1476,21 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     quantity, the two prices side by side, then the fee. */}
                 <View className="flex-row items-start gap-[4px]">
                   <View className="flex-1 gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                      {t('Nama produk')}
+                    </Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={addItemDraft.namaProduk}
                         onChangeText={(v) => updateAddItemDraft({ namaProduk: v })}
-                        placeholder="Nama produk"
+                        placeholder={t('Nama produk')}
                         placeholderTextColor="#9ca3af"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
                   <View className="w-[56px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Jumlah')}</Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={addItemDraft.jumlah}
@@ -1412,7 +1498,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
-                        accessibilityLabel="Jumlah"
+                        accessibilityLabel={t('Jumlah')}
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
@@ -1422,46 +1508,52 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 <View className="gap-[8px]">
                   <View className="flex-row items-start gap-[8px]">
                     <View className="flex-1 gap-[4px]">
-                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Harga asli</Text>
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        {t('Harga asli')}
+                      </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currencyLabel()}
+                        </Text>
                         <Input
                           value={addItemDraft.hargaAsli}
                           onChangeText={(v) => updateAddItemDraft({ hargaAsli: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga asli"
+                          accessibilityLabel={t('Harga asli')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                     <View className="flex-1 gap-[4px]">
                       <Text className="font-inter text-[12px] text-[#1e1e1e]">
-                        Harga ke pelanggan
+                        {t('Harga ke pelanggan')}
                       </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">
+                          {currencyLabel()}
+                        </Text>
                         <Input
                           value={addItemDraft.harga}
                           onChangeText={(v) => updateAddItemDraft({ harga: v })}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga ke pelanggan"
+                          accessibilityLabel={t('Harga ke pelanggan')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
-                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
-                    dikosongkan.
+                    {t(
+                      'Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh dikosongkan.'
+                    )}
                   </Text>
 
                   <View className="gap-[4px]">
-                    <Text className="font-inter text-[12px] text-[#1e1e1e]">Fee Jastip</Text>
+                    <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Fee Jastip')}</Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
                         ref={addFeeTriggerRef}
@@ -1471,7 +1563,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           addFeeDropdownAnchor ? 'border-orange-500' : 'border-neutral-400'
                         )}>
                         <Text className="font-inter text-[12px] text-neutral-800">
-                          {addItemDraft.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR'}
+                          {addItemDraft.feeType === 'percent'
+                            ? t('Pakai %')
+                            : t('Pakai {currency}', { currency: currencyLabel() })}
                         </Text>
                         <View
                           style={{
@@ -1482,7 +1576,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                         {addItemDraft.feeType === 'flat' ? (
-                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {currencyLabel()}
+                          </Text>
                         ) : null}
                         <Input
                           value={addItemDraft.feeValue}
@@ -1501,7 +1597,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                 </View>
 
                 <View className="gap-[4px]">
-                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">Foto struk</Text>
+                  <Text className="font-inter-bold text-[12px] text-[#1e1e1e]">
+                    {t('Foto struk')}
+                  </Text>
                   {addFotoStrukDraft ? (
                     <View className="gap-[8px]">
                       <Pressable
@@ -1517,7 +1615,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                         onPress={handlePickAddFotoStruk}
                         className="h-[34px] w-[190px] items-center justify-center rounded-[8px] border border-orange-500">
                         <Text className="font-inter-semibold text-[14px] text-orange-500">
-                          Ganti foto struk
+                          {t('Ganti foto struk')}
                         </Text>
                       </Pressable>
                     </View>
@@ -1527,7 +1625,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       className="w-[160px] flex-row items-center gap-[2px] rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                       <CameraIcon width={18} height={18} />
                       <Text className="font-inter text-[12px] text-orange-500">
-                        Tambah foto struk
+                        {t('Tambah foto struk')}
                       </Text>
                     </Pressable>
                   )}
@@ -1551,7 +1649,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       'font-inter-semibold text-[14px]',
                       isAddItemValid ? 'text-orange-500' : 'text-orange-300'
                     )}>
-                    Simpan
+                    {t('Simpan')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1568,7 +1666,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                       'font-inter-semibold text-[14px]',
                       isAddItemValid ? 'text-white' : 'text-orange-300'
                     )}>
-                    Tandai sudah dibeli
+                    {t('Tandai sudah dibeli')}
                   </Text>
                 </Pressable>
               </View>
@@ -1599,7 +1697,9 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                     setAddFeeDropdownAnchor(null);
                   }}
                   className={cn('px-[12px] py-[10px]', index > 0 && 'border-t border-neutral-300')}>
-                  <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                  <Text className="font-inter text-[12px] text-neutral-800">
+                    {t(label, { currency: currencyLabel() })}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -1635,7 +1735,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
               <Pressable
                 onPress={handleDownloadPhoto}
                 className="flex-1 items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[14px]">
-                <Text className="font-inter-semibold text-[14px] text-white">Download</Text>
+                <Text className="font-inter-semibold text-[14px] text-white">{t('Download')}</Text>
               </Pressable>
               <Pressable onPress={() => setPreviewPhoto(null)} hitSlop={8}>
                 <XCircleIcon width={32} height={32} />

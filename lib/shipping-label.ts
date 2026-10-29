@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { t } from './i18n';
 
 // "Cetak label pengiriman": the shipping label for a paid order (Figma
 // node 254:78), saved as a PNG. The label is drawn straight onto a canvas
@@ -118,11 +119,11 @@ export async function downloadShippingLabel(label: ShippingLabel) {
     value.trim() ? { label: title, lines: wrap(measure, value.trim(), textWidth) } : null;
   const sections: Row[][] = [
     [
-      row('Nama customer', label.namaCustomer),
-      row('Alamat', label.alamat),
-      row('No.Whatsapp', label.whatsapp),
+      row(t('Nama customer'), label.namaCustomer),
+      row(t('Alamat'), label.alamat),
+      row(t('No.Whatsapp'), label.whatsapp),
     ],
-    [row('Pengirim', label.pengirim), row('No. Telepon Jastip', label.teleponPengirim)],
+    [row(t('Pengirim'), label.pengirim), row(t('No. Telepon Jastip'), label.teleponPengirim)],
   ].map((rows) => rows.filter((r): r is Row => r !== null));
 
   const rowHeight = (r: Row) => LINE_HEIGHT + LABEL_GAP + r.lines.length * LINE_HEIGHT;

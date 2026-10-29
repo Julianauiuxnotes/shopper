@@ -3,21 +3,47 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { costLabel, type TokenEntry, useAuth } from '@/lib/auth-store';
 import { useEvents } from '@/lib/events-store';
-import { formatDate, formatIDR } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-// Bundles of Justipers tokens. 1 token is IDR 4,000; bigger bundles cost
-// less per token. Only bundles are sold: a single 4,000 payment would
-// lose too much to payment fees.
-const TOKEN_BUNDLES = [
-  { tokens: 5, price: 20_000 },
-  { tokens: 10, price: 37_500 },
-  { tokens: 25, price: 87_500 },
-  { tokens: 50, price: 160_000 },
-];
+// Bundles of Justipers tokens; bigger bundles cost less per token. Only
+// bundles are sold: a single token's payment would lose too much to fees.
+// Shops in Indonesia pay in IDR (1 token = IDR 4,000). Shops anywhere
+// else pay in USD, about USD 1 a token (decided 2026-10-29); the shop's
+// country is the owner's, from sign-up.
+const TOKEN_BUNDLES = {
+  IDR: [
+    { tokens: 5, price: 20_000 },
+    { tokens: 10, price: 37_500 },
+    { tokens: 25, price: 87_500 },
+    { tokens: 50, price: 160_000 },
+  ],
+  USD: [
+    { tokens: 5, price: 4.99 },
+    { tokens: 10, price: 8.99 },
+    { tokens: 25, price: 19.99 },
+    { tokens: 50, price: 34.99 },
+  ],
+};
 
+type TokenCurrency = keyof typeof TOKEN_BUNDLES;
+
+/** USD for shops outside Indonesia; IDR for Indonesia and for shops from
+ * before countries existed. */
+function tokenCurrency(country: string | null | undefined): TokenCurrency {
+  return country && country !== 'ID' ? 'USD' : 'IDR';
+}
+
+function formatPrice(amount: number, currency: TokenCurrency) {
+  // Token prices are always IDR or USD, whatever the shop's own currency.
+  return formatMoney(amount, currency);
+}
+
+// Indonesian, like every string; shown through t().
 const KIND_LABELS: Record<string, string> = {
   bonus: 'Token gratis',
   purchase: 'Beli token',
@@ -35,6 +61,7 @@ const HISTORY_SHOWN = 10;
 // and prices live on the server (supabase/migrations/0007_shopper_tokens.sql).
 function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
   const { shop, isAdmin, prices, beta, loadTokenHistory } = useAuth();
+  const t = useT();
   const { getEvent } = useEvents();
   const [history, setHistory] = React.useState<TokenEntry[] | null>(null);
   const [historyError, setHistoryError] = React.useState(false);
@@ -60,8 +87,9 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
 
   function describe(entry: TokenEntry) {
     if (entry.kind === 'member_slot' && entry.email) return entry.email;
-    if (entry.eventId) return getEvent(entry.eventId)?.namaAcara ?? 'Event yang sudah dihapus';
-    return entry.note;
+    if (entry.eventId) return getEvent(entry.eventId)?.namaAcara ?? t('Event yang sudah dihapus');
+    // The server writes notes in Indonesian (e.g. "Token gratis untuk mulai").
+    return t(entry.note);
   }
 
   const shown = showAll ? (history ?? []) : (history ?? []).slice(0, HISTORY_SHOWN);
@@ -69,16 +97,21 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
   return (
     <View className="gap-[12px]">
       <View className="gap-[10px] rounded-[12px] bg-orange-500 p-[16px]">
-        <Text className="font-inter text-[12px] text-orange-50">Saldo token toko</Text>
+        <Text className="font-inter text-[12px] text-orange-50">{t('Saldo token toko')}</Text>
         <View className="flex-row items-end justify-between gap-[10px]">
           {beta ? (
             <Text className="font-inter-bold text-[28px] text-white">
               ∞{' '}
-              <Text className="font-inter-semibold text-[14px] text-white">tidak terbatas</Text>
+              <Text className="font-inter-semibold text-[14px] text-white">
+                {t('tidak terbatas')}
+              </Text>
             </Text>
           ) : (
             <Text className="font-inter-bold text-[28px] text-white">
-              {balance} <Text className="font-inter-semibold text-[14px] text-white">token</Text>
+              {balance}{' '}
+              <Text className="font-inter-semibold text-[14px] text-white">
+                {t('token', { n: balance })}
+              </Text>
             </Text>
           )}
           {isAdmin ? (
@@ -97,38 +130,43 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
                   'font-inter-semibold text-[12px]',
                   beta ? 'text-orange-100' : 'text-orange-500'
                 )}>
-                Beli token
+                {t('Beli token')}
               </Text>
             </Pressable>
           ) : null}
         </View>
         <Text className="font-inter text-[10px] text-orange-50">
-          Buka event {costLabel(prices.openEvent)} · Publikasi form order{' '}
-          {costLabel(prices.publishEvent)} · Slot anggota {costLabel(prices.memberSlot)}
+          {t('Buka event {open} · Publikasi form order {publish} · Slot anggota {slot}', {
+            open: costLabel(prices.openEvent),
+            publish: costLabel(prices.publishEvent),
+            slot: costLabel(prices.memberSlot),
+          })}
         </Text>
       </View>
       {beta ? (
         <Text className="font-inter text-[10px] text-neutral-500">
-          Justipers sedang dalam masa beta: token tidak terbatas dan semua fitur gratis. Saldo
-          tokenmu ({balance} token) tetap tersimpan untuk dipakai setelah beta berakhir.
+          {t(
+            'Justipers sedang dalam masa beta: token tidak terbatas dan semua fitur gratis. Saldo tokenmu ({n} token) tetap tersimpan untuk dipakai setelah beta berakhir.',
+            { n: balance }
+          )}
         </Text>
       ) : null}
       {!isAdmin ? (
         <Text className="font-inter text-[10px] text-neutral-500">
-          Hanya admin yang bisa memakai dan membeli token toko.
+          {t('Hanya admin yang bisa memakai dan membeli token toko.')}
         </Text>
       ) : null}
 
       <View className="gap-[6px]">
-        <Text className="font-inter-bold text-[12px] text-neutral-800">Riwayat token</Text>
+        <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Riwayat token')}</Text>
         {historyError && history === null ? (
           <Text className="font-inter text-[12px] text-neutral-500">
-            Riwayat tidak bisa dimuat. Cek koneksi internet.
+            {t('Riwayat tidak bisa dimuat. Cek koneksi internet.')}
           </Text>
         ) : history === null ? (
-          <Text className="font-inter text-[12px] text-neutral-500">Memuat...</Text>
+          <Text className="font-inter text-[12px] text-neutral-500">{t('Memuat...')}</Text>
         ) : history.length === 0 ? (
-          <Text className="font-inter text-[12px] text-neutral-500">Belum ada riwayat.</Text>
+          <Text className="font-inter text-[12px] text-neutral-500">{t('Belum ada riwayat.')}</Text>
         ) : (
           <View className="rounded-[8px] border border-neutral-300 bg-white">
             {shown.map((entry, index) => (
@@ -140,7 +178,7 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
                 )}>
                 <View className="flex-1 gap-[2px]">
                   <Text className="font-inter-semibold text-[12px] text-neutral-800">
-                    {KIND_LABELS[entry.kind] ?? entry.kind}
+                    {KIND_LABELS[entry.kind] ? t(KIND_LABELS[entry.kind]) : entry.kind}
                   </Text>
                   <Text numberOfLines={1} className="font-inter text-[10px] text-neutral-600">
                     {[formatDate(new Date(entry.createdAt)), describe(entry)]
@@ -162,7 +200,7 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
         {history && history.length > HISTORY_SHOWN ? (
           <Pressable onPress={() => setShowAll((s) => !s)} hitSlop={8}>
             <Text className="font-inter-semibold text-[12px] text-orange-500">
-              {showAll ? 'Tampilkan lebih sedikit' : 'Lihat semua riwayat'}
+              {showAll ? t('Tampilkan lebih sedikit') : t('Lihat semua riwayat')}
             </Text>
           </Pressable>
         ) : null}
@@ -174,7 +212,11 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
 // "Beli token": the bundles. Online payment isn't connected yet, so the
 // sheet shows the prices and says so; tokens are added by hand meanwhile.
 function BuyTokenSheet({ onClose }: { onClose: () => void }) {
-  const [choice, setChoice] = React.useState(TOKEN_BUNDLES[1].tokens);
+  const { shop } = useAuth();
+  const currency = tokenCurrency(shop?.country);
+  const bundles = TOKEN_BUNDLES[currency];
+  const [choice, setChoice] = React.useState(bundles[1].tokens);
+  const t = useT();
 
   return (
     <BottomSheet onClose={onClose} sheetClassName="bg-orange-100">
@@ -182,11 +224,11 @@ function BuyTokenSheet({ onClose }: { onClose: () => void }) {
         <View className="gap-[20px] px-[31px] pb-[32px] pt-[24.5px]">
           <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
             <CaretCircleLeftIcon width={24} height={24} />
-            <Text className="font-inter-semibold text-[16px] text-black">Beli token</Text>
+            <Text className="font-inter-semibold text-[16px] text-black">{t('Beli token')}</Text>
           </Pressable>
 
           <View accessibilityRole="radiogroup" className="gap-[10px]">
-            {TOKEN_BUNDLES.map((bundle) => {
+            {bundles.map((bundle) => {
               const selected = choice === bundle.tokens;
               const perToken = bundle.price / bundle.tokens;
               return (
@@ -211,14 +253,14 @@ function BuyTokenSheet({ onClose }: { onClose: () => void }) {
                   </View>
                   <View className="flex-1 gap-[2px]">
                     <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                      {bundle.tokens} token
+                      {t('{n} token', { n: bundle.tokens })}
                     </Text>
                     <Text className="font-inter text-[12px] text-neutral-700">
-                      {formatIDR(perToken)} per token
+                      {t('{price} per token', { price: formatPrice(perToken, currency) })}
                     </Text>
                   </View>
                   <Text className="font-inter-bold text-[14px] text-neutral-800">
-                    {formatIDR(bundle.price)}
+                    {formatPrice(bundle.price, currency)}
                   </Text>
                 </Pressable>
               );
@@ -226,8 +268,9 @@ function BuyTokenSheet({ onClose }: { onClose: () => void }) {
           </View>
 
           <Text className="text-center font-inter text-[12px] text-neutral-700">
-            Pembayaran online segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah
-            token.
+            {t(
+              'Pembayaran online segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah token.'
+            )}
           </Text>
 
           <Pressable
@@ -236,7 +279,7 @@ function BuyTokenSheet({ onClose }: { onClose: () => void }) {
             accessibilityState={{ disabled: true }}
             className="w-full items-center justify-center rounded-[12px] bg-orange-200 px-[10px] py-[16px]">
             <Text className="font-inter-semibold text-[14px] text-orange-300">
-              Bayar (segera hadir)
+              {t('Bayar (segera hadir)')}
             </Text>
           </Pressable>
         </View>

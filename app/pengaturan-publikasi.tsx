@@ -2,6 +2,7 @@ import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.sv
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { AuthError, useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'expo-router';
@@ -47,6 +48,7 @@ export default function PengaturanPublikasiScreen() {
   const router = useRouter();
   const { adminWhatsapp, publikasiOpening, ready } = useSettings();
   const { role, updateShop } = useAuth();
+  const t = useT();
   // These are shop settings: only the owner may change them.
   const isOwner = role === 'owner';
   const [saving, setSaving] = React.useState(false);
@@ -77,7 +79,9 @@ export default function PengaturanPublikasiScreen() {
       setJustSaved(true);
     } catch (error) {
       setSaveError(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
     } finally {
       setSaving(false);
@@ -91,7 +95,7 @@ export default function PengaturanPublikasiScreen() {
     };
   }
 
-  const previewOpening = openingDraft.trim().length > 0 ? openingDraft : OPENING_PLACEHOLDER;
+  const previewOpening = openingDraft.trim().length > 0 ? openingDraft : t(OPENING_PLACEHOLDER);
 
   return (
     <KeyboardAvoidingView
@@ -106,11 +110,15 @@ export default function PengaturanPublikasiScreen() {
           hitSlop={8}
           className="flex-row items-center gap-[5px]">
           <CaretCircleLeftIcon width={24} height={24} />
-          <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">Pengaturan Publikasi</Text>
+          <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">
+            {t('Pengaturan Publikasi')}
+          </Text>
         </Pressable>
 
         <View className="gap-[4px]">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">Nomor WhatsApp Admin</Text>
+          <Text className="font-inter-bold text-[12px] text-neutral-800">
+            {t('Nomor WhatsApp Admin')}
+          </Text>
           <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
             <Text className="font-inter text-[12px] text-neutral-800">+62</Text>
             <Input
@@ -123,20 +131,21 @@ export default function PengaturanPublikasiScreen() {
             />
           </View>
           <Text className="font-inter text-[10px] italic text-neutral-600">
-            Nomor ini akan digunakan untuk mengirim publikasi event jastip dan konfirmasi pesanan ke
-            pelanggan.
+            {t(
+              'Nomor ini akan digunakan untuk mengirim publikasi event jastip dan konfirmasi pesanan ke pelanggan.'
+            )}
           </Text>
         </View>
 
         <View className="gap-[4px]">
           <Text className="font-inter-bold text-[12px] text-neutral-800">
-            Format kalimat pembuka publikasi event jastip
+            {t('Format kalimat pembuka publikasi event jastip')}
           </Text>
           <View className="h-[97px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
             <Input
               value={openingDraft}
               onChangeText={withDirtyReset(setOpeningDraft)}
-              placeholder={OPENING_PLACEHOLDER}
+              placeholder={t(OPENING_PLACEHOLDER)}
               placeholderTextColor="#d1d5db"
               multiline
               textAlignVertical="top"
@@ -147,28 +156,32 @@ export default function PengaturanPublikasiScreen() {
 
         <View className="gap-[12px]">
           <Text className="font-inter-semibold text-[12px] text-neutral-800">
-            Preview tampilan publikasi via Whatsapp:
+            {t('Preview tampilan publikasi via Whatsapp:')}
           </Text>
           <View className="overflow-hidden rounded-[8px] border border-neutral-600 bg-white pb-[10px]">
             <View className="h-[160px] w-full items-center justify-center bg-neutral-200">
-              <Text className="font-inter text-[12px] text-neutral-600">Foto event</Text>
+              <Text className="font-inter text-[12px] text-neutral-600">{t('Foto event')}</Text>
             </View>
             <View className="gap-[8px] px-[12px] pt-[10px]">
               <Text className="font-inter text-[12px] text-neutral-800">{previewOpening}</Text>
               <Text className="font-inter text-[12px] text-neutral-800">
-                <Text className="font-inter-bold text-[12px] text-neutral-800">Nama acara</Text>
+                <Text className="font-inter-bold text-[12px] text-neutral-800">
+                  {t('Nama acara')}
+                </Text>
                 {`: ${SAMPLE_EVENT.namaAcara}\n`}
                 <Text className="font-inter-bold text-[12px] text-neutral-800">
-                  Tanggal acara:{' '}
+                  {t('Tanggal acara:')}{' '}
                 </Text>
                 {SAMPLE_EVENT.tanggalAcara}
                 {'\n'}
-                <Text className="font-inter-bold text-[12px] text-neutral-800">Lokasi: </Text>
+                <Text className="font-inter-bold text-[12px] text-neutral-800">
+                  {t('Lokasi:')}{' '}
+                </Text>
                 {SAMPLE_EVENT.lokasi}
               </Text>
               <Text className="font-inter text-[12px] text-neutral-800">
                 <Text className="font-inter-bold text-[12px] text-neutral-800">
-                  Klik link dibawah ini untuk pemesanan:
+                  {t('Klik link dibawah ini untuk pemesanan:')}
                 </Text>
                 {`\n${SAMPLE_EVENT.link}`}
               </Text>
@@ -190,19 +203,21 @@ export default function PengaturanPublikasiScreen() {
               'font-inter-semibold text-[14px]',
               isValid ? 'text-orange-50' : 'text-orange-300'
             )}>
-            {saving ? 'Menyimpan...' : 'Simpan'}
+            {saving ? t('Menyimpan...') : t('Simpan')}
           </Text>
         </Pressable>
 
         {justSaved && !isDirty ? (
-          <Text className="text-center font-inter text-[12px] text-orange-500">✓ Tersimpan</Text>
+          <Text className="text-center font-inter text-[12px] text-orange-500">
+            {t('✓ Tersimpan')}
+          </Text>
         ) : null}
         {saveError ? (
           <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
         ) : null}
         {!isOwner ? (
           <Text className="text-center font-inter text-[10px] text-neutral-500">
-            Pengaturan publikasi hanya bisa diubah oleh pemilik toko.
+            {t('Pengaturan publikasi hanya bisa diubah oleh pemilik toko.')}
           </Text>
         ) : null}
       </ScrollView>

@@ -1,7 +1,10 @@
-// Currencies an Internasional event can be priced in. A Lokal event is
-// always IDR. Whatever the currency, everything stored and totalled
-// (harga, tagihan, revenue, profit) is in IDR: a foreign price is
-// converted with the event's kurs the moment it's entered.
+import { currencyLabel } from './money';
+
+// Currencies an Internasional event can be priced in. An Indonesia
+// ("lokal") event is in the shop's own currency (lib/money.ts). Whatever
+// the currency, everything stored and totalled (harga, tagihan, revenue,
+// profit) is in the shop's currency: a foreign price is converted with the
+// event's kurs the moment it's entered.
 
 export const CURRENCIES = [
   { code: 'USD', name: 'Dolar Amerika' },
@@ -17,17 +20,20 @@ export const CURRENCIES = [
   { code: 'EUR', name: 'Euro' },
   { code: 'GBP', name: 'Poundsterling' },
   { code: 'SAR', name: 'Riyal Saudi' },
+  { code: 'PHP', name: 'Peso Filipina' },
+  { code: 'VND', name: 'Dong Vietnam' },
 ] as const;
 
 type EventCurrencyFields = { jenis?: 'lokal' | 'internasional'; mataUang?: string; kurs?: number };
 
-/** The currency prices are typed in for this event, and its rate to IDR. */
+/** The currency prices are typed in for this event, and its rate to the
+ * shop's currency. */
 export function eventCurrency(event?: EventCurrencyFields | null) {
   const foreign =
     event?.jenis === 'internasional' && !!event.mataUang && !!event.kurs && event.kurs > 0;
   return foreign
     ? { foreign: true as const, code: event.mataUang as string, kurs: event.kurs as number }
-    : { foreign: false as const, code: 'IDR', kurs: 1 };
+    : { foreign: false as const, code: currencyLabel(), kurs: 1 };
 }
 
 /** Reads a typed amount that may use a comma as the decimal mark. */

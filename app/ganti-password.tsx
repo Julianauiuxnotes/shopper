@@ -4,6 +4,7 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { AuthError, useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Stack, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -23,6 +24,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 export default function GantiPasswordScreen() {
   const router = useRouter();
   const { changePassword } = useAuth();
+  const t = useT();
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [passwordBaru, setPasswordBaru] = React.useState('');
@@ -49,17 +51,21 @@ export default function GantiPasswordScreen() {
               showsVerticalScrollIndicator={false}>
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
-                <Text className="font-inter-semibold text-[16px] text-black">Ganti Password</Text>
+                <Text className="font-inter-semibold text-[16px] text-black">
+                  {t('Ganti Password')}
+                </Text>
               </Pressable>
 
               <View className="gap-[16px]">
                 <View className="gap-[4px]">
-                  <Text className="font-inter text-[12px] text-neutral-800">Password baru</Text>
+                  <Text className="font-inter text-[12px] text-neutral-800">
+                    {t('Password baru')}
+                  </Text>
                   <View className="flex-row items-center gap-[10px] rounded-[8px] bg-white p-[10px]">
                     <Input
                       value={passwordBaru}
                       onChangeText={setPasswordBaru}
-                      placeholder="Masukkan password baru"
+                      placeholder={t('Masukkan password baru')}
                       placeholderTextColor="#9ca3af"
                       secureTextEntry={!showPasswordBaru}
                       autoCapitalize="none"
@@ -73,7 +79,7 @@ export default function GantiPasswordScreen() {
 
                 <View className="gap-[4px]">
                   <Text className="font-inter text-[12px] text-neutral-800">
-                    Konfirmasi password baru
+                    {t('Konfirmasi password baru')}
                   </Text>
                   <View
                     className={cn(
@@ -83,7 +89,7 @@ export default function GantiPasswordScreen() {
                     <Input
                       value={konfirmasi}
                       onChangeText={setKonfirmasi}
-                      placeholder="Konfirmasi password baru"
+                      placeholder={t('Konfirmasi password baru')}
                       placeholderTextColor="#9ca3af"
                       secureTextEntry={!showKonfirmasi}
                       autoCapitalize="none"
@@ -98,7 +104,7 @@ export default function GantiPasswordScreen() {
                   </View>
                   {mismatch ? (
                     <Text className="font-inter-semibold text-[10px] text-red-500">
-                      Password tidak sama
+                      {t('Password tidak sama')}
                     </Text>
                   ) : null}
                   {saveError ? (
@@ -121,7 +127,7 @@ export default function GantiPasswordScreen() {
                     setSaveError(
                       error instanceof AuthError
                         ? error.message
-                        : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+                        : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
                     );
                   } finally {
                     setSaving(false);
@@ -139,7 +145,7 @@ export default function GantiPasswordScreen() {
                     'font-inter-semibold text-[14px]',
                     isValid ? 'text-orange-50' : 'text-orange-300'
                   )}>
-                  {saving ? 'Menyimpan...' : 'Simpan'}
+                  {saving ? t('Menyimpan...') : t('Simpan')}
                 </Text>
               </Pressable>
             </ScrollView>

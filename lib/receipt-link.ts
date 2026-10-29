@@ -1,5 +1,13 @@
 import { computeItemTotals, getTotalTagihan, type JastipEvent, type Order } from './events-store';
 import { formatDateRange } from './format';
+import { linkLanguageParam } from './i18n';
+import {
+  decimalsOf,
+  getHomeCurrency,
+  type HomeCurrency,
+  isHomeCurrency,
+  roundMoney,
+} from './money';
 import {
   escapeText,
   fromDayNumber,
@@ -52,8 +60,11 @@ export type ReceiptSnapshot = {
   og: number;
   /** Items: [nama produk, jumlah, per-unit price incl. jastip fee] */
   it: Array<[string, number, number]>;
-  /** Total tagihan, IDR */
+  /** Total tagihan, in `cu` */
   tt: number;
+  /** The shop's currency (lib/money.ts) every amount here is in. Absent on
+   * links from before currencies, which are all IDR. */
+  cu?: HomeCurrency;
 };
 
 export function buildReceiptSnapshot(
@@ -85,9 +96,10 @@ export function buildReceiptSnapshot(
         const { fee } = computeItemTotals(item);
         // Same "price already includes the jastip fee" per-unit figure as
         // app/cetak-penanda.tsx.
-        return [item.namaProduk, item.jumlah, Math.round(item.harga + fee / item.jumlah)];
+        return [item.namaProduk, item.jumlah, roundMoney(item.harga + fee / item.jumlah)];
       }),
     tt: getTotalTagihan(order),
+    cu: getHomeCurrency(),
   };
 }
 
@@ -103,16 +115,21 @@ export function buildReceiptSnapshot(
 //   nama jastip . telepon . printed-at (minutes) . nama acara .
 //   date from . date to . nomor order . nama customer . alamat .
 //   flags (lunas*4 + belum-lunas*8 + ongkir option index) . ongkir billed .
-//   total . [format 3 only: DP paid] .
+//   total . [format 3 and 4: DP paid] . [format 4: currency] .
 //   then per item: nama produk . jumlah . price per unit
 //
-// Format "3" is the same with the DP added after the total; "2" links
-// already sent to customers still open.
+// Format "3" adds the DP after the total. Format "4" adds the currency
+// after that, and gives amounts in its smallest unit (cents for MYR, SGD
+// and USD, since only whole numbers fit). "2" and "3" links already sent
+// to customers still open, as IDR.
 const ONGKIR_CODES = [null, 'awal', 'saatPengiriman', 'gratis'] as const;
 const HEADER_FIELDS = 12;
 
 export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
   const [from, to] = snapshot.dd ?? [0, 0];
+  const currency = snapshot.cu ?? 'IDR';
+  const scale = 10 ** decimalsOf(currency);
+  const amount = (value: number) => num(value * scale);
   const fields = [
     escapeText(snapshot.nj),
     escapeText(snapshot.tj),
@@ -126,30 +143,42 @@ export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
     num(
       (snapshot.lu ? 4 : 0) + (snapshot.bl ? 8 : 0) + Math.max(0, ONGKIR_CODES.indexOf(snapshot.ok))
     ),
-    num(snapshot.og),
-    num(snapshot.tt),
-    num(snapshot.dp ?? 0),
-    ...snapshot.it.flatMap(([nama, jumlah, harga]) => [escapeText(nama), num(jumlah), num(harga)]),
+    amount(snapshot.og),
+    amount(snapshot.tt),
+    amount(snapshot.dp ?? 0),
+    currency,
+    ...snapshot.it.flatMap(([nama, jumlah, harga]) => [
+      escapeText(nama),
+      num(jumlah),
+      amount(harga),
+    ]),
   ];
-  return `3.${fields.join('.')}`;
+  return `4.${fields.join('.')}`;
 }
 
 function decodeV2(encoded: string): ReceiptSnapshot | null {
   const f = encoded.split('.').slice(1);
-  // Format 3 carries one more header field than 2: the DP.
-  const header = encoded.startsWith('3.') ? HEADER_FIELDS + 1 : HEADER_FIELDS;
+  // Format 3 carries one more header field than 2 (the DP), format 4 two
+  // more (the DP and the currency).
+  const format = encoded[0];
+  const header = HEADER_FIELDS + (format === '4' ? 2 : format === '3' ? 1 : 0);
   if (f.length < header || (f.length - header) % 3 !== 0) return null;
+  if (format === '4' && !isHomeCurrency(f[13])) return null;
+  const currency: HomeCurrency = format === '4' ? (f[13] as HomeCurrency) : 'IDR';
+  const scale = 10 ** decimalsOf(currency);
   const int = (text: string) => parseInt(text, 36);
-  const numbers = [f[2], f[4], f[5], f[9], f[10], f[11]].map(int);
-  if (numbers.some(Number.isNaN)) return null;
-  const [minutes, from, to, flags, og, tt] = numbers;
-  const dp = header > HEADER_FIELDS ? int(f[12]) : 0;
+  const numbers = [f[2], f[4], f[5], f[9]].map(int);
+  const amounts = [f[10], f[11]].map((text) => int(text) / scale);
+  if ([...numbers, ...amounts].some(Number.isNaN)) return null;
+  const [minutes, from, to, flags] = numbers;
+  const [og, tt] = amounts;
+  const dp = header > HEADER_FIELDS ? int(f[12]) / scale : 0;
   if (Number.isNaN(dp)) return null;
 
   const it: ReceiptSnapshot['it'] = [];
   for (let i = header; i < f.length; i += 3) {
     const jumlah = int(f[i + 1]);
-    const harga = int(f[i + 2]);
+    const harga = int(f[i + 2]) / scale;
     if (Number.isNaN(jumlah) || Number.isNaN(harga)) return null;
     it.push([unescapeText(f[i]), jumlah, harga]);
   }
@@ -172,6 +201,7 @@ function decodeV2(encoded: string): ReceiptSnapshot | null {
     og,
     it,
     tt,
+    cu: currency,
   };
 }
 
@@ -203,7 +233,7 @@ function decodeV1(encoded: string): ReceiptSnapshot | null {
 /** Returns null for anything that isn't a well-formed receipt link. */
 export function decodeReceiptSnapshot(encoded: string): ReceiptSnapshot | null {
   try {
-    return /^[23]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
+    return /^[234]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
   } catch {
     return null;
   }
@@ -212,5 +242,5 @@ export function decodeReceiptSnapshot(encoded: string): ReceiptSnapshot | null {
 export function buildReceiptLink(snapshot: ReceiptSnapshot) {
   // In the #fragment, not the ?query: fragments are never sent to the
   // server, so the customer's name and address stay out of server logs.
-  return `${publicBaseUrl()}/r#${encodeReceiptSnapshot(snapshot)}`;
+  return `${publicBaseUrl()}/r${linkLanguageParam()}#${encodeReceiptSnapshot(snapshot)}`;
 }

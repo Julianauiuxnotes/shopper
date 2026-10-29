@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { compressLogo } from '@/lib/compress-image';
 import { AuthError, useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import * as ImagePicker from 'expo-image-picker';
@@ -46,10 +47,12 @@ const LOGO_MAX_STORED_BYTES = 500 * 1024;
 // Password is deliberately its OWN section, not an inline editable field
 // here — it opens the "Ganti password" bottom sheet (app/ganti-password.tsx)
 // instead, which has its own confirm-match flow.
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { userProfile, logoJastip, setLogoJastip, ready } = useSettings();
   const { role, updateShop, updateMyName } = useAuth();
+  const t = useT();
   // Shop settings (shop name, phone, logo) are the owner's to change; an
   // invited member can only edit their own name.
   const isOwner = role === 'owner';
@@ -63,7 +66,7 @@ export default function SettingsScreen() {
     setLogoError(null);
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setLogoError('Aktifkan akses foto di pengaturan perangkat untuk memilih logo.');
+      setLogoError(t('Aktifkan akses foto di pengaturan perangkat untuk memilih logo.'));
       return;
     }
 
@@ -76,18 +79,26 @@ export default function SettingsScreen() {
     const asset = result.assets[0];
     const mimeType = asset.mimeType ?? 'image/jpeg';
     if (!LOGO_MIME_TYPES.includes(mimeType)) {
-      setLogoError('Format tidak didukung. Pilih gambar PNG atau JPG.');
+      setLogoError(t('Format tidak didukung. Pilih gambar PNG atau JPG.'));
       return;
     }
     if (asset.width < LOGO_MIN_WIDTH || asset.height < LOGO_MIN_HEIGHT) {
       setLogoError(
-        `Gambar terlalu kecil (${asset.width} x ${asset.height} px). Minimal ${LOGO_MIN_WIDTH} x ${LOGO_MIN_HEIGHT} px.`
+        t('Gambar terlalu kecil ({width} x {height} px). Minimal {minWidth} x {minHeight} px.', {
+          width: asset.width,
+          height: asset.height,
+          minWidth: LOGO_MIN_WIDTH,
+          minHeight: LOGO_MIN_HEIGHT,
+        })
       );
       return;
     }
     if ((asset.fileSize ?? 0) > LOGO_MAX_INPUT_BYTES) {
       setLogoError(
-        `Ukuran file terlalu besar (${Math.round((asset.fileSize ?? 0) / 1024 / 1024)} MB). Maksimal ${LOGO_MAX_INPUT_BYTES / 1024 / 1024} MB.`
+        t('Ukuran file terlalu besar ({size} MB). Maksimal {max} MB.', {
+          size: Math.round((asset.fileSize ?? 0) / 1024 / 1024),
+          max: LOGO_MAX_INPUT_BYTES / 1024 / 1024,
+        })
       );
       return;
     }
@@ -96,12 +107,12 @@ export default function SettingsScreen() {
     try {
       const compressed = await compressLogo(asset, mimeType === 'image/png');
       if (!compressed.base64 || compressed.bytes > LOGO_MAX_STORED_BYTES) {
-        setLogoError('Logo terlalu besar untuk disimpan. Coba gambar yang lebih sederhana.');
+        setLogoError(t('Logo terlalu besar untuk disimpan. Coba gambar yang lebih sederhana.'));
         return;
       }
       setLogoJastip(`data:${compressed.mimeType};base64,${compressed.base64}`);
     } catch {
-      setLogoError('Logo tidak berhasil dibaca. Coba pilih gambar lain.');
+      setLogoError(t('Logo tidak berhasil dibaca. Coba pilih gambar lain.'));
     }
   }
 
@@ -150,7 +161,9 @@ export default function SettingsScreen() {
       setJustSaved(true);
     } catch (error) {
       setSaveError(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
     } finally {
       setSaving(false);
@@ -177,14 +190,14 @@ export default function SettingsScreen() {
           hitSlop={8}
           className="flex-row items-center gap-[5px]">
           <CaretCircleLeftIcon width={24} height={24} />
-          <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">Pengaturan</Text>
+          <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">{t('Pengaturan')}</Text>
         </Pressable>
 
         <View className="gap-[16px]">
-          <Text className="font-inter-bold text-[14px] text-neutral-800">Data Akun</Text>
+          <Text className="font-inter-bold text-[14px] text-neutral-800">{t('Data Akun')}</Text>
 
           <View className="gap-[8px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Logo Jastip</Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Logo Jastip')}</Text>
             <View className="flex-row items-center gap-[12px]">
               {/* Square, like the logo itself. */}
               <View className="h-[70px] w-[70px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
@@ -193,10 +206,12 @@ export default function SettingsScreen() {
                     source={{ uri: logoJastip }}
                     resizeMode="contain"
                     style={{ width: 70, height: 70 }}
-                    accessibilityLabel="Logo jastip"
+                    accessibilityLabel={t('Logo jastip')}
                   />
                 ) : (
-                  <Text className="font-inter text-[10px] text-neutral-500">Belum ada logo</Text>
+                  <Text className="font-inter text-[10px] text-neutral-500">
+                    {t('Belum ada logo')}
+                  </Text>
                 )}
               </View>
               <View className="items-start gap-[8px]">
@@ -205,7 +220,7 @@ export default function SettingsScreen() {
                   accessibilityRole="button"
                   className="rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                   <Text className="font-inter text-[12px] text-orange-500">
-                    {logoJastip ? 'Ganti logo' : 'Unggah logo'}
+                    {logoJastip ? t('Ganti logo') : t('Unggah logo')}
                   </Text>
                 </Pressable>
                 {logoJastip ? (
@@ -217,16 +232,17 @@ export default function SettingsScreen() {
                     accessibilityRole="button"
                     hitSlop={8}>
                     <Text className="font-inter-semibold text-[12px] text-red-500 underline">
-                      Hapus logo
+                      {t('Hapus logo')}
                     </Text>
                   </Pressable>
                 ) : null}
               </View>
             </View>
             <Text className="font-inter text-[10px] text-neutral-500">
-              PNG atau JPG, persegi (rasio 1:1). Minimal {LOGO_MIN_WIDTH} x {LOGO_MIN_HEIGHT} px,
-              maksimal {LOGO_MAX_SIDE} x {LOGO_MAX_SIDE} px. Gambar yang lebih besar dikecilkan
-              otomatis. Logo tampil di dashboard dan di cetakan.
+              {t(
+                'PNG atau JPG, persegi (rasio 1:1). Minimal {min} x {min} px, maksimal {max} x {max} px. Gambar yang lebih besar dikecilkan otomatis. Logo tampil di dashboard dan di cetakan.',
+                { min: LOGO_MIN_WIDTH, max: LOGO_MAX_SIDE }
+              )}
             </Text>
             {logoError ? (
               <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>
@@ -234,12 +250,12 @@ export default function SettingsScreen() {
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Nama</Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Nama')}</Text>
             <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Input
                 value={namaDraft}
                 onChangeText={withDirtyReset(setNamaDraft)}
-                placeholder="Nama Lengkap"
+                placeholder={t('Nama Lengkap')}
                 placeholderTextColor="#9ca3af"
                 className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
               />
@@ -247,13 +263,13 @@ export default function SettingsScreen() {
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Nama Jastip</Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Nama Jastip')}</Text>
             <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Input
                 value={namaJastipDraft}
                 onChangeText={withDirtyReset(setNamaJastipDraft)}
                 editable={isOwner}
-                placeholder="Nama Jastip"
+                placeholder={t('Nama Jastip')}
                 placeholderTextColor="#9ca3af"
                 className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
               />
@@ -283,7 +299,9 @@ export default function SettingsScreen() {
             under the jastiper's name. Same "+62" prefix pattern as
             Pengaturan Publikasi's admin WhatsApp field. */}
         <View className="gap-[4px]">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">No. Telepon Jastip</Text>
+          <Text className="font-inter-bold text-[12px] text-neutral-800">
+            {t('No. Telepon Jastip')}
+          </Text>
           <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
             <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
             <Input
@@ -299,18 +317,18 @@ export default function SettingsScreen() {
             />
           </View>
           <Text className="font-inter text-[10px] text-neutral-500">
-            Ditampilkan di tagihan customer, di bawah nama jastip.
+            {t('Ditampilkan di tagihan customer, di bawah nama jastip.')}
           </Text>
         </View>
 
         <View className="gap-[4px]">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">Password</Text>
+          <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Password')}</Text>
           <View className="flex-row items-center justify-between rounded-[8px] border border-neutral-400 bg-white p-[10px]">
             <Text className="font-inter text-[12px] text-neutral-800">{'•'.repeat(8)}</Text>
             <Link href="/ganti-password" asChild>
               <Pressable hitSlop={8}>
                 <Text className="font-inter-semibold text-[12px] text-orange-500 underline">
-                  Ganti password
+                  {t('Ganti password')}
                 </Text>
               </Pressable>
             </Link>
@@ -331,22 +349,23 @@ export default function SettingsScreen() {
               'font-inter-semibold text-[14px]',
               isValid ? 'text-orange-50' : 'text-orange-300'
             )}>
-            {saving ? 'Menyimpan...' : 'Simpan'}
+            {saving ? t('Menyimpan...') : t('Simpan')}
           </Text>
         </Pressable>
 
         {justSaved && !isDirty ? (
-          <Text className="text-center font-inter text-[12px] text-orange-500">✓ Tersimpan</Text>
+          <Text className="text-center font-inter text-[12px] text-orange-500">
+            {t('✓ Tersimpan')}
+          </Text>
         ) : null}
         {saveError ? (
           <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
         ) : null}
         {!isOwner ? (
           <Text className="text-center font-inter text-[10px] text-neutral-500">
-            Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.
+            {t('Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.')}
           </Text>
         ) : null}
-
       </ScrollView>
     </KeyboardAvoidingView>
   );

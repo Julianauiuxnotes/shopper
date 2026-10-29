@@ -3,7 +3,8 @@ import { JastiperLogo } from '@/components/jastiper-logo';
 import { TagihanReceipt } from '@/components/tagihan-receipt';
 import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
-import { formatIDR } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { buildReceiptLink, buildReceiptSnapshot } from '@/lib/receipt-link';
 import { useSettings } from '@/lib/settings-store';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ export default function TagihanScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
   const { userProfile } = useSettings();
+  const t = useT();
   const { eventId, orderId } = useLocalSearchParams<{ eventId?: string; orderId?: string }>();
   const event = eventId ? getEvent(eventId) : undefined;
   const order = eventId && orderId ? getOrder(eventId, orderId) : undefined;
@@ -28,11 +30,11 @@ export default function TagihanScreen() {
     return (
       <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
         <Text className="font-inter-bold text-[16px] text-neutral-900">
-          Pesanan tidak ditemukan
+          {t('Pesanan tidak ditemukan')}
         </Text>
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Text className="font-inter-semibold text-[14px] text-orange-500">
-            Kembali ke Dashboard
+            {t('Kembali ke Dashboard')}
           </Text>
         </Pressable>
       </View>
@@ -65,10 +67,15 @@ export default function TagihanScreen() {
   // The customer opens this link to see the same receipt on a public page
   // (app/r.tsx) — no Justipers account needed, see lib/receipt-link.ts.
   function buildShareMessage() {
-    return (
-      `Hi ${order!.nama}! Ini tagihan pesananmu dari ${snapshot.nj} ` +
-      `(${snapshot.on}), total ${formatIDR(snapshot.tt)}. ` +
-      `Lihat rinciannya di sini:\n${buildReceiptLink(snapshot)}`
+    return t(
+      'Hi {customer}! Ini tagihan pesananmu dari {jastip} ({order}), total {total}. Lihat rinciannya di sini:\n{link}',
+      {
+        customer: order!.nama,
+        jastip: snapshot.nj,
+        order: snapshot.on,
+        total: formatMoney(snapshot.tt),
+        link: buildReceiptLink(snapshot),
+      }
     );
   }
 
@@ -118,7 +125,7 @@ export default function TagihanScreen() {
             accessibilityRole="button"
             className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
             <Text className="font-inter-semibold text-[14px] text-orange-50">
-              Kirim ke WhatsApp customer
+              {t('Kirim ke WhatsApp customer')}
             </Text>
           </Pressable>
           <Pressable
@@ -126,12 +133,13 @@ export default function TagihanScreen() {
             accessibilityRole="button"
             className="w-full items-center justify-center rounded-[12px] border border-orange-500 bg-white px-[10px] py-[16px]">
             <Text className="font-inter-semibold text-[14px] text-orange-500">
-              {linkCopied ? '✓ Link tersalin' : 'Bagikan link tagihan'}
+              {linkCopied ? t('✓ Link tersalin') : t('Bagikan link tagihan')}
             </Text>
           </Pressable>
           <Text className="text-center font-inter text-[10px] text-neutral-500">
-            Customer bisa membuka tagihan dari link ini tanpa perlu login. Logo jastip tidak ikut
-            tampil di link.
+            {t(
+              'Customer bisa membuka tagihan dari link ini tanpa perlu login. Logo jastip tidak ikut tampil di link.'
+            )}
           </Text>
         </View>
       </ScrollView>

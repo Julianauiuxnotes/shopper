@@ -8,6 +8,7 @@ import { OfflineBanner } from '@/components/offline-banner';
 import { ScreenTransition } from '@/components/screen-transition';
 import { AuthProvider } from '@/lib/auth-store';
 import { EventsProvider } from '@/lib/events-store';
+import { loadLanguage } from '@/lib/i18n';
 import { SettingsProvider } from '@/lib/settings-store';
 import { NAV_THEME } from '@/lib/theme';
 // Per-weight entry points, not the package root: importing from
@@ -25,7 +26,7 @@ import { ThemeProvider } from 'expo-router/react-navigation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 export {
@@ -43,14 +44,20 @@ export default function RootLayout() {
     Inter_700Bold,
     Poppins_400Regular,
   });
+  // The saved language (lib/i18n.tsx), read before the first screen shows
+  // so it doesn't flash up in Indonesian first.
+  const [languageLoaded, setLanguageLoaded] = useState(false);
+  useEffect(() => {
+    loadLanguage().finally(() => setLanguageLoaded(true));
+  }, []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && languageLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, languageLoaded]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !languageLoaded) {
     return null;
   }
 

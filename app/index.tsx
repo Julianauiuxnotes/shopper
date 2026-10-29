@@ -1,6 +1,8 @@
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import SplashTagline from '@/assets/images/figma/splash-tagline.svg';
+import { LanguageSwitch } from '@/components/language-switch';
 import { Text } from '@/components/ui/text';
+import { useLanguage } from '@/lib/i18n';
 import { useSettings } from '@/lib/settings-store';
 import { Link } from 'expo-router';
 import * as React from 'react';
@@ -22,10 +24,53 @@ const PHOTO = require('@/assets/images/splash-photo.jpg');
 const FRAME_WIDTH = 390;
 const FRAME_HEIGHT = 927;
 
+// Not in Figma. The tagline artwork above is Indonesian lettering drawn as
+// shapes, so English gets the same look in live text: white, bold and
+// slanted, one large word with two small ones stacked beside it, each
+// line centred in the artwork's 205 x 98 box.
+const TAGLINE_TEXT = { color: '#fafafa', includeFontPadding: false } as const;
+const SLANT = { transform: [{ skewX: '-12deg' }] };
+
+function EnglishTagline() {
+  return (
+    <View
+      style={[{ width: 205.385, height: 97.822 }, SLANT]}
+      className="items-center justify-between">
+      <View className="flex-row items-center gap-[6px]">
+        <Text style={[TAGLINE_TEXT, { fontSize: 44, lineHeight: 40 }]} className="font-inter-bold">
+          NO.1
+        </Text>
+        <View>
+          <Text
+            style={[TAGLINE_TEXT, { fontSize: 14, lineHeight: 15 }]}
+            className="font-inter-bold">
+            ORDER
+          </Text>
+          <Text
+            style={[TAGLINE_TEXT, { fontSize: 14, lineHeight: 15 }]}
+            className="font-inter-bold">
+            APP
+          </Text>
+        </View>
+      </View>
+      <Text
+        numberOfLines={1}
+        style={[TAGLINE_TEXT, { fontSize: 23, lineHeight: 30 }]}
+        className="font-inter-bold">
+        FOR PERSONAL
+      </Text>
+      <Text style={[TAGLINE_TEXT, { fontSize: 29, lineHeight: 30 }]} className="font-inter-bold">
+        SHOPPERS
+      </Text>
+    </View>
+  );
+}
+
 export default function SplashScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const [size, setSize] = React.useState({ width: 0, height: 0 });
   const { ready: settingsReady } = useSettings();
+  const { language, t } = useLanguage();
 
   function handleLayout(e: LayoutChangeEvent) {
     const { width, height } = e.nativeEvent.layout;
@@ -59,6 +104,11 @@ export default function SplashScreen() {
             <BrandLogo width={130} height={45} />
           </View>
 
+          {/* Not in Figma: the language choice, top left across from the logo. */}
+          <View className="absolute" style={{ left: dx + 24, top: 50 }}>
+            <LanguageSwitch />
+          </View>
+
           {/* Node 308:189: the orange panel, rounded at the top. */}
           <View
             className="absolute bottom-0 left-0 right-0 rounded-tl-[110px] rounded-tr-[110px] bg-orange-500"
@@ -68,10 +118,14 @@ export default function SplashScreen() {
           {/* Node 308:178: "KELOLA SAT SET JASTIP ANTI RIBET". */}
           <View
             accessible
-            accessibilityLabel="Kelola sat set, jastip anti ribet"
+            accessibilityLabel={t('Kelola sat set, jastip anti ribet')}
             className="absolute"
             style={{ left: dx + 87.61, top: size.height - fromBottom(585) }}>
-            <SplashTagline width={205.385} height={97.822} />
+            {language === 'en' ? (
+              <EnglishTagline />
+            ) : (
+              <SplashTagline width={205.385} height={97.822} />
+            )}
           </View>
 
           {/* Node 308:190: the buttons. */}
@@ -80,15 +134,19 @@ export default function SplashScreen() {
             style={{ left: dx + 52, bottom: fromBottom(745) - (46.333 * 2 + 16 * 2 + 12.333) }}>
             <Link href="/sign-up" asChild>
               <Pressable className="h-[46.333px] w-full items-center justify-center rounded-[12px] border border-orange-500 bg-[#f5f7fa] px-[10px]">
-                <Text className="font-inter-semibold text-[14px] text-orange-500">Daftar</Text>
+                <Text className="font-inter-semibold text-[14px] text-orange-500">
+                  {t('Daftar')}
+                </Text>
               </Pressable>
             </Link>
             <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
-              Atau sudah punya akun?
+              {t('Atau sudah punya akun?')}
             </Text>
             <Link href="/login" asChild>
               <Pressable className="h-[46.333px] w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px]">
-                <Text className="font-inter-semibold text-[14px] text-neutral-50">Masuk</Text>
+                <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                  {t('Masuk')}
+                </Text>
               </Pressable>
             </Link>
           </View>

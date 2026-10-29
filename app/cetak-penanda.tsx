@@ -4,7 +4,9 @@ import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents } from '@/lib/events-store';
-import { formatDateRange, formatIDR, formatPrintTimestamp } from '@/lib/format';
+import { formatDateRange, formatPrintTimestamp } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -45,6 +47,7 @@ export default function CetakPenandaScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
   const { userProfile } = useSettings();
+  const t = useT();
   const { eventId, orderId, itemId } = useLocalSearchParams<{
     eventId?: string;
     orderId?: string;
@@ -61,11 +64,11 @@ export default function CetakPenandaScreen() {
     return (
       <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
         <Text className="font-inter-bold text-[16px] text-neutral-900">
-          Pesanan tidak ditemukan
+          {t('Pesanan tidak ditemukan')}
         </Text>
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Text className="font-inter-semibold text-[14px] text-orange-500">
-            Kembali ke Dashboard
+            {t('Kembali ke Dashboard')}
           </Text>
         </Pressable>
       </View>
@@ -97,11 +100,13 @@ export default function CetakPenandaScreen() {
               {userProfile.namaJastip || 'Jastip by Juli'}
             </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
-              Waktu cetak : {formatPrintTimestamp(printedAt)}
+              {t('Waktu cetak')} : {formatPrintTimestamp(printedAt)}
             </Text>
           </View>
           <View className="items-center gap-[3px]">
-            <Text className="font-inter text-[14px] text-neutral-800">Cetak pesanan ke:</Text>
+            <Text className="font-inter text-[14px] text-neutral-800">
+              {t('Cetak pesanan ke:')}
+            </Text>
             <Text className="font-inter-semibold text-[14px] text-neutral-800">
               {currentIndex + 1}/{totalItems}
             </Text>
@@ -112,17 +117,23 @@ export default function CetakPenandaScreen() {
 
         <View className="w-full gap-[10px]">
           <View className="flex-row gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Nama acara</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
+              {t('Nama acara')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">: {event.namaAcara}</Text>
           </View>
           <View className="flex-row gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Tanggal acara</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
+              {t('Tanggal acara')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
               : {formatDateRange(event.tanggalDari, event.tanggalSampai)}
             </Text>
           </View>
           <View className="flex-row gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Nomor order</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
+              {t('Nomor order')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
               :{' '}
               <Text className="font-inter-bold text-[12px] text-neutral-800">
@@ -131,29 +142,35 @@ export default function CetakPenandaScreen() {
             </Text>
           </View>
           <View className="flex-row gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Nama customer</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
+              {t('Nama customer')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-800">: {order.nama}</Text>
           </View>
           <View className="flex-row items-start gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Alamat</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">{t('Alamat')}</Text>
             <Text className="flex-1 font-inter text-[12px] text-neutral-800">: {order.alamat}</Text>
           </View>
           <View className="flex-row gap-[3px]">
-            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">Total pesanan</Text>
-            <Text className="font-inter text-[12px] text-neutral-800">: {totalItems} items</Text>
+            <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
+              {t('Total pesanan')}
+            </Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              : {t('{n} items', { n: totalItems })}
+            </Text>
           </View>
           <View className="flex-row gap-[3px]">
             <Text className="w-[131px] font-inter text-[12px] text-neutral-800">
-              Status pembayaran
+              {t('Status pembayaran')}
             </Text>
             <Text className="font-inter text-[12px] text-neutral-800">
               :{' '}
               <Text className="font-inter-bold text-[12px] text-neutral-800">
                 {order.statusPembayaran === 'lunas'
-                  ? 'Lunas'
+                  ? t('Lunas')
                   : order.statusPembayaran === 'belumLunas'
-                    ? 'Belum lunas'
-                    : 'Belum bayar'}
+                    ? t('Belum lunas')
+                    : t('Belum bayar')}
               </Text>
             </Text>
           </View>
@@ -162,7 +179,7 @@ export default function CetakPenandaScreen() {
         <View className="w-full border-t border-dashed border-neutral-400" />
 
         <View className="w-full gap-[11px]">
-          <Text className="font-inter-bold text-[10px] text-[#1e1e1e]">List pesanan</Text>
+          <Text className="font-inter-bold text-[10px] text-[#1e1e1e]">{t('List pesanan')}</Text>
           {order.items.map((item, index) => {
             const { fee } = computeItemTotals(item);
             const perUnitInclFee = item.harga + fee / item.jumlah;
@@ -193,13 +210,13 @@ export default function CetakPenandaScreen() {
                     'font-inter text-[10px]',
                     checked ? 'text-[#1e1e1e]' : 'text-neutral-400'
                   )}>
-                  {item.jumlah}x {formatIDR(perUnitInclFee)}*
+                  {item.jumlah}x {formatMoney(perUnitInclFee)}*
                 </Text>
               </View>
             );
           })}
           <Text className="font-inter text-[10px] text-[#1e1e1e]">
-            *Harga sudah termasuk jastip fee
+            {t('*Harga sudah termasuk jastip fee')}
           </Text>
         </View>
 
@@ -213,7 +230,7 @@ export default function CetakPenandaScreen() {
         <Pressable
           onPress={handleCetak}
           className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-          <Text className="font-inter-semibold text-[14px] text-white">Cetak</Text>
+          <Text className="font-inter-semibold text-[14px] text-white">{t('Cetak')}</Text>
         </Pressable>
       </ScrollView>
     </View>

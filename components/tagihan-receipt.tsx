@@ -1,7 +1,9 @@
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { Text } from '@/components/ui/text';
-import { formatIDR, formatPrintTimestamp } from '@/lib/format';
+import { formatPrintTimestamp } from '@/lib/format';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { ONGKIR_OPTIONS } from '@/lib/ongkir';
 import type { ReceiptSnapshot } from '@/lib/receipt-link';
 import * as React from 'react';
@@ -35,9 +37,14 @@ function DashedLine() {
 // out as a receipt up to 390px wide. Shown by app/tagihan.tsx (jastiper)
 // and app/r.tsx (customer).
 function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
+  const t = useT();
+  // In the currency the bill was made in, which a customer's device can't
+  // know otherwise (lib/receipt-link.ts).
+  const money = (amount: number) => formatMoney(amount, snapshot.cu ?? 'IDR');
   // The ticked "Pembayaran ongkos kirim" option, if any; the Ongkos kirim
   // block is left off the receipt when none is ticked.
-  const ongkirLabel = ONGKIR_OPTIONS.find((o) => o.value === snapshot.ok)?.label ?? null;
+  const ongkirOption = ONGKIR_OPTIONS.find((o) => o.value === snapshot.ok);
+  const ongkirLabel = ongkirOption ? t(ongkirOption.label) : null;
 
   return (
     <View className="w-full max-w-[390px] bg-white pb-[24px]">
@@ -49,24 +56,24 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
             <Text className="font-inter text-[12px] text-neutral-800">+62{snapshot.tj}</Text>
           ) : null}
           <Text className="font-inter text-[12px] text-neutral-800">
-            Waktu cetak : {formatPrintTimestamp(new Date(snapshot.t))}
+            {t('Waktu cetak')} : {formatPrintTimestamp(new Date(snapshot.t))}
           </Text>
         </View>
 
         <DashedLine />
 
         <View className="w-full gap-[10px]">
-          <InfoRow label="Nama acara">{snapshot.ea}</InfoRow>
-          <InfoRow label="Tanggal acara">{snapshot.ed}</InfoRow>
-          <InfoRow label="Nomor order">
+          <InfoRow label={t('Nama acara')}>{snapshot.ea}</InfoRow>
+          <InfoRow label={t('Tanggal acara')}>{snapshot.ed}</InfoRow>
+          <InfoRow label={t('Nomor order')}>
             <Text className="font-inter-bold text-[12px] text-neutral-800">{snapshot.on}</Text>
           </InfoRow>
-          <InfoRow label="Nama customer">{snapshot.cn}</InfoRow>
-          <InfoRow label="Alamat">{snapshot.al}</InfoRow>
-          <InfoRow label="Total pesanan">{snapshot.it.length} items</InfoRow>
-          <InfoRow label="Status pembayaran">
+          <InfoRow label={t('Nama customer')}>{snapshot.cn}</InfoRow>
+          <InfoRow label={t('Alamat')}>{snapshot.al}</InfoRow>
+          <InfoRow label={t('Total pesanan')}>{t('{n} items', { n: snapshot.it.length })}</InfoRow>
+          <InfoRow label={t('Status pembayaran')}>
             <Text className="font-inter-bold text-[12px] text-neutral-800">
-              {snapshot.lu ? 'Lunas' : snapshot.bl ? 'Belum lunas' : 'Belum bayar'}
+              {snapshot.lu ? t('Lunas') : snapshot.bl ? t('Belum lunas') : t('Belum bayar')}
             </Text>
           </InfoRow>
         </View>
@@ -76,24 +83,26 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
         <View className="w-full gap-[11px] px-[16px]">
           {ongkirLabel ? (
             <>
-              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">Ongkos kirim</Text>
+              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">
+                {t('Ongkos kirim')}
+              </Text>
               <View className="gap-[8px]">
                 <View className="flex-row items-center gap-[5px]">
                   <CheckSquareIcon width={12} height={12} />
                   <Text className="font-inter text-[10px] text-neutral-800">
-                    Ongkos kirim : {ongkirLabel}
+                    {t('Ongkos kirim')} : {ongkirLabel}
                   </Text>
                 </View>
                 {snapshot.og > 0 ? (
                   <Text className="font-inter text-[10px] text-neutral-800">
-                    {formatIDR(snapshot.og)}
+                    {money(snapshot.og)}
                   </Text>
                 ) : null}
               </View>
             </>
           ) : null}
 
-          <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">List pesanan</Text>
+          <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">{t('List pesanan')}</Text>
           {snapshot.it.map(([namaProduk, jumlah, perUnitInclFee], index) => (
             <React.Fragment key={index}>
               <View className="gap-[8px]">
@@ -106,7 +115,7 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
                 <View className="flex-row gap-[8px]">
                   <Text className="font-inter text-[10px] text-neutral-800">{jumlah}x</Text>
                   <Text className="font-inter text-[10px] text-neutral-800">
-                    {formatIDR(perUnitInclFee)}*
+                    {money(perUnitInclFee)}*
                   </Text>
                 </View>
               </View>
@@ -116,29 +125,27 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
 
           <View className="gap-[6px]">
             <Text className="font-inter-bold text-[10px] text-neutral-800">
-              Total tagihan yang harus dibayar
+              {t('Total tagihan yang harus dibayar')}
             </Text>
-            <Text className="font-inter text-[12px] text-neutral-800">
-              {formatIDR(snapshot.tt)}
-            </Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{money(snapshot.tt)}</Text>
           </View>
           {/* A DP already paid, and what is left to pay. */}
           {!snapshot.lu && (snapshot.dp ?? 0) > 0 ? (
             <>
               <View className="gap-[6px]">
                 <Text className="font-inter-bold text-[10px] text-neutral-800">
-                  DP sudah dibayar
+                  {t('DP sudah dibayar')}
                 </Text>
                 <Text className="font-inter text-[12px] text-neutral-800">
-                  {formatIDR(snapshot.dp ?? 0)}
+                  {money(snapshot.dp ?? 0)}
                 </Text>
               </View>
               <View className="gap-[6px]">
                 <Text className="font-inter-bold text-[10px] text-neutral-800">
-                  Sisa pembayaran
+                  {t('Sisa pembayaran')}
                 </Text>
                 <Text className="font-inter text-[12px] text-neutral-800">
-                  {formatIDR(Math.max(0, snapshot.tt - (snapshot.dp ?? 0)))}
+                  {money(Math.max(0, snapshot.tt - (snapshot.dp ?? 0)))}
                 </Text>
               </View>
             </>
@@ -148,15 +155,15 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
           {(snapshot.dp ?? 0) > snapshot.tt ? (
             <View className="gap-[6px]">
               <Text className="font-inter-bold text-[10px] text-neutral-800">
-                Kelebihan bayar (dikembalikan ke pelanggan)
+                {t('Kelebihan bayar (dikembalikan ke pelanggan)')}
               </Text>
               <Text className="font-inter text-[12px] text-neutral-800">
-                {formatIDR((snapshot.dp ?? 0) - snapshot.tt)}
+                {money((snapshot.dp ?? 0) - snapshot.tt)}
               </Text>
             </View>
           ) : null}
           <Text className="font-inter text-[10px] text-[#1e1e1e]">
-            *Harga sudah termasuk jastip fee
+            {t('*Harga sudah termasuk jastip fee')}
           </Text>
         </View>
 

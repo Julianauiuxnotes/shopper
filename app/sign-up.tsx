@@ -1,9 +1,12 @@
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
+import { CountryPicker } from '@/components/country-picker';
+import { LanguageSwitch } from '@/components/language-switch';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { AuthError, useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
@@ -11,10 +14,11 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // 53:2717 (error). The "List" menu icon (x=404 in a 390px frame) is
 // off-canvas in the source design, so it's intentionally not rendered.
 export default function SignUpScreen() {
-  const router = useRouter();
   const { signUp } = useAuth();
+  const t = useT();
   const [nama, setNama] = React.useState('');
   const [namaJastip, setNamaJastip] = React.useState('');
+  const [country, setCountry] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [verifikasi, setVerifikasi] = React.useState('');
@@ -29,6 +33,7 @@ export default function SignUpScreen() {
   const isValid =
     nama.trim().length > 0 &&
     namaJastip.trim().length > 0 &&
+    country.length > 0 &&
     email.trim().length > 0 &&
     password.length > 0 &&
     verifikasi.length > 0 &&
@@ -45,14 +50,18 @@ export default function SignUpScreen() {
       const result = await signUp({
         nama: nama.trim(),
         namaJastip: namaJastip.trim(),
+        country,
         email: email.trim(),
         password,
       });
+      // Otherwise signed in: components/auth-gate.tsx moves on to the
+      // Dashboard (navigating here too opened it twice).
       if (result === 'confirm_email') setAwaitingConfirmation(true);
-      else router.replace('/dashboard');
     } catch (error) {
       setSubmitError(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
     } finally {
       setSubmitting(false);
@@ -65,9 +74,11 @@ export default function SignUpScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Same header and panel as the login page (app/login.tsx). */}
       <View className="items-center gap-[13px] px-[10px] pt-[57px]">
+        {/* Not in Figma: the language choice, top right. */}
+        <LanguageSwitch className="absolute right-[16px] top-[16px]" />
         <BrandLogo width={161.78} height={56} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
-          Kelola jastip tanpa ribet!
+          {t('Kelola jastip tanpa ribet!')}
         </Text>
       </View>
 
@@ -80,13 +91,19 @@ export default function SignUpScreen() {
         {!awaitingConfirmation ? (
           <View className="items-center px-[10px] pb-[14px] pt-[85px]">
             <View className="w-full max-w-[271px] gap-[14px]">
-              <Text className="font-inter-bold text-[16px] text-neutral-50">Gabung Sekarang!</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-50">Daftar akun baru</Text>
+              <Text className="font-inter-bold text-[16px] text-neutral-50">
+                {t('Gabung Sekarang!')}
+              </Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-50">
+                {t('Daftar akun baru')}
+              </Text>
               <View className="w-full rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
                 <Text className="font-inter text-[12px] text-neutral-50">
-                  Akun baru dapat{' '}
-                  <Text className="font-inter-bold text-[12px] text-neutral-50">5 token gratis</Text>{' '}
-                  untuk mencoba Justipers.
+                  {t('Akun baru dapat')}{' '}
+                  <Text className="font-inter-bold text-[12px] text-neutral-50">
+                    {t('5 token gratis')}
+                  </Text>{' '}
+                  {t('untuk mencoba Justipers.')}
                 </Text>
               </View>
             </View>
@@ -103,14 +120,20 @@ export default function SignUpScreen() {
           <View className="w-full max-w-[271px] gap-[14px]">
             {awaitingConfirmation ? (
               <>
-                <Text className="font-inter-bold text-[16px] text-neutral-50">Cek email kamu</Text>
+                <Text className="font-inter-bold text-[16px] text-neutral-50">
+                  {t('Cek email kamu')}
+                </Text>
                 <Text className="font-inter text-[12px] text-neutral-50">
-                  Kami mengirim link konfirmasi ke {email.trim()}. Buka link itu, lalu login untuk
-                  mulai memakai Justipers.
+                  {t(
+                    'Kami mengirim link konfirmasi ke {email}. Buka link itu, lalu login untuk mulai memakai Justipers.',
+                    { email: email.trim() }
+                  )}
                 </Text>
                 <Link href="/login" asChild>
                   <Pressable className="w-full items-center justify-center rounded-[12px] bg-neutral-50 px-[10px] py-[16px]">
-                    <Text className="font-inter-semibold text-[14px] text-orange-500">Login</Text>
+                    <Text className="font-inter-semibold text-[14px] text-orange-500">
+                      {t('Login')}
+                    </Text>
                   </Pressable>
                 </Link>
               </>
@@ -118,17 +141,18 @@ export default function SignUpScreen() {
               <>
                 <View className="w-full gap-[10px]">
                   <FormField
-                    label="Nama"
+                    label={t('Nama')}
                     value={nama}
                     onChangeText={setNama}
-                    placeholder="Nama Lengkap"
+                    placeholder={t('Nama Lengkap')}
                   />
                   <FormField
-                    label="Nama Jastip"
+                    label={t('Nama Jastip')}
                     value={namaJastip}
                     onChangeText={setNamaJastip}
-                    placeholder="Nama Jastip"
+                    placeholder={t('Nama Jastip')}
                   />
+                  <CountryPicker value={country} onChange={setCountry} />
                   <FormField
                     label="Email"
                     value={email}
@@ -137,22 +161,22 @@ export default function SignUpScreen() {
                     keyboardType="email-address"
                   />
                   <FormField
-                    label="Password"
+                    label={t('Password')}
                     value={password}
                     onChangeText={setPassword}
-                    placeholder="Password"
+                    placeholder={t('Password')}
                     secureTextEntry={!showPassword}
                     onToggleSecure={() => setShowPassword((s) => !s)}
                   />
                   <FormField
-                    label="Verifikasi Password"
+                    label={t('Verifikasi Password')}
                     value={verifikasi}
                     onChangeText={setVerifikasi}
-                    placeholder="Password"
+                    placeholder={t('Password')}
                     secureTextEntry={!showVerifikasi}
                     onToggleSecure={() => setShowVerifikasi((s) => !s)}
                     hasError={passwordMismatch}
-                    errorMessage={passwordMismatch ? "Password doesn't match!" : undefined}
+                    errorMessage={passwordMismatch ? t("Password doesn't match!") : undefined}
                   />
                 </View>
 
@@ -176,17 +200,19 @@ export default function SignUpScreen() {
                       'font-inter-semibold text-[14px]',
                       isValid ? 'text-orange-500' : 'text-orange-700'
                     )}>
-                    {submitting ? 'Memproses...' : 'Daftar'}
+                    {submitting ? t('Memproses...') : t('Daftar')}
                   </Text>
                 </Pressable>
 
                 <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
-                  Sudah punya akun?
+                  {t('Sudah punya akun?')}
                 </Text>
 
                 <Link href="/login" asChild>
                   <Pressable className="w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px] py-[16px]">
-                    <Text className="font-inter-semibold text-[14px] text-neutral-50">Login</Text>
+                    <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                      {t('Login')}
+                    </Text>
                   </Pressable>
                 </Link>
               </>

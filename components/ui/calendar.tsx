@@ -1,4 +1,5 @@
 import { Text } from '@/components/ui/text';
+import { useLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
@@ -7,8 +8,25 @@ import { Pressable, View } from 'react-native';
 // other components/ui/* pieces (react-native-reusables) — neither shadcn
 // (web-only) nor react-native-reusables ship a calendar/date-picker
 // component, so this is hand-built rather than installed.
-const WEEKDAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-const MONTH_NAMES = [
+const WEEKDAYS = {
+  id: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+};
+const MONTH_NAMES_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const MONTH_NAMES_ID = [
   'Januari',
   'Februari',
   'Maret',
@@ -50,6 +68,7 @@ type CalendarProps = {
 };
 
 function Calendar({ value, onSelect, initialMonth, minDate }: CalendarProps) {
+  const { language } = useLanguage();
   const [visibleMonth, setVisibleMonth] = React.useState(() =>
     startOfMonth(initialMonth ?? value ?? new Date())
   );
@@ -79,7 +98,7 @@ function Calendar({ value, onSelect, initialMonth, minDate }: CalendarProps) {
           <Text className="font-inter-semibold text-[18px] text-neutral-800">‹</Text>
         </Pressable>
         <Text className="font-inter-semibold text-[14px] text-neutral-800">
-          {MONTH_NAMES[month]} {year}
+          {(language === 'en' ? MONTH_NAMES_EN : MONTH_NAMES_ID)[month]} {year}
         </Text>
         <Pressable
           hitSlop={8}
@@ -90,7 +109,7 @@ function Calendar({ value, onSelect, initialMonth, minDate }: CalendarProps) {
       </View>
 
       <View className="flex-row">
-        {WEEKDAYS.map((w) => (
+        {WEEKDAYS[language].map((w) => (
           <View key={w} className="flex-1 items-center">
             <Text className="font-inter text-[10px] text-neutral-500">{w}</Text>
           </View>

@@ -11,6 +11,7 @@ import {
   costLabel,
   useAuth,
 } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
@@ -49,6 +50,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
     removeMember,
     setAdmin,
   } = useAuth();
+  const t = useT();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState<PendingAction | null>(null);
@@ -68,7 +70,9 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
       if (action.kind === 'cancel') await cancelInvite(action.invite.id);
       if (action.kind === 'admin') await setAdmin(action.member.userId, action.admin);
     } catch (e) {
-      setError(e instanceof AuthError ? e.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.');
+      setError(
+        e instanceof AuthError ? e.message : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
+      );
     } finally {
       setBusy(false);
     }
@@ -78,30 +82,41 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
   const dialog =
     pending?.kind === 'remove'
       ? {
-          title: 'Hapus anggota?',
-          message: `${name(pending.member)} tidak bisa lagi membuka toko ini. Slot anggotanya ikut hilang dan token tidak dikembalikan.`,
-          confirmLabel: 'Hapus',
+          title: t('Hapus anggota?'),
+          message: t(
+            '{name} tidak bisa lagi membuka toko ini. Slot anggotanya ikut hilang dan token tidak dikembalikan.',
+            { name: name(pending.member) }
+          ),
+          confirmLabel: t('Hapus'),
           tone: 'danger' as const,
         }
       : pending?.kind === 'cancel'
         ? {
-            title: 'Batalkan undangan?',
-            message: `Undangan untuk ${pending.invite.email} dibatalkan. Slot anggotanya ikut hilang dan token tidak dikembalikan.`,
-            confirmLabel: 'Batalkan undangan',
+            title: t('Batalkan undangan?'),
+            message: t(
+              'Undangan untuk {email} dibatalkan. Slot anggotanya ikut hilang dan token tidak dikembalikan.',
+              { email: pending.invite.email }
+            ),
+            confirmLabel: t('Batalkan undangan'),
             tone: 'danger' as const,
           }
         : pending?.kind === 'admin' && pending.admin
           ? {
-              title: 'Jadikan admin?',
-              message: `${name(pending.member)} akan bisa memakai token toko: membuka event, mempublikasikan form order, dan membeli slot anggota.`,
-              confirmLabel: 'Jadikan admin',
+              title: t('Jadikan admin?'),
+              message: t(
+                '{name} akan bisa memakai token toko: membuka event, mempublikasikan form order, dan membeli slot anggota.',
+                { name: name(pending.member) }
+              ),
+              confirmLabel: t('Jadikan admin'),
               tone: 'primary' as const,
             }
           : pending?.kind === 'admin'
             ? {
-                title: 'Cabut status admin?',
-                message: `${name(pending.member)} tidak bisa lagi memakai token toko.`,
-                confirmLabel: 'Cabut admin',
+                title: t('Cabut status admin?'),
+                message: t('{name} tidak bisa lagi memakai token toko.', {
+                  name: name(pending.member),
+                }),
+                confirmLabel: t('Cabut admin'),
                 tone: 'danger' as const,
               }
             : null;
@@ -110,9 +125,9 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
     <View className="gap-[12px]">
       <View className="gap-[6px]">
         <View className="flex-row items-center justify-between">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">Anggota toko</Text>
+          <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Anggota toko')}</Text>
           <Text className="font-inter text-[10px] text-neutral-600">
-            {used}/{MEMBER_LIMIT} slot terpakai
+            {t('{used}/{limit} slot terpakai', { used, limit: MEMBER_LIMIT })}
           </Text>
         </View>
         {members.map((member) => (
@@ -123,7 +138,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
               <View className="flex-row flex-wrap items-center gap-[6px]">
                 <Text className="font-inter-semibold text-[12px] text-neutral-800">
                   {name(member)}
-                  {member.userId === userId ? ' (kamu)' : ''}
+                  {member.userId === userId ? t(' (kamu)') : ''}
                 </Text>
                 {member.role !== 'member' ? (
                   <View
@@ -136,7 +151,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                         'font-inter-semibold text-[10px]',
                         member.role === 'owner' ? 'text-white' : 'text-orange-600'
                       )}>
-                      {ROLE_LABELS[member.role]}
+                      {t(ROLE_LABELS[member.role])}
                     </Text>
                   </View>
                 ) : null}
@@ -153,7 +168,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                   accessibilityRole="button"
                   hitSlop={8}>
                   <Text className="font-inter-semibold text-[12px] text-orange-500 underline">
-                    {member.role === 'admin' ? 'Cabut admin' : 'Jadikan admin'}
+                    {member.role === 'admin' ? t('Cabut admin') : t('Jadikan admin')}
                   </Text>
                 </Pressable>
               ) : null}
@@ -162,10 +177,10 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                   onPress={() => setPending({ kind: 'remove', member })}
                   disabled={busy}
                   accessibilityRole="button"
-                  accessibilityLabel={`Hapus anggota ${member.email}`}
+                  accessibilityLabel={t('Hapus anggota {email}', { email: member.email })}
                   hitSlop={8}>
                   <Text className="font-inter-semibold text-[12px] text-red-500 underline">
-                    Hapus
+                    {t('Hapus')}
                   </Text>
                 </Pressable>
               ) : null}
@@ -181,7 +196,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                 {invite.email}
               </Text>
               <Text className="font-inter text-[10px] text-neutral-600">
-                Diundang, belum mendaftar
+                {t('Diundang, belum mendaftar')}
               </Text>
             </View>
             {isAdmin ? (
@@ -189,10 +204,10 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                 onPress={() => setPending({ kind: 'cancel', invite })}
                 disabled={busy}
                 accessibilityRole="button"
-                accessibilityLabel={`Batalkan undangan ${invite.email}`}
+                accessibilityLabel={t('Batalkan undangan {email}', { email: invite.email })}
                 hitSlop={8}>
                 <Text className="font-inter-semibold text-[12px] text-red-500 underline">
-                  Batalkan
+                  {t('Batalkan')}
                 </Text>
               </Pressable>
             ) : null}
@@ -200,24 +215,28 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
         ))}
         {isAdmin && !isOwner && members.some((m) => m.role === 'admin') ? (
           <Text className="font-inter text-[10px] text-neutral-500">
-            Admin hanya bisa dihapus setelah pemilik toko mencabut status adminnya.
+            {t('Admin hanya bisa dihapus setelah pemilik toko mencabut status adminnya.')}
           </Text>
         ) : null}
       </View>
 
       {!isAdmin ? (
         <Text className="font-inter text-[10px] text-neutral-500">
-          Hanya admin yang bisa menambah atau menghapus anggota.
+          {t('Hanya admin yang bisa menambah atau menghapus anggota.')}
         </Text>
       ) : used < MEMBER_LIMIT ? (
         <View className="gap-[6px]">
           <View className="mb-[4px] gap-[2px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Undang anggota</Text>
+            <Text className="font-inter-bold text-[12px] text-neutral-800">
+              {t('Undang anggota')}
+            </Text>
             <Text className="font-inter text-[12px] text-neutral-600">
-              Kamu bisa undang orang untuk memiliki akses yang sama di Justipers app.{' '}
+              {t('Kamu bisa undang orang untuk memiliki akses yang sama di Justipers app.')}{' '}
               {beta
-                ? 'Fitur ini akan tersedia saat Justipers versi lengkap dirilis.'
-                : `Satu slot anggota ${costLabel(prices.memberSlot)}, sekali bayar.`}
+                ? t('Fitur ini akan tersedia saat Justipers versi lengkap dirilis.')
+                : t('Satu slot anggota {cost}, sekali bayar.', {
+                    cost: costLabel(prices.memberSlot),
+                  })}
             </Text>
           </View>
           {/* Inviting members is held back until the full release. */}
@@ -235,13 +254,15 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
                 'font-inter-semibold text-[12px]',
                 beta ? 'text-neutral-500' : 'text-orange-500'
               )}>
-              {beta ? 'Tambah anggota · Segera hadir' : `Tambah anggota · ${costLabel(prices.memberSlot)}`}
+              {beta
+                ? t('Tambah anggota · Segera hadir')
+                : t('Tambah anggota · {cost}', { cost: costLabel(prices.memberSlot) })}
             </Text>
           </Pressable>
         </View>
       ) : (
         <Text className="font-inter text-[10px] text-neutral-500">
-          Toko ini sudah mencapai batas {MEMBER_LIMIT} anggota.
+          {t('Toko ini sudah mencapai batas {n} anggota.', { n: MEMBER_LIMIT })}
         </Text>
       )}
 
@@ -266,6 +287,7 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
 // outside its ScrollView, so it covers the whole screen on phones too.
 function AddMemberSheet({ onClose }: { onClose: () => void }) {
   const { shop, prices, buyMemberSlot } = useAuth();
+  const t = useT();
   const [email, setEmail] = React.useState('');
   const [confirmEmail, setConfirmEmail] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -287,7 +309,9 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
       await buyMemberSlot(normalized);
       close();
     } catch (e) {
-      setError(e instanceof AuthError ? e.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.');
+      setError(
+        e instanceof AuthError ? e.message : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
+      );
     } finally {
       setSaving(false);
     }
@@ -299,12 +323,14 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
         <View className="gap-[16px] px-[31px] pb-[32px] pt-[24.5px]">
           <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
             <CaretCircleLeftIcon width={24} height={24} />
-            <Text className="font-inter-semibold text-[16px] text-black">Tambah anggota</Text>
+            <Text className="font-inter-semibold text-[16px] text-black">
+              {t('Tambah anggota')}
+            </Text>
           </Pressable>
 
           <View className="gap-[10px]">
             <View className="gap-[4px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Email anggota</Text>
+              <Text className="font-inter text-[12px] text-neutral-800">{t('Email anggota')}</Text>
               <Input
                 value={email}
                 onChangeText={(value) => {
@@ -320,7 +346,9 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
               />
             </View>
             <View className="gap-[4px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Ketik ulang email</Text>
+              <Text className="font-inter text-[12px] text-neutral-800">
+                {t('Ketik ulang email')}
+              </Text>
               <Input
                 value={confirmEmail}
                 onChangeText={(value) => {
@@ -338,37 +366,47 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
                 )}
               />
               {mismatch ? (
-                <Text className="font-inter text-[10px] text-red-500">Email tidak sama.</Text>
+                <Text className="font-inter text-[10px] text-red-500">
+                  {t('Email tidak sama.')}
+                </Text>
               ) : null}
             </View>
           </View>
 
           <View className="gap-[6px] rounded-[8px] border border-orange-300 bg-white p-[10px]">
             <Text className="font-inter-semibold text-[12px] text-neutral-800">
-              Periksa email ini sebelum {free ? 'mengundang' : 'membeli'}
+              {free
+                ? t('Periksa email ini sebelum mengundang')
+                : t('Periksa email ini sebelum membeli')}
             </Text>
             <Text className="font-inter text-[12px] leading-[17px] text-neutral-700">
-              • Slot anggota terikat ke email ini dan tidak bisa diganti atau dipindahkan ke orang
-              lain.{'\n'}• Kalau emailnya salah, kamu perlu membeli slot baru untuk email yang
-              benar.{'\n'}• Menghapus anggota atau membatalkan undangan tidak mengembalikan token.
-              {'\n'}• Anggota bergabung dengan mendaftar di Justipers memakai email ini persis.
+              {[
+                t(
+                  'Slot anggota terikat ke email ini dan tidak bisa diganti atau dipindahkan ke orang lain.'
+                ),
+                t('Kalau emailnya salah, kamu perlu membeli slot baru untuk email yang benar.'),
+                t('Menghapus anggota atau membatalkan undangan tidak mengembalikan token.'),
+                t('Anggota bergabung dengan mendaftar di Justipers memakai email ini persis.'),
+              ]
+                .map((line) => `• ${line}`)
+                .join('\n')}
             </Text>
           </View>
 
           <View className="flex-row items-center justify-between">
             <Text className="font-inter text-[12px] text-neutral-800">
-              Biaya:{' '}
+              {t('Biaya:')}{' '}
               <Text className="font-inter-semibold text-[12px] text-neutral-800">
                 {costLabel(prices.memberSlot)}
               </Text>
             </Text>
             <Text className="font-inter text-[12px] text-neutral-700">
-              Saldo: {free ? 'tidak terbatas' : `${balance} token`}
+              {t('Saldo:')} {free ? t('tidak terbatas') : t('{n} token', { n: balance })}
             </Text>
           </View>
           {!enoughTokens ? (
             <Text className="font-inter text-[10px] text-red-500">
-              Token tidak cukup. Beli token dulu.
+              {t('Token tidak cukup. Beli token dulu.')}
             </Text>
           ) : null}
           {error ? (
@@ -390,10 +428,10 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
                 canBuy ? 'text-white' : 'text-orange-300'
               )}>
               {saving
-                ? 'Memproses...'
+                ? t('Memproses...')
                 : free
-                  ? 'Undang · Gratis'
-                  : `Beli slot & undang · ${prices.memberSlot} token`}
+                  ? t('Undang · Gratis')
+                  : t('Beli slot & undang · {n} token', { n: prices.memberSlot })}
             </Text>
           </Pressable>
         </View>

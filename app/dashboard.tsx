@@ -4,13 +4,18 @@ import AlignLeftLineShort from '@/assets/images/figma/icon-align-left-line-short
 import BasketIcon from '@/assets/images/figma/icon-basket.svg';
 import MagnifyingGlassIcon from '@/assets/images/figma/icon-magnifying-glass.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
+import { LanguageDialog } from '@/components/language-dialog';
+import { type TutorialTarget, TutorialOverlay } from '@/components/tutorial-overlay';
 import { SideDrawer } from '@/components/ui/side-drawer';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents, getEventProfit } from '@/lib/events-store';
-import { formatDateRange, formatIDR, isDateInRange } from '@/lib/format';
+import { formatDateRange, isDateInRange } from '@/lib/format';
 import { useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { useSettings } from '@/lib/settings-store';
+import { storage } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -51,10 +56,41 @@ const BUTTON_SHADOW = { boxShadow: '0px 2px 2.55px rgba(0, 0, 0, 0.25)' };
 // that same string as a fallback for the pre-sign-up empty state.
 export default function DashboardScreen() {
   const router = useRouter();
-  const { events } = useEvents();
+  const { events, ready: eventsReady } = useEvents();
   const { userProfile, logoJastip } = useSettings();
-  const { shop, beta, signOut } = useAuth();
+  const { shop, beta, signOut, userId } = useAuth();
+  const t = useT();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [languageOpen, setLanguageOpen] = React.useState(false);
+  const [tutorialOpen, setTutorialOpen] = React.useState(false);
+  // The parts of this screen the tutorial points at.
+  const tokenRef = React.useRef<View>(null);
+  const summaryRef = React.useRef<View>(null);
+  const bukaEventRef = React.useRef<View>(null);
+  const menuRef = React.useRef<View>(null);
+  const tutorialTargets = React.useMemo<Record<TutorialTarget, React.RefObject<View | null>>>(
+    () => ({ token: tokenRef, summary: summaryRef, bukaEvent: bukaEventRef, menu: menuRef }),
+    []
+  );
+
+  // New users get the tutorial once: an account with no events that hasn't
+  // seen it on this device. The menu's "Tutorial" shows it again.
+  React.useEffect(() => {
+    if (!userId || !eventsReady || events.length > 0) return;
+    let cancelled = false;
+    storage.get(`tutorialSeen:${userId}`, false).then((seen) => {
+      if (!seen && !cancelled) setTutorialOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only when the account or the loaded events change, not on every edit.
+  }, [userId, eventsReady]);
+
+  function closeTutorial() {
+    setTutorialOpen(false);
+    if (userId) storage.set(`tutorialSeen:${userId}`, true);
+  }
   const hasEvents = events.length > 0;
   // Search box over the event list: name, location or event code.
   const [query, setQuery] = React.useState('');
@@ -107,13 +143,13 @@ export default function DashboardScreen() {
                   source={{ uri: logoJastip }}
                   resizeMode="cover"
                   style={{ width: 51, height: 51, borderRadius: 25.5 }}
-                  accessibilityLabel="Logo jastip"
+                  accessibilityLabel={t('Logo jastip')}
                 />
               ) : (
                 <View className="size-[51px] rounded-full bg-[#d9d9d9]" />
               )}
               <View>
-                <Text className="font-inter-bold text-[10px] text-neutral-800">Hallo!</Text>
+                <Text className="font-inter-bold text-[10px] text-neutral-800">{t('Hallo!')}</Text>
                 <Text className="font-inter-semibold text-[16px] text-neutral-800">
                   {userProfile.namaJastip || 'Jastip by Juli'}
                 </Text>
@@ -121,10 +157,11 @@ export default function DashboardScreen() {
             </View>
             {/* "align-left": three stroked lines, the last one shorter. */}
             <Pressable
+              ref={menuRef}
               onPress={() => setMenuOpen(true)}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Buka menu"
+              accessibilityLabel={t('Buka menu')}
               className="w-[44px] items-center justify-center p-[10px]">
               <View className="h-[22px] w-[24px] gap-[5px] px-[3px] py-[6px]">
                 <MenuLine width={20} />
@@ -137,10 +174,13 @@ export default function DashboardScreen() {
           {/* Figma node 323:335: the shop's token balance; opens
               Pengaturan Subscription. */}
           <Pressable
+            ref={tokenRef}
             onPress={() => router.push('/pengaturan-subscription')}
             accessibilityRole="button"
             accessibilityLabel={
-              beta ? 'Token tersedia: tidak terbatas' : `Token tersedia: ${shop?.tokenBalance ?? 0} token`
+              beta
+                ? t('Token tersedia: tidak terbatas')
+                : t('Token tersedia: {n} token', { n: shop?.tokenBalance ?? 0 })
             }
             className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] border border-dashed border-orange-200 bg-orange-50 py-[10px]">
             <View className="h-[27px] w-[28px] overflow-hidden">
@@ -152,9 +192,9 @@ export default function DashboardScreen() {
               />
             </View>
             <View className="min-w-[84px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Token tersedia</Text>
+              <Text className="font-inter text-[12px] text-neutral-800">{t('Token tersedia')}</Text>
               <Text className="font-inter-semibold text-[16px] text-neutral-800">
-                {beta ? '∞ Tidak terbatas' : `${shop?.tokenBalance ?? 0} token`}
+                {beta ? t('∞ Tidak terbatas') : t('{n} token', { n: shop?.tokenBalance ?? 0 })}
               </Text>
             </View>
           </Pressable>
@@ -165,6 +205,7 @@ export default function DashboardScreen() {
             image's average, shown while it loads. The fill sits at 80% opacity;
             the text on top stays fully opaque. */}
           <View
+            ref={summaryRef}
             style={CARD_SHADOW}
             className="gap-[17px] overflow-hidden rounded-[12px] p-[20px]">
             <View style={CARD_FILL} className="bg-[#cdb8cc] opacity-80">
@@ -177,30 +218,34 @@ export default function DashboardScreen() {
                 style={CARD_FILL}
               />
             </View>
-            <Text className="font-inter-bold text-[14px] text-neutral-800">Jastip bulan ini</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {t('Jastip bulan ini')}
+            </Text>
 
             {/* The right-hand column is the same width in both rows, so
                 Profit and Total order line up (Figma node 322:73 / 322:80). */}
             <View className="flex-row gap-[12px]">
               <View className="flex-1 gap-[6px]">
                 <Text className="font-inter text-[12px] text-neutral-800">
-                  Total Revenue (Bulan ini)
+                  {t('Total Revenue (Bulan ini)')}
                 </Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">
-                  {formatIDR(totalRevenue)}
+                  {formatMoney(totalRevenue)}
                 </Text>
               </View>
               <View className="w-[110px] gap-[6px]">
-                <Text className="font-inter text-[12px] text-neutral-800">Profit</Text>
+                <Text className="font-inter text-[12px] text-neutral-800">{t('Profit')}</Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">
-                  {formatIDR(totalProfit)}
+                  {formatMoney(totalProfit)}
                 </Text>
               </View>
             </View>
 
             <View className="flex-row gap-[12px]">
               <View className="flex-1 gap-[8px]">
-                <Text className="font-inter text-[12px] text-neutral-800">Sedang berlangsung</Text>
+                <Text className="font-inter text-[12px] text-neutral-800">
+                  {t('Sedang berlangsung')}
+                </Text>
                 <View
                   className={cn(
                     'max-w-[146px] self-start rounded-[12px] px-[10px] py-[2px]',
@@ -212,34 +257,37 @@ export default function DashboardScreen() {
                       'font-inter-medium text-[12px] italic',
                       ongoingEvent ? 'text-neutral-50' : 'text-orange-500'
                     )}>
-                    {ongoingEvent ? ongoingEvent.namaAcara : 'Belum ada'}
+                    {ongoingEvent ? ongoingEvent.namaAcara : t('Belum ada')}
                   </Text>
                 </View>
               </View>
               <View className="w-[110px] gap-[6px]">
-                <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                <Text className="font-inter text-[12px] text-neutral-800">{t('Total order')}</Text>
                 <Text className="font-inter-bold text-[14px] text-neutral-800">{totalOrder}</Text>
               </View>
             </View>
           </View>
 
           {/* Figma node 323:367, without the token cost under the label. */}
-          <Link href="/buka-event-jastip" asChild>
-            <Pressable
-              style={BUTTON_SHADOW}
-              className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-400 px-[10px] py-[16px]">
-              <BasketIcon width={24} height={24} />
-              <Text className="font-inter-semibold text-[14px] text-neutral-50">
-                Buka event jastip
-              </Text>
-            </Pressable>
-          </Link>
+          {/* Wrapped so the tutorial can measure it. */}
+          <View ref={bukaEventRef} collapsable={false}>
+            <Link href="/buka-event-jastip" asChild>
+              <Pressable
+                style={BUTTON_SHADOW}
+                className="w-full flex-row items-center justify-center gap-[10px] rounded-[12px] bg-orange-400 px-[10px] py-[16px]">
+                <BasketIcon width={24} height={24} />
+                <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                  {t('Buka event jastip')}
+                </Text>
+              </Pressable>
+            </Link>
+          </View>
 
           {/* Figma node 241:35. */}
           {hasEvents ? (
             <View className="gap-[16px]">
               <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                List event jastip
+                {t('List event jastip')}
               </Text>
               <View className="flex-row items-center gap-[10px] rounded-[8px] border border-[#d9d9d9] bg-white px-[10px]">
                 <MagnifyingGlassIcon width={16} height={16} />
@@ -249,9 +297,9 @@ export default function DashboardScreen() {
                     setQuery(value);
                     setPage(1);
                   }}
-                  placeholder="Ketik nama event, lokasi atau kode event"
+                  placeholder={t('Ketik nama event, lokasi atau kode event')}
                   placeholderTextColor="#d1d5db"
-                  accessibilityLabel="Cari event"
+                  accessibilityLabel={t('Cari event')}
                   autoCapitalize="none"
                   autoCorrect={false}
                   className="h-auto min-h-[37px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none placeholder:text-neutral-400"
@@ -268,7 +316,7 @@ export default function DashboardScreen() {
             contentContainerClassName="gap-[12px] px-[20px] pb-[40px]">
             {shownEvents.length === 0 ? (
               <Text className="font-inter text-[10px] italic text-neutral-800">
-                Tidak ada event yang cocok
+                {t('Tidak ada event yang cocok')}
               </Text>
             ) : null}
             {pageEvents.map((event) => (
@@ -297,7 +345,9 @@ export default function DashboardScreen() {
                       {event.kodeEvent}
                     </Text>
                     <View className="gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Total order</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        {t('Total order')}
+                      </Text>
                       <Text className="font-inter-bold text-[12px] text-neutral-800">
                         {event.totalOrder}
                       </Text>
@@ -307,7 +357,7 @@ export default function DashboardScreen() {
                 <Link href={{ pathname: '/event-detail', params: { id: event.id } }} asChild>
                   <Pressable className="w-full items-center justify-center rounded-[8px] bg-orange-400 px-[10px] py-[6px]">
                     <Text className="font-inter-semibold text-[10px] text-neutral-50">
-                      Lihat detail
+                      {t('Lihat detail')}
                     </Text>
                   </Pressable>
                 </Link>
@@ -319,7 +369,7 @@ export default function DashboardScreen() {
                 <View className="flex-row flex-wrap items-center justify-center gap-[6px]">
                   <PageButton
                     label="‹"
-                    accessibilityLabel="Halaman sebelumnya"
+                    accessibilityLabel={t('Halaman sebelumnya')}
                     disabled={currentPage === 1}
                     onPress={() => goToPage(currentPage - 1)}
                   />
@@ -327,20 +377,24 @@ export default function DashboardScreen() {
                     <PageButton
                       key={number}
                       label={String(number)}
-                      accessibilityLabel={`Halaman ${number}`}
+                      accessibilityLabel={t('Halaman {n}', { n: number })}
                       active={number === currentPage}
                       onPress={() => goToPage(number)}
                     />
                   ))}
                   <PageButton
                     label="›"
-                    accessibilityLabel="Halaman berikutnya"
+                    accessibilityLabel={t('Halaman berikutnya')}
                     disabled={currentPage === pageCount}
                     onPress={() => goToPage(currentPage + 1)}
                   />
                 </View>
                 <Text className="font-inter text-[10px] text-neutral-700">
-                  Halaman {currentPage} dari {pageCount} · {shownEvents.length} event
+                  {t('Halaman {page} dari {pages} · {n} event', {
+                    page: currentPage,
+                    pages: pageCount,
+                    n: shownEvents.length,
+                  })}
                 </Text>
               </View>
             ) : null}
@@ -363,7 +417,7 @@ export default function DashboardScreen() {
                   onPress={() => close(() => router.push('/settings'))}
                   className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
-                    Pengaturan Akun
+                    {t('Pengaturan Akun')}
                   </Text>
                 </Pressable>
 
@@ -371,7 +425,7 @@ export default function DashboardScreen() {
                   onPress={() => close(() => router.push('/pengaturan-subscription'))}
                   className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
-                    Pengaturan Subscription
+                    {t('Pengaturan Subscription')}
                   </Text>
                 </Pressable>
 
@@ -379,7 +433,27 @@ export default function DashboardScreen() {
                   onPress={() => close(() => router.push('/pengaturan-publikasi'))}
                   className="w-full items-start px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
-                    Pengaturan Publikasi
+                    {t('Pengaturan Publikasi')}
+                  </Text>
+                </Pressable>
+
+                {/* Not in Figma: the tutorial again, once the drawer has
+                    closed. */}
+                <Pressable
+                  onPress={() => close(() => setTutorialOpen(true))}
+                  className="w-full items-start px-[10px] py-[10px]">
+                  <Text className="font-inter-semibold text-[16px] text-white">
+                    {t('Tutorial')}
+                  </Text>
+                </Pressable>
+
+                {/* Not in Figma: opens the language pop-up once the drawer
+                    has closed. */}
+                <Pressable
+                  onPress={() => close(() => setLanguageOpen(true))}
+                  className="w-full items-start px-[10px] py-[10px]">
+                  <Text className="font-inter-semibold text-[16px] text-white">
+                    {t('Bahasa / Language')}
                   </Text>
                 </Pressable>
 
@@ -392,13 +466,16 @@ export default function DashboardScreen() {
                     close();
                   }}
                   className="w-full items-start px-[10px] py-[10px]">
-                  <Text className="font-inter-semibold text-[16px] text-white">Keluar</Text>
+                  <Text className="font-inter-semibold text-[16px] text-white">{t('Keluar')}</Text>
                 </Pressable>
               </View>
             </View>
           )}
         </SideDrawer>
       ) : null}
+
+      <LanguageDialog visible={languageOpen} onClose={() => setLanguageOpen(false)} />
+      <TutorialOverlay visible={tutorialOpen} targets={tutorialTargets} onClose={closeTutorial} />
     </>
   );
 }

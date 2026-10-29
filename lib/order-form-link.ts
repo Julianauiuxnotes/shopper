@@ -1,5 +1,6 @@
 import type { JastipEvent } from './events-store';
 import { formatDateRange } from './format';
+import { linkLanguageParam } from './i18n';
 import {
   escapeText,
   fromDayNumber,
@@ -44,7 +45,7 @@ export function buildOrderFormLink(
     escapeText(event.kodeEvent),
     jastiper.inboxId,
   ];
-  return `${publicBaseUrl()}/o#1.${fields.join('.')}`;
+  return `${publicBaseUrl()}/o${linkLanguageParam()}#1.${fields.join('.')}`;
 }
 
 /** Returns null for anything that isn't a well-formed order-form link. */

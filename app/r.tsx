@@ -1,5 +1,6 @@
 import { TagihanReceipt } from '@/components/tagihan-receipt';
 import { Text } from '@/components/ui/text';
+import { parseLinkLanguage, useLinkLanguage } from '@/lib/i18n';
 import { decodeReceiptSnapshot, type ReceiptSnapshot } from '@/lib/receipt-link';
 import { useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
@@ -12,9 +13,12 @@ import { Platform, ScrollView, View } from 'react-native';
 // login, no navigation back into it, nothing read from this device's
 // storage. Everything shown comes out of the link itself, after the "#"
 // (lib/receipt-link.ts); `?d=` is accepted too for platforms without a
-// URL fragment.
+// URL fragment. `?l=en` shows it in English: a jastiper using the app in
+// English makes links that say so (lib/i18n.tsx).
 export default function PublicReceiptScreen() {
-  const { d } = useLocalSearchParams<{ d?: string }>();
+  const { d, l } = useLocalSearchParams<{ d?: string; l?: string }>();
+  // Before the decode below, so dates are read in the link's language.
+  const { t } = useLinkLanguage(parseLinkLanguage(l));
   // undefined = not read yet (the static HTML is rendered without a URL
   // fragment, so it can only be read after mount), null = unreadable link.
   const [snapshot, setSnapshot] = React.useState<ReceiptSnapshot | null | undefined>(undefined);
@@ -23,13 +27,15 @@ export default function PublicReceiptScreen() {
     const fromHash = Platform.OS === 'web' ? window.location.hash.slice(1) : '';
     const encoded = fromHash || d || '';
     setSnapshot(encoded ? decodeReceiptSnapshot(encoded) : null);
-  }, [d]);
+  }, [d, l]);
 
   return (
     <View className="flex-1 bg-white">
       {Platform.OS === 'web' ? (
         <Head>
-          <title>{snapshot ? `Tagihan ${snapshot.on} - ${snapshot.nj}` : 'Tagihan'}</title>
+          <title>
+            {snapshot ? `${t('Tagihan')} ${snapshot.on} - ${snapshot.nj}` : t('Tagihan')}
+          </title>
           <meta name="robots" content="noindex" />
         </Head>
       ) : null}
@@ -37,10 +43,10 @@ export default function PublicReceiptScreen() {
       {snapshot === null ? (
         <View className="flex-1 items-center justify-center gap-[8px] px-[20px]">
           <Text className="font-inter-bold text-[16px] text-neutral-900">
-            Tagihan tidak ditemukan
+            {t('Tagihan tidak ditemukan')}
           </Text>
           <Text className="text-center font-inter text-[12px] text-neutral-600">
-            Link tagihan ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.
+            {t('Link tagihan ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.')}
           </Text>
         </View>
       ) : snapshot ? (

@@ -8,6 +8,15 @@ import { CURRENCIES, parseDecimal } from '@/lib/currency';
 import { AuthError, costLabel, useAuth } from '@/lib/auth-store';
 import { type JastipEvent, newId, useEvents } from '@/lib/events-store';
 import { formatDate } from '@/lib/format';
+import { countryName } from '@/lib/countries';
+import { useT } from '@/lib/i18n';
+import {
+  amountKeyboard,
+  cleanAmountInput,
+  currencyLabel,
+  currencyName,
+  formatAmountInput,
+} from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { compressPhoto } from '@/lib/compress-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -91,6 +100,11 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
   const router = useRouter();
   const { addEvent, updateEvent } = useEvents();
   const { shop, isAdmin, prices, openEvent } = useAuth();
+  const t = useT();
+  // The first event type is the shop's own country, priced in its own
+  // currency (lib/money.ts); shops from before countries are Indonesia.
+  const homeCountry = countryName(shop?.country ?? 'ID');
+  const home = { code: currencyLabel(), name: t(currencyName()) };
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const balance = shop?.tokenBalance ?? 0;
@@ -137,7 +151,10 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
   async function handlePickFoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Izin dibutuhkan', 'Aktifkan akses foto di pengaturan untuk memilih foto acara.');
+      Alert.alert(
+        t('Izin dibutuhkan'),
+        t('Aktifkan akses foto di pengaturan untuk memilih foto acara.')
+      );
       return;
     }
 
@@ -149,7 +166,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
 
     const asset = result.assets[0];
     if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType)) {
-      Alert.alert('Format tidak didukung', 'Pilih foto berformat JPG, JPEG, atau PNG.');
+      Alert.alert(t('Format tidak didukung'), t('Pilih foto berformat JPG, JPEG, atau PNG.'));
       return;
     }
 
@@ -158,7 +175,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
       const compressed = await compressPhoto(asset);
       setFotoUri(compressed.uri);
     } catch {
-      Alert.alert('Gagal', 'Foto tidak berhasil diproses. Coba pilih foto lain.');
+      Alert.alert(t('Gagal'), t('Foto tidak berhasil diproses. Coba pilih foto lain.'));
     }
   }
 
@@ -188,7 +205,9 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
       await openEvent(id);
     } catch (error) {
       setSaveError(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
       setSaving(false);
       return;
@@ -226,25 +245,33 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
               <Pressable onPress={close} hitSlop={8} className="flex-row items-center gap-[6px]">
                 <CaretCircleLeftIcon width={24} height={24} />
                 <Text className="font-inter-semibold text-[16px] text-black">
-                  {editing ? 'Edit event detail' : 'Buka Jastip'}
+                  {editing ? t('Edit event detail') : t('Buka Jastip')}
                 </Text>
               </Pressable>
 
               {step === 'jenis' ? (
                 <>
                   <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                    Apakah event ini bersifat Lokal atau Internasional?
+                    {t('Apakah event ini di {country} atau Internasional?', {
+                      country: homeCountry,
+                    })}
                   </Text>
                   <View accessibilityRole="radiogroup" className="gap-[10px]">
                     <JenisOption
-                      title="Lokal"
-                      description="Event di dalam negeri. Semua harga barang, tagihan, dan laporan memakai Rupiah (IDR)."
+                      title={homeCountry}
+                      description={t(
+                        'Event di {country}. Semua harga barang, tagihan, dan laporan memakai {currency} ({code}).',
+                        { country: homeCountry, currency: home.name, code: home.code }
+                      )}
                       selected={jenis === 'lokal'}
                       onPress={() => setJenis('lokal')}
                     />
                     <JenisOption
-                      title="Internasional"
-                      description="Event di luar negeri, belanja dengan mata uang asing. Harga barang diisi dalam mata uang pilihanmu, lalu otomatis dihitung ke Rupiah untuk tagihan pelanggan dan laporan."
+                      title={t('Internasional')}
+                      description={t(
+                        'Event di luar negeri, belanja dengan mata uang asing. Harga barang diisi dalam mata uang pilihanmu, lalu otomatis dihitung ke {currency} untuk tagihan pelanggan dan laporan.',
+                        { currency: home.name }
+                      )}
                       selected={jenis === 'internasional'}
                       onPress={() => setJenis('internasional')}
                     />
@@ -254,7 +281,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                     <View className="gap-[16px]">
                       <View className="gap-[8px]">
                         <Text className="font-inter text-[12px] text-neutral-800">
-                          Mata uang belanja
+                          {t('Mata uang belanja')}
                         </Text>
                         <View className="flex-row flex-wrap gap-[8px]">
                           {CURRENCIES.map((currency) => (
@@ -263,7 +290,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                               onPress={() => setMataUang(currency.code)}
                               accessibilityRole="radio"
                               accessibilityState={{ checked: mataUang === currency.code }}
-                              accessibilityLabel={`${currency.code}, ${currency.name}`}
+                              accessibilityLabel={`${currency.code}, ${t(currency.name)}`}
                               className={cn(
                                 'rounded-[8px] border px-[12px] py-[8px]',
                                 mataUang === currency.code
@@ -282,7 +309,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                         </View>
                         {mataUang ? (
                           <Text className="font-inter text-[10px] text-neutral-700">
-                            {CURRENCIES.find((c) => c.code === mataUang)?.name}
+                            {t(CURRENCIES.find((c) => c.code === mataUang)?.name ?? '')}
                           </Text>
                         ) : null}
                       </View>
@@ -290,10 +317,15 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                       {mataUang ? (
                         <View className="gap-[4px]">
                           <Text className="font-inter text-[12px] text-neutral-800">
-                            Kurs: 1 {mataUang} berapa Rupiah?
+                            {t('Kurs: 1 {currency} berapa {home}?', {
+                              currency: mataUang,
+                              home: home.code,
+                            })}
                           </Text>
                           <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
-                            <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                            <Text className="font-inter text-[12px] text-neutral-400">
+                              {home.code}
+                            </Text>
                             <Input
                               value={kurs}
                               onChangeText={(value) =>
@@ -302,13 +334,15 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                               placeholder="0"
                               placeholderTextColor="#9ca3af"
                               keyboardType="decimal-pad"
-                              accessibilityLabel="Kurs ke Rupiah"
+                              accessibilityLabel={t('Kurs ke {home}', { home: home.code })}
                               className="h-auto min-h-[35px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                             />
                           </View>
                           <Text className="font-inter text-[10px] text-neutral-700">
-                            Dipakai untuk menghitung harga barang ke Rupiah. Bisa diubah nanti di
-                            Edit event detail.
+                            {t(
+                              'Dipakai untuk menghitung harga barang ke {currency}. Bisa diubah nanti di Edit event detail.',
+                              { currency: home.name }
+                            )}
                           </Text>
                         </View>
                       ) : null}
@@ -329,7 +363,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                         'font-inter-semibold text-[14px]',
                         isJenisValid ? 'text-orange-50' : 'text-orange-300'
                       )}>
-                      Lanjut
+                      {t('Lanjut')}
                     </Text>
                   </Pressable>
                 </>
@@ -337,29 +371,35 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                 <>
                   <View className="flex-row items-center gap-[10px] rounded-[8px] bg-orange-50 p-[10px]">
                     <View className="flex-1 gap-[2px]">
-                      <Text className="font-inter text-[10px] text-neutral-700">Jenis event</Text>
+                      <Text className="font-inter text-[10px] text-neutral-700">
+                        {t('Jenis event')}
+                      </Text>
                       <Text className="font-inter-semibold text-[12px] text-neutral-800">
                         {jenis === 'internasional'
-                          ? `Internasional · 1 ${mataUang} = IDR ${parseDecimal(kurs).toLocaleString('id-ID', { maximumFractionDigits: 4 })}`
-                          : 'Lokal · IDR'}
+                          ? `${t('Internasional')} · 1 ${mataUang} = ${home.code} ${parseDecimal(kurs).toLocaleString('id-ID', { maximumFractionDigits: 4 })}`
+                          : `${homeCountry} · ${home.code}`}
                       </Text>
                     </View>
                     <Pressable
                       onPress={() => setStep('jenis')}
                       accessibilityRole="button"
-                      accessibilityLabel="Ubah jenis event"
+                      accessibilityLabel={t('Ubah jenis event')}
                       hitSlop={8}>
-                      <Text className="font-inter-semibold text-[12px] text-orange-500">Ubah</Text>
+                      <Text className="font-inter-semibold text-[12px] text-orange-500">
+                        {t('Ubah')}
+                      </Text>
                     </Pressable>
                   </View>
 
                   <View className="gap-[16px]">
                     <View className="gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Nama Acara</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        {t('Nama Acara')}
+                      </Text>
                       <Input
                         value={namaAcara}
                         onChangeText={setNamaAcara}
-                        placeholder="Nama acara"
+                        placeholder={t('Nama acara')}
                         placeholderTextColor="#9ca3af"
                         className="h-auto rounded-[8px] border-neutral-400 bg-white p-[10px] text-[12px] text-neutral-800 shadow-none"
                       />
@@ -367,11 +407,13 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
 
                     <View className="gap-[10px]">
                       <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                        Tanggal Acara
+                        {t('Tanggal Acara')}
                       </Text>
                       <View className="flex-row gap-[18px]">
                         <View className="w-[132px] gap-[4px]">
-                          <Text className="font-inter text-[12px] text-neutral-800">Dari:</Text>
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {t('Dari:')}
+                          </Text>
                           <Pressable
                             onPress={() => setActivePicker('dari')}
                             disabled={dateLocked}
@@ -390,7 +432,9 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                           </Pressable>
                         </View>
                         <View className="w-[132px] gap-[4px]">
-                          <Text className="font-inter text-[12px] text-neutral-800">Sampai:</Text>
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {t('Sampai:')}
+                          </Text>
                           <Pressable
                             onPress={() => setActivePicker('sampai')}
                             disabled={dateLocked}
@@ -412,18 +456,18 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                       {dateLocked ? (
                         <Text className="font-inter text-[10px] text-neutral-700">
                           {editing && editing.orders.length > 0
-                            ? 'Tanggal tidak bisa diubah karena event ini sudah punya pesanan.'
-                            : 'Tanggal tidak bisa diubah karena event ini sudah dimulai.'}
+                            ? t('Tanggal tidak bisa diubah karena event ini sudah punya pesanan.')
+                            : t('Tanggal tidak bisa diubah karena event ini sudah dimulai.')}
                         </Text>
                       ) : null}
                     </View>
 
                     <View className="gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Lokasi</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">{t('Lokasi')}</Text>
                       <Input
                         value={lokasi}
                         onChangeText={setLokasi}
-                        placeholder="Lokasi acara"
+                        placeholder={t('Lokasi acara')}
                         placeholderTextColor="#9ca3af"
                         className="h-auto rounded-[8px] border-neutral-400 bg-white p-[10px] text-[12px] text-neutral-800 shadow-none"
                       />
@@ -444,7 +488,7 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                           onPress={handlePickFoto}
                           className="h-[34px] w-[190px] items-center justify-center rounded-[8px] border border-orange-500">
                           <Text className="font-inter-semibold text-[14px] text-orange-500">
-                            Ganti foto
+                            {t('Ganti foto')}
                           </Text>
                         </Pressable>
                       </View>
@@ -453,24 +497,26 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                         onPress={handlePickFoto}
                         className="h-[91px] w-full items-center justify-center rounded-[8px] border border-dashed border-neutral-400 bg-white p-[10px]">
                         <Text className="font-inter text-[12px] text-neutral-400">
-                          Foto acara (optional)
+                          {t('Foto acara (optional)')}
                         </Text>
                       </Pressable>
                     )}
 
                     <View className="gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Budget jastip</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        {t('Budget jastip')}
+                      </Text>
                       {/* min-h rather than vertical padding: the Input inside is
                       already 36px tall on wide screens, and padding on top of
                       that made this field taller than Nama Acara and Lokasi. */}
                       <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
-                        <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+                        <Text className="font-inter text-[12px] text-neutral-400">{home.code}</Text>
                         <Input
-                          value={budget ? Number(budget).toLocaleString('id-ID') : ''}
-                          onChangeText={(value) => setBudget(value.replace(/\D/g, '').slice(0, 12))}
+                          value={formatAmountInput(budget)}
+                          onChangeText={(value) => setBudget(cleanAmountInput(value).slice(0, 12))}
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
-                          keyboardType="number-pad"
+                          keyboardType={amountKeyboard()}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
@@ -506,10 +552,10 @@ function EventForm({ editing }: { editing?: JastipEvent }) {
                         isValid && canPay ? 'text-orange-50' : 'text-orange-300'
                       )}>
                       {saving
-                        ? 'Memproses...'
+                        ? t('Memproses...')
                         : editing
-                          ? 'Simpan'
-                          : `Buka event · ${costLabel(prices.openEvent)}`}
+                          ? t('Simpan')
+                          : t('Buka event · {cost}', { cost: costLabel(prices.openEvent) })}
                     </Text>
                   </Pressable>
                 </>
@@ -567,39 +613,40 @@ function TokenCostNote({
   onBuy: () => void;
 }) {
   const short = balance < price;
+  const t = useT();
   return (
     <View className="gap-[4px] rounded-[8px] bg-orange-50 p-[10px]">
       <View className="flex-row items-center justify-between">
         <Text className="font-inter text-[12px] text-neutral-800">
-          Biaya buka event:{' '}
+          {t('Biaya buka event:')}{' '}
           <Text className="font-inter-semibold text-[12px] text-neutral-800">
             {costLabel(price)}
           </Text>
         </Text>
         <Text className="font-inter text-[12px] text-neutral-700">
-          Saldo: {price === 0 ? 'tidak terbatas' : `${balance} token`}
+          {t('Saldo:')} {price === 0 ? t('tidak terbatas') : t('{n} token', { n: balance })}
         </Text>
       </View>
       {!isAdmin ? (
         <Text className="font-inter text-[10px] text-red-500">
-          Hanya admin yang bisa membuka event. Minta pemilik toko menjadikanmu admin.
+          {t('Hanya admin yang bisa membuka event. Minta pemilik toko menjadikanmu admin.')}
         </Text>
       ) : short ? (
         <Pressable onPress={onBuy} accessibilityRole="button" hitSlop={8}>
           <Text className="font-inter text-[10px] text-red-500">
-            Token tidak cukup.{' '}
+            {t('Token tidak cukup.')}{' '}
             <Text className="font-inter-semibold text-[10px] text-orange-500 underline">
-              Beli token
+              {t('Beli token')}
             </Text>
           </Text>
         </Pressable>
       ) : price === 0 ? (
         <Text className="font-inter text-[10px] text-neutral-700">
-          Gratis selama masa beta Justipers.
+          {t('Gratis selama masa beta Justipers.')}
         </Text>
       ) : (
         <Text className="font-inter text-[10px] text-neutral-700">
-          Token dikembalikan jika event dihapus sebelum tanggal acara dan belum ada pesanan.
+          {t('Token dikembalikan jika event dihapus sebelum tanggal acara dan belum ada pesanan.')}
         </Text>
       )}
     </View>

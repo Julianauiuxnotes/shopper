@@ -1,4 +1,6 @@
-export const MONTH_SHORT = [
+import { getLanguage } from './i18n';
+
+const MONTH_SHORT_ID = [
   'Jan',
   'Feb',
   'Mar',
@@ -12,6 +14,25 @@ export const MONTH_SHORT = [
   'Nov',
   'Des',
 ];
+const MONTH_SHORT_EN = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** Short month name in the app's language (lib/i18n.tsx). */
+function monthShort(month: number) {
+  return (getLanguage() === 'en' ? MONTH_SHORT_EN : MONTH_SHORT_ID)[month];
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
@@ -32,25 +53,21 @@ export function formatDateRange(from: Date, to: Date) {
   const sameMonthYear =
     from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear();
   if (sameMonthYear) {
-    return `${from.getDate()} - ${to.getDate()} ${MONTH_SHORT[from.getMonth()]} ${from.getFullYear()}`;
+    return `${from.getDate()} - ${to.getDate()} ${monthShort(from.getMonth())} ${from.getFullYear()}`;
   }
   const sameYear = from.getFullYear() === to.getFullYear();
   const fromLabel = sameYear
-    ? `${from.getDate()} ${MONTH_SHORT[from.getMonth()]}`
-    : `${from.getDate()} ${MONTH_SHORT[from.getMonth()]} ${from.getFullYear()}`;
-  return `${fromLabel} - ${to.getDate()} ${MONTH_SHORT[to.getMonth()]} ${to.getFullYear()}`;
+    ? `${from.getDate()} ${monthShort(from.getMonth())}`
+    : `${from.getDate()} ${monthShort(from.getMonth())} ${from.getFullYear()}`;
+  return `${fromLabel} - ${to.getDate()} ${monthShort(to.getMonth())} ${to.getFullYear()}`;
 }
 
-/** IDR 0, IDR 5,000,000 */
-export function formatIDR(amount: number) {
-  return `IDR ${amount.toLocaleString('id-ID')}`;
-}
 
 /** Matches Cetak Penanda's "Waktu cetak" style, e.g. "4 Sep 2026 , 12:33 WIB". */
 export function formatPrintTimestamp(date: Date) {
   const hh = pad2(date.getHours());
   const mm = pad2(date.getMinutes());
-  return `${date.getDate()} ${MONTH_SHORT[date.getMonth()]} ${date.getFullYear()} , ${hh}:${mm} WIB`;
+  return `${date.getDate()} ${monthShort(date.getMonth())} ${date.getFullYear()} , ${hh}:${mm} WIB`;
 }
 
 /** Day-granularity range check (ignores time-of-day, so "today" matches

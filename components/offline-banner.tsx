@@ -1,5 +1,6 @@
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { useOffline } from '@/lib/sync-status';
 import * as React from 'react';
 import { View } from 'react-native';
@@ -10,12 +11,14 @@ import { View } from 'react-native';
 function OfflineBanner() {
   const offline = useOffline();
   const { signedIn } = useAuth();
+  const t = useT();
   if (!offline || !signedIn) return null;
   return (
     <View accessibilityRole="alert" className="bg-neutral-800 px-[16px] py-[8px]">
       <Text className="text-center font-inter text-[11px] text-neutral-50">
-        Kamu sedang offline. Perubahan disimpan di perangkat ini dan akan disinkronkan saat online
-        kembali.
+        {t(
+          'Kamu sedang offline. Perubahan disimpan di perangkat ini dan akan disinkronkan saat online kembali.'
+        )}
       </Text>
     </View>
   );

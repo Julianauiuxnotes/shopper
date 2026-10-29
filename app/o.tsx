@@ -4,6 +4,7 @@ import SparkleIcon from '@/assets/images/figma/icon-sparkle.svg';
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { parseLinkLanguage, useLinkLanguage } from '@/lib/i18n';
 import { decodeOrderFormInfo, type OrderFormInfo } from '@/lib/order-form-link';
 import { submitOrder, type SubmittedOrder } from '@/lib/order-inbox';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,8 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 //
 // Not shown from Figma: the jastiper's logo and the event photo. Both
 // are images stored on the jastiper's device and can't travel in a link.
+//
+// `?l=en` shows the form in English (see lib/i18n.tsx).
 
 type ItemDraft = { key: string; namaProduk: string; jumlah: string };
 
@@ -59,7 +62,9 @@ function DashedLine() {
 }
 
 export default function CustomerOrderFormScreen() {
-  const { d } = useLocalSearchParams<{ d?: string }>();
+  const { d, l } = useLocalSearchParams<{ d?: string; l?: string }>();
+  // Before the decode below, so the date is read in the link's language.
+  const { t } = useLinkLanguage(parseLinkLanguage(l));
   // undefined = not read yet (the static HTML is rendered without a URL
   // fragment, so it can only be read after mount), null = unreadable link.
   const [info, setInfo] = React.useState<OrderFormInfo | null | undefined>(undefined);
@@ -68,7 +73,7 @@ export default function CustomerOrderFormScreen() {
     const fromHash = Platform.OS === 'web' ? window.location.hash.slice(1) : '';
     const encoded = fromHash || d || '';
     setInfo(encoded ? decodeOrderFormInfo(encoded) : null);
-  }, [d]);
+  }, [d, l]);
 
   const [nama, setNama] = React.useState('');
   const [alamat, setAlamat] = React.useState('');
@@ -122,7 +127,9 @@ export default function CustomerOrderFormScreen() {
     }
   }
 
-  const title = info ? `Form order ${info.namaAcara} - ${info.namaJastip}` : 'Form order';
+  const title = info
+    ? `${t('Form order')} ${info.namaAcara} - ${info.namaJastip}`
+    : t('Form order');
 
   return (
     <KeyboardAvoidingView
@@ -138,10 +145,12 @@ export default function CustomerOrderFormScreen() {
       {info === null ? (
         <View className="flex-1 items-center justify-center gap-[8px] px-[20px]">
           <Text className="font-inter-bold text-[16px] text-neutral-900">
-            Form order tidak ditemukan
+            {t('Form order tidak ditemukan')}
           </Text>
           <Text className="text-center font-inter text-[12px] text-neutral-600">
-            Link form order ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.
+            {t(
+              'Link form order ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.'
+            )}
           </Text>
         </View>
       ) : !info ? null : step === 'form' ? (
@@ -161,13 +170,13 @@ export default function CustomerOrderFormScreen() {
             <View className="gap-[10px] rounded-[12px] bg-orange-500 p-[20px]">
               <Text className="font-inter-bold text-[16px] text-neutral-50">{info.namaAcara}</Text>
               <View className="gap-[4px]">
-                <Text className="font-inter text-[12px] text-neutral-50">Tanggal acara</Text>
+                <Text className="font-inter text-[12px] text-neutral-50">{t('Tanggal acara')}</Text>
                 <Text className="font-inter-semibold text-[14px] text-neutral-50">
                   {info.tanggalAcara}
                 </Text>
               </View>
               <View className="gap-[4px]">
-                <Text className="font-inter text-[12px] text-neutral-50">Lokasi</Text>
+                <Text className="font-inter text-[12px] text-neutral-50">{t('Lokasi')}</Text>
                 <Text className="font-inter-semibold text-[14px] text-neutral-50">
                   {info.lokasi}
                 </Text>
@@ -177,16 +186,16 @@ export default function CustomerOrderFormScreen() {
 
           <View className="gap-[22px] px-[28px]">
             <Text className="font-inter-semibold text-[14px] text-neutral-800">
-              Isi detail pesanan dibawah ini:
+              {t('Isi detail pesanan dibawah ini:')}
             </Text>
 
             <View className="gap-[4px]">
-              <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama</Text>
+              <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Nama')}</Text>
               <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                 <Input
                   value={nama}
                   onChangeText={setNama}
-                  placeholder="Nama"
+                  placeholder={t('Nama')}
                   placeholderTextColor="#9ca3af"
                   className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                 />
@@ -194,12 +203,12 @@ export default function CustomerOrderFormScreen() {
             </View>
 
             <View className="gap-[4px]">
-              <Text className="font-inter text-[12px] text-[#1e1e1e]">Alamat</Text>
+              <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Alamat')}</Text>
               <View className="h-[75px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                 <Input
                   value={alamat}
                   onChangeText={setAlamat}
-                  placeholder="Alamat"
+                  placeholder={t('Alamat')}
                   placeholderTextColor="#9ca3af"
                   multiline
                   textAlignVertical="top"
@@ -210,7 +219,7 @@ export default function CustomerOrderFormScreen() {
             </View>
 
             <View className="gap-[4px]">
-              <Text className="font-inter text-[12px] text-[#1e1e1e]">No. Whatsapp</Text>
+              <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('No. Whatsapp')}</Text>
               <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                 <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
                 <Input
@@ -225,7 +234,9 @@ export default function CustomerOrderFormScreen() {
             </View>
 
             <View className="gap-[10px]">
-              <Text className="font-inter text-[12px] text-[#1e1e1e]">Metode pengiriman</Text>
+              <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                {t('Metode pengiriman')}
+              </Text>
               <View className="flex-row gap-[10px]">
                 {(
                   [
@@ -249,7 +260,7 @@ export default function CustomerOrderFormScreen() {
                           'font-inter text-[10px]',
                           selected ? 'text-white' : 'text-[#5d5d5d]'
                         )}>
-                        {label}
+                        {t(label)}
                       </Text>
                     </Pressable>
                   );
@@ -258,12 +269,16 @@ export default function CustomerOrderFormScreen() {
             </View>
 
             <View className="gap-[8px]">
-              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">List pesanan</Text>
+              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">
+                {t('List pesanan')}
+              </Text>
               {items.map((item, index) => (
                 <View key={item.key} className="flex-row items-start gap-[8px]">
                   <View className="flex-1 gap-[4px]">
                     {index === 0 ? (
-                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Nama produk</Text>
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">
+                        {t('Nama produk')}
+                      </Text>
                     ) : null}
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
@@ -271,14 +286,14 @@ export default function CustomerOrderFormScreen() {
                         onChangeText={(v) => updateItem(item.key, { namaProduk: v })}
                         placeholder="item"
                         placeholderTextColor="#9ca3af"
-                        accessibilityLabel={`Nama produk ${index + 1}`}
+                        accessibilityLabel={t('Nama produk {n}', { n: index + 1 })}
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
                   <View className="w-[52px] gap-[4px]">
                     {index === 0 ? (
-                      <Text className="font-inter text-[12px] text-[#1e1e1e]">Jumlah</Text>
+                      <Text className="font-inter text-[12px] text-[#1e1e1e]">{t('Jumlah')}</Text>
                     ) : null}
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
@@ -289,7 +304,7 @@ export default function CustomerOrderFormScreen() {
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="number-pad"
-                        accessibilityLabel={`Jumlah produk ${index + 1}`}
+                        accessibilityLabel={t('Jumlah produk {n}', { n: index + 1 })}
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
@@ -300,7 +315,7 @@ export default function CustomerOrderFormScreen() {
                 onPress={() => setItems((prev) => [...prev, blankItem()])}
                 accessibilityRole="button"
                 className="w-[82px] items-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
-                <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+                <Text className="font-inter text-[12px] text-orange-500">{t('+Tambah')}</Text>
               </Pressable>
             </View>
           </View>
@@ -320,12 +335,12 @@ export default function CustomerOrderFormScreen() {
                   'font-inter-semibold text-[14px]',
                   isValid ? 'text-white' : 'text-orange-300'
                 )}>
-                {sending ? 'Mengirim pesanan...' : 'Buat pesanan'}
+                {sending ? t('Mengirim pesanan...') : t('Buat pesanan')}
               </Text>
             </Pressable>
             {sendFailed ? (
               <Text className="pt-[8px] text-center font-inter text-[12px] text-red-500">
-                Pesanan belum terkirim. Cek koneksi internet, lalu coba lagi.
+                {t('Pesanan belum terkirim. Cek koneksi internet, lalu coba lagi.')}
               </Text>
             ) : null}
           </View>
@@ -345,11 +360,12 @@ export default function CustomerOrderFormScreen() {
                 </View>
               </View>
               <Text className="text-center font-inter-semibold text-[16px] text-neutral-800">
-                Pesananmu sudah tercatat!
+                {t('Pesananmu sudah tercatat!')}
               </Text>
               <Text className="text-center font-inter text-[14px] text-neutral-700">
-                Hi, list pesananmu sudah terkirim ke Jastiper. Tunggu konfirmasi dari Jastiper untuk
-                konfirmasi pesanan dan pembayaran ya.
+                {t(
+                  'Hi, list pesananmu sudah terkirim ke Jastiper. Tunggu konfirmasi dari Jastiper untuk konfirmasi pesanan dan pembayaran ya.'
+                )}
               </Text>
             </View>
             <View className="w-full gap-[10px]">
@@ -358,7 +374,7 @@ export default function CustomerOrderFormScreen() {
                 accessibilityRole="button"
                 className="h-[49px] w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px]">
                 <Text className="font-inter-semibold text-[14px] text-white">
-                  Lihat bukti pesanan
+                  {t('Lihat bukti pesanan')}
                 </Text>
               </Pressable>
             </View>
@@ -369,7 +385,7 @@ export default function CustomerOrderFormScreen() {
           <Pressable
             onPress={() => setStep('sent')}
             accessibilityRole="button"
-            accessibilityLabel="Kembali"
+            accessibilityLabel={t('Kembali')}
             hitSlop={8}
             className="w-full px-[16px] pt-[20px]">
             <CaretCircleLeftIcon width={24} height={24} />
@@ -389,31 +405,37 @@ export default function CustomerOrderFormScreen() {
               </View>
               <DashedLine />
               <Text className="pt-[12px] font-inter-bold text-[16px] text-orange-500">
-                Bukti cetak pesanan
+                {t('Bukti cetak pesanan')}
               </Text>
             </View>
 
             <DashedLine />
 
             <View className="w-full gap-[10px]">
-              <InfoRow label="Nama acara">{info.namaAcara}</InfoRow>
-              <InfoRow label="Tanggal acara">{info.tanggalAcara}</InfoRow>
-              <InfoRow label="Nama customer">{submitted.nama}</InfoRow>
-              <InfoRow label="Alamat">{submitted.alamat}</InfoRow>
-              <InfoRow label="Total pesanan">{submitted.items.length} items</InfoRow>
-              <InfoRow label="Status pembayaran">Menunggu konfirmasi dan total pembayaran</InfoRow>
+              <InfoRow label={t('Nama acara')}>{info.namaAcara}</InfoRow>
+              <InfoRow label={t('Tanggal acara')}>{info.tanggalAcara}</InfoRow>
+              <InfoRow label={t('Nama customer')}>{submitted.nama}</InfoRow>
+              <InfoRow label={t('Alamat')}>{submitted.alamat}</InfoRow>
+              <InfoRow label={t('Total pesanan')}>
+                {t('{n} items', { n: submitted.items.length })}
+              </InfoRow>
+              <InfoRow label={t('Status pembayaran')}>
+                {t('Menunggu konfirmasi dan total pembayaran')}
+              </InfoRow>
             </View>
 
             <DashedLine />
 
             <View className="w-full gap-[11px] px-[16px]">
-              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">List pesanan</Text>
+              <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">
+                {t('List pesanan')}
+              </Text>
               <View className="flex-row gap-[8px]">
                 <Text className="flex-1 font-inter-semibold text-[12px] text-neutral-500">
-                  Nama produk
+                  {t('Nama produk')}
                 </Text>
                 <Text className="w-[44px] font-inter-semibold text-[12px] text-neutral-500">
-                  Jumlah
+                  {t('Jumlah')}
                 </Text>
               </View>
               {submitted.items.map((item, index) => (

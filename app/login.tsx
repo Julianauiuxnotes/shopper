@@ -1,9 +1,11 @@
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
+import { LanguageSwitch } from '@/components/language-switch';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { ActiveElsewhereError, AuthError, useAuth } from '@/lib/auth-store';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 
@@ -14,8 +16,8 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } fr
 // state, with the message for what actually went wrong (wrong
 // credentials, unconfirmed email, no connection).
 export default function LoginScreen() {
-  const router = useRouter();
   const { signIn, notice } = useAuth();
+  const t = useT();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -47,7 +49,8 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim(), password, keepLoggedIn, takeOver);
       setConfirmTakeOver(false);
-      router.replace('/dashboard');
+      // components/auth-gate.tsx moves on to the Dashboard once signed in;
+      // navigating here too opened it twice, which showed as a blink.
     } catch (error) {
       if (error instanceof ActiveElsewhereError) {
         setConfirmTakeOver(true);
@@ -55,7 +58,9 @@ export default function LoginScreen() {
       }
       setConfirmTakeOver(false);
       setLoginError(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
     } finally {
       setSubmitting(false);
@@ -70,9 +75,11 @@ export default function LoginScreen() {
           308:205: a larger wordmark, and a panel rounded like the splash
           screen's with the form at the top and the buttons at the bottom. */}
       <View className="items-center gap-[13px] px-[10px] pt-[57px]">
+        {/* Not in Figma: the language choice, top right. */}
+        <LanguageSwitch className="absolute right-[16px] top-[16px]" />
         <BrandLogo width={161.78} height={56} />
         <Text className="text-center font-poppins text-[15px] text-neutral-900">
-          Kelola jastip tanpa ribet!
+          {t('Kelola jastip tanpa ribet!')}
         </Text>
       </View>
 
@@ -89,8 +96,12 @@ export default function LoginScreen() {
               bottom; on a short screen the panel scrolls instead. */}
           <View className="w-full max-w-[271px] flex-1 justify-between gap-[32px]">
             <View className="w-full gap-[21px]">
-              <Text className="font-inter-bold text-[16px] text-neutral-50">Selamat Datang!</Text>
-              <Text className="font-inter-bold text-[14px] text-neutral-50">Login dengan akun</Text>
+              <Text className="font-inter-bold text-[16px] text-neutral-50">
+                {t('Selamat Datang!')}
+              </Text>
+              <Text className="font-inter-bold text-[14px] text-neutral-50">
+                {t('Login dengan akun')}
+              </Text>
 
               <View className="w-full gap-[10px]">
                 <FormField
@@ -103,16 +114,16 @@ export default function LoginScreen() {
                   tintErrorText={false}
                 />
                 <FormField
-                  label="Password"
+                  label={t('Password')}
                   value={password}
                   onChangeText={handleChangePassword}
-                  placeholder="Password"
+                  placeholder={t('Password')}
                   secureTextEntry={!showPassword}
                   onToggleSecure={() => setShowPassword((s) => !s)}
                   hasError={loginError !== null}
                   tintErrorText={false}
                   // `notice`: why this device was logged out, if it was.
-                  errorMessage={loginError ?? notice ?? undefined}
+                  errorMessage={loginError ?? (notice ? t(notice) : undefined)}
                 />
               </View>
 
@@ -137,7 +148,7 @@ export default function LoginScreen() {
                     </Text>
                   ) : null}
                 </View>
-                <Text className="font-inter text-[12px] text-neutral-50">Tetap masuk</Text>
+                <Text className="font-inter text-[12px] text-neutral-50">{t('Tetap masuk')}</Text>
               </Pressable>
             </View>
 
@@ -156,17 +167,19 @@ export default function LoginScreen() {
                     'font-inter-semibold text-[14px]',
                     isValid ? 'text-orange-500' : 'text-orange-700'
                   )}>
-                  {submitting ? 'Memproses...' : 'Login'}
+                  {submitting ? t('Memproses...') : t('Login')}
                 </Text>
               </Pressable>
 
               <Text className="w-full text-center font-inter text-[12px] text-neutral-50">
-                Belum punya akun?
+                {t('Belum punya akun?')}
               </Text>
 
               <Link href="/sign-up" asChild>
                 <Pressable className="w-full items-center justify-center rounded-[12px] border border-neutral-50 px-[10px] py-[16px]">
-                  <Text className="font-inter-semibold text-[14px] text-neutral-50">Daftar</Text>
+                  <Text className="font-inter-semibold text-[14px] text-neutral-50">
+                    {t('Daftar')}
+                  </Text>
                 </Pressable>
               </Link>
             </View>
@@ -190,9 +203,9 @@ export default function LoginScreen() {
             accessibilityRole="alert"
             className="w-full max-w-[330px] gap-[16px] rounded-[8px] bg-white p-[20px]">
             <Text className="font-inter text-[13px] leading-[20px] text-neutral-800">
-              Akun ini sedang aktif di browser/perangkat lain. Apakah kamu mau keluar dari browser
-              lain dan login di sini? Jika setuju, akunmu di browser lain akan secara otomatis
-              keluar.
+              {t(
+                'Akun ini sedang aktif di browser/perangkat lain. Apakah kamu mau keluar dari browser lain dan login di sini? Jika setuju, akunmu di browser lain akan secara otomatis keluar.'
+              )}
             </Text>
             <View className="flex-row gap-[10px]">
               <Pressable
@@ -201,7 +214,7 @@ export default function LoginScreen() {
                 accessibilityRole="button"
                 className="flex-1 items-center justify-center rounded-[8px] border border-orange-500 bg-white p-[10px]">
                 <Text className="font-inter-semibold text-[12px] text-orange-500">
-                  Tidak setuju
+                  {t('Tidak setuju')}
                 </Text>
               </Pressable>
               <Pressable
@@ -211,7 +224,7 @@ export default function LoginScreen() {
                 accessibilityState={{ busy: submitting }}
                 className="flex-1 items-center justify-center rounded-[8px] bg-orange-500 p-[10px]">
                 <Text className="font-inter-semibold text-[12px] text-white">
-                  {submitting ? 'Memproses...' : 'Setuju'}
+                  {submitting ? t('Memproses...') : t('Setuju')}
                 </Text>
               </Pressable>
             </View>

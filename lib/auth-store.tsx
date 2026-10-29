@@ -3,6 +3,8 @@ import * as React from 'react';
 import { AppState, Platform } from 'react-native';
 import { SUPABASE_KEY, SUPABASE_URL } from './backend';
 import { newId, useEvents } from './events-store';
+import { t } from './i18n';
+import { currencyForCountry, setHomeCurrency } from './money';
 import { useSettings } from './settings-store';
 import { storage } from './storage';
 import { supabase } from './supabase';
@@ -35,6 +37,9 @@ export type Shop = {
   adminWhatsapp: string;
   publikasiOpening: string;
   tokenBalance: number;
+  /** Two-letter country code chosen by the owner at sign-up; null for
+   * shops created before countries existed (treated as Indonesia). */
+  country: string | null;
 };
 
 export type ShopMember = { userId: string; role: Role; nama: string; email: string };
@@ -67,7 +72,7 @@ function isBeta(prices: TokenPrices) {
 
 /** "Gratis" for a free action, otherwise "N token". */
 export function costLabel(tokens: number) {
-  return tokens === 0 ? 'Gratis' : `${tokens} token`;
+  return tokens === 0 ? t('Gratis') : t('{n} token', { n: tokens });
 }
 /** People a shop can have besides its owner (members plus pending invites). */
 export const MEMBER_LIMIT = 10;
@@ -84,6 +89,8 @@ type ShopState = {
 type SignUpInput = {
   nama: string;
   namaJastip: string;
+  /** Two-letter country code (lib/countries.ts). */
+  country: string;
   email: string;
   password: string;
 };
@@ -141,7 +148,8 @@ const AuthContext = React.createContext<AuthContextValue | null>(null);
 const NO_CHARGES: EventCharges = { opened: [], published: [], openedPaid: [] };
 
 // Shown on the login screen of a device that was logged out because the
-// account was taken over, or found active, on another one.
+// account was taken over, or found active, on another one. Kept in
+// Indonesian here; the login screen passes it through t().
 const LOGGED_OUT_ELSEWHERE = 'Kamu keluar karena akun ini sedang aktif di browser/perangkat lain.';
 
 // How often an open app renews its hold on the account. The server lets
@@ -182,7 +190,7 @@ async function releaseSession() {
   }
 }
 
-/** An error whose `message` is already written for the user, in Indonesian. */
+/** An error whose `message` is already written for the user, in the app's language. */
 export class AuthError extends Error {}
 
 /**
@@ -192,7 +200,7 @@ export class AuthError extends Error {}
  */
 export class ActiveElsewhereError extends AuthError {
   constructor() {
-    super('Akun ini sedang aktif di browser/perangkat lain.');
+    super(t('Akun ini sedang aktif di browser/perangkat lain.'));
   }
 }
 
@@ -204,36 +212,39 @@ function toAuthError(error: unknown): AuthError {
   const has = (...needles: string[]) => needles.some((n) => text.includes(n));
 
   if (has('invalid login credentials', 'invalid_credentials'))
-    return new AuthError('Email atau password salah. Coba lagi.');
+    return new AuthError(t('Email atau password salah. Coba lagi.'));
   if (has('email not confirmed', 'email_not_confirmed'))
-    return new AuthError('Email belum dikonfirmasi. Cek inbox kamu, lalu login lagi.');
+    return new AuthError(t('Email belum dikonfirmasi. Cek inbox kamu, lalu login lagi.'));
   if (has('already registered', 'user_already_exists', 'email_exists'))
-    return new AuthError('Email ini sudah terdaftar. Silakan login.');
+    return new AuthError(t('Email ini sudah terdaftar. Silakan login.'));
   if (has('weak_password', 'password should be at least'))
-    return new AuthError('Password minimal 6 karakter.');
-  if (has('same_password')) return new AuthError('Password baru harus berbeda dari yang lama.');
+    return new AuthError(t('Password minimal 6 karakter.'));
+  if (has('same_password')) return new AuthError(t('Password baru harus berbeda dari yang lama.'));
   if (has('invalid_email', 'unable to validate email', 'email address'))
-    return new AuthError('Alamat email tidak valid.');
+    return new AuthError(t('Alamat email tidak valid.'));
   if (has('rate limit', 'over_email_send_rate_limit', 'too many'))
-    return new AuthError('Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.');
+    return new AuthError(t('Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.'));
   if (has('insufficient_tokens'))
-    return new AuthError('Token tidak cukup. Beli token dulu di Pengaturan Subscription.');
+    return new AuthError(t('Token tidak cukup. Beli token dulu di Pengaturan Subscription.'));
   if (has('beta_no_invites'))
-    return new AuthError('Menambah anggota akan tersedia saat Justipers versi lengkap dirilis.');
+    return new AuthError(t('Menambah anggota akan tersedia saat Justipers versi lengkap dirilis.'));
   if (has('member_limit'))
-    return new AuthError(`Toko ini sudah mencapai batas ${MEMBER_LIMIT} anggota.`);
-  if (has('already_member')) return new AuthError('Email ini sudah menjadi anggota sebuah toko.');
-  if (has('already_invited')) return new AuthError('Email ini sudah diundang.');
-  if (has('is_owner')) return new AuthError('Pemilik toko tidak bisa dihapus.');
+    return new AuthError(t('Toko ini sudah mencapai batas {n} anggota.', { n: MEMBER_LIMIT }));
+  if (has('already_member'))
+    return new AuthError(t('Email ini sudah menjadi anggota sebuah toko.'));
+  if (has('already_invited')) return new AuthError(t('Email ini sudah diundang.'));
+  if (has('is_owner')) return new AuthError(t('Pemilik toko tidak bisa dihapus.'));
   if (has('is_admin'))
     return new AuthError(
-      'Admin tidak bisa dihapus. Minta pemilik toko mencabut status admin dulu.'
+      t('Admin tidak bisa dihapus. Minta pemilik toko mencabut status admin dulu.')
     );
-  if (has('not_admin')) return new AuthError('Hanya admin yang bisa memakai token toko.');
-  if (has('not_owner')) return new AuthError('Hanya pemilik toko yang bisa melakukan ini.');
+  if (has('not_admin')) return new AuthError(t('Hanya admin yang bisa memakai token toko.'));
+  if (has('not_owner')) return new AuthError(t('Hanya pemilik toko yang bisa melakukan ini.'));
   if (has('failed to fetch', 'network request failed', 'networkerror', 'load failed'))
-    return new AuthError('Tidak bisa terhubung ke server. Cek koneksi internet, lalu coba lagi.');
-  return new AuthError('Terjadi kesalahan. Coba lagi sebentar lagi.');
+    return new AuthError(
+      t('Tidak bisa terhubung ke server. Cek koneksi internet, lalu coba lagi.')
+    );
+  return new AuthError(t('Terjadi kesalahan. Coba lagi sebentar lagi.'));
 }
 
 // Supabase calls resolve to `{ data, error }` rather than throwing; this
@@ -250,7 +261,7 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
   const shops = check(
     await supabase
       .from('shops')
-      .select('id, name, telepon, admin_whatsapp, publikasi_opening, token_balance')
+      .select('id, name, telepon, admin_whatsapp, publikasi_opening, token_balance, country')
       .limit(1)
   );
   const row = shops?.[0];
@@ -261,7 +272,9 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
   const invites = check(
     await supabase.from('shop_invites').select('id, email').order('created_at')
   );
-  const charges = check(await supabase.from('shop_event_charges').select('event_id, kind, tokens, refunded_at'));
+  const charges = check(
+    await supabase.from('shop_event_charges').select('event_id, kind, tokens, refunded_at')
+  );
   const prices = check(await supabase.from('shopper_token_prices').select('kind, tokens'));
   const price = (kind: string, fallback: number) =>
     (prices ?? []).find((p) => p.kind === kind)?.tokens ?? fallback;
@@ -274,6 +287,7 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
       adminWhatsapp: row.admin_whatsapp,
       publikasiOpening: row.publikasi_opening,
       tokenBalance: row.token_balance ?? 0,
+      country: row.country ?? null,
     },
     role: toRole(mine?.role),
     members: (members ?? []).map((m) => ({
@@ -308,6 +322,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [sessionRead, setSessionRead] = React.useState(false);
   const [state, setState] = React.useState<ShopState | null>(null);
+  // Every amount on screen is in the shop's currency (lib/money.ts). Set
+  // here during render, so the screens below already format with it.
+  setHomeCurrency(currencyForCountry(state?.shop.country));
   const [notice, setNotice] = React.useState<string | null>(null);
 
   // The effects below outlive renders; read the stores through a ref.
@@ -346,7 +363,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       );
       const next = await loadShopState(current.user.id);
-      if (!next) throw new AuthError('Toko tidak ditemukan untuk akun ini.');
+      if (!next) throw new AuthError(t('Toko tidak ditemukan untuk akun ini.'));
 
       // A device remembers which shop the events and orders it holds
       // belong to, because components/data-sync.tsx uploads whatever is
@@ -404,7 +421,11 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cached && !cancelled)
           setState({
             ...cached,
-            shop: { ...cached.shop, tokenBalance: cached.shop.tokenBalance ?? 0 },
+            shop: {
+              ...cached.shop,
+              tokenBalance: cached.shop.tokenBalance ?? 0,
+              country: cached.shop.country ?? null,
+            },
             charges: { ...NO_CHARGES, ...cached.charges },
             prices: cached.prices ?? LIST_PRICES,
           });
@@ -494,9 +515,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           email: input.email,
           password: input.password,
           // Kept with the account so the shop can be created at first
-          // login even when email confirmation delays it.
+          // login even when email confirmation delays it. The country
+          // stays here, with the account, for now.
           options: {
-            data: { nama: input.nama, nama_jastip: input.namaJastip },
+            data: { nama: input.nama, nama_jastip: input.namaJastip, country: input.country },
           },
         })
       );
@@ -558,7 +580,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateShop = React.useCallback<AuthContextValue['updateShop']>(
     async (patch) => {
-      if (!state) throw new AuthError('Kamu belum login.');
+      if (!state) throw new AuthError(t('Kamu belum login.'));
       const columns: Record<string, string> = {};
       if (patch.name !== undefined) columns.name = patch.name;
       if (patch.telepon !== undefined) columns.telepon = patch.telepon;

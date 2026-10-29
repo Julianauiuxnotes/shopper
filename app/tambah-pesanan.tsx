@@ -6,9 +6,18 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useEvents } from '@/lib/events-store';
 import { eventCurrency, formatForeign } from '@/lib/currency';
-import { formatIDR } from '@/lib/format';
 import { useSettings } from '@/lib/settings-store';
 import { parseOrderForm } from '@/lib/parse-order-form';
+import { t as translate, useT } from '@/lib/i18n';
+import {
+  amountKeyboard,
+  cleanAmountInput,
+  currencyLabel,
+  formatAmountInput,
+  formatMoney,
+  parseAmount,
+  roundMoney,
+} from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -29,26 +38,29 @@ import {
 // pop-up (node 199:794), as [label, value] rows so the pop-up can bold
 // the labels. "Salin contoh form order" copies it as plain text for the
 // jastiper to send to customers; lib/parse-order-form.ts reads this
-// format, including the "[Nama produk (Jumlah)] contoh →" hint.
-const CONTOH_GREETING = 'Hi dear, yuk lengkapi form pesanan dibawah ini ya';
-const CONTOH_ROWS = [
-  ['Nama', 'Anjani'],
-  ['Alamat', 'Perumahan Galaxy, blok Jupiter no. 2, Bandung, 40524'],
-  ['No. Whatsapp', '0851211151167'],
-  [
-    'List pesanan',
-    '[Nama produk (Jumlah)] contoh → Herborist lotion Strawberry (1), Wardah cushion shade N21 (1)',
-  ],
-] as const;
-const CONTOH_FORM_PESANAN = [
-  CONTOH_GREETING,
-  '',
-  ...CONTOH_ROWS.map(([label, value]) => `${label}: ${value}`),
-].join('\n');
+// format, including the "[Nama produk (Jumlah)] contoh →" hint. Built in
+// the app's language: the parser reads the English labels too.
+function contohForm() {
+  const greeting = translate('Hi dear, yuk lengkapi form pesanan dibawah ini ya');
+  const rows = [
+    [translate('Nama'), 'Anjani'],
+    [translate('Alamat'), 'Perumahan Galaxy, blok Jupiter no. 2, Bandung, 40524'],
+    [translate('No. Whatsapp'), '0851211151167'],
+    [
+      translate('List pesanan'),
+      translate(
+        '[Nama produk (Jumlah)] contoh → Herborist lotion Strawberry (1), Wardah cushion shade N21 (1)'
+      ),
+    ],
+  ];
+  const text = [greeting, '', ...rows.map(([label, value]) => `${label}: ${value}`)].join('\n');
+  return { greeting, rows, text };
+}
 
+// Labels go through t() where they're shown.
 const FEE_TYPE_OPTIONS = [
   ['percent', 'Pakai %'],
-  ['flat', 'Pakai IDR'],
+  ['flat', 'Pakai {currency}'],
 ] as const;
 
 type ItemDraft = {
@@ -82,16 +94,16 @@ function parseNumber(s: string) {
 // Mirrors lib/events-store.tsx's computeItemTotals — kept in sync by
 // hand since this is only a live preview; the store recomputes
 // authoritatively when the order is actually created.
-// `kurs` turns the typed price into IDR: 1 for a Lokal event, the event's
+// `kurs` turns the typed price into the shop's currency: 1 for an Indonesia event, the event's
 // rate for an Internasional one (lib/currency.ts).
 function itemTotals(item: ItemDraft, kurs: number) {
   const jumlah = parseNumber(item.jumlah);
-  const harga = Math.round(parseNumber(item.harga) * kurs);
+  const harga = roundMoney(parseNumber(item.harga) * kurs);
   const feeValue = parseNumber(item.feeValue);
   const subtotal = harga * jumlah;
   const fee = item.feeType === 'percent' ? subtotal * (feeValue / 100) : feeValue * jumlah;
   // Markup over harga asli: profit, but already inside the price billed.
-  const hargaAsli = Math.round(parseNumber(item.hargaAsli) * kurs);
+  const hargaAsli = roundMoney(parseNumber(item.hargaAsli) * kurs);
   const markup = hargaAsli > 0 ? (harga - hargaAsli) * jumlah : 0;
   return { subtotal, fee, markup };
 }
@@ -106,6 +118,8 @@ export default function TambahPesananScreen() {
   const router = useRouter();
   const { getEvent, addOrder } = useEvents();
   const { userProfile } = useSettings();
+  const t = useT();
+  const contoh = contohForm();
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const event = eventId ? getEvent(eventId) : undefined;
   // Prices are typed in the event's currency and stored in IDR.
@@ -159,7 +173,7 @@ export default function TambahPesananScreen() {
   async function handleSalinContoh() {
     if (Platform.OS === 'web') {
       try {
-        await navigator.clipboard.writeText(CONTOH_FORM_PESANAN);
+        await navigator.clipboard.writeText(contohForm().text);
         setContohCopied(true);
       } catch {
         // clipboard blocked — the text is still on screen to select by hand.
@@ -169,7 +183,7 @@ export default function TambahPesananScreen() {
     // No clipboard module in this app; the share sheet offers "Copy" and
     // can send the template straight to a chat.
     try {
-      await Share.share({ message: CONTOH_FORM_PESANAN });
+      await Share.share({ message: contohForm().text });
     } catch {
       // dismissed
     }
@@ -195,19 +209,19 @@ export default function TambahPesananScreen() {
     const filled: string[] = [];
     if (parsed.nama) {
       setNama(parsed.nama);
-      filled.push('Nama');
+      filled.push(t('Nama'));
     }
     if (parsed.alamat) {
       setAlamat(parsed.alamat);
-      filled.push('Alamat');
+      filled.push(t('Alamat'));
     }
     if (parsed.whatsapp) {
       setWhatsapp(parsed.whatsapp);
-      filled.push('No. Whatsapp');
+      filled.push(t('No. Whatsapp'));
     }
     if (parsed.metodePengiriman) {
       setMetodePengiriman(parsed.metodePengiriman);
-      filled.push('Metode pengiriman');
+      filled.push(t('Metode pengiriman'));
     }
     if (parsed.items.length > 0) {
       setItems(
@@ -217,7 +231,7 @@ export default function TambahPesananScreen() {
           jumlah: String(it.jumlah),
         }))
       );
-      filled.push(`${parsed.items.length} produk`);
+      filled.push(t('{n} produk', { n: parsed.items.length }));
     }
     setAutoFilled(filled);
   }
@@ -285,15 +299,15 @@ export default function TambahPesananScreen() {
       alamat,
       whatsapp: `+62${whatsapp}`,
       metodePengiriman,
-      dp: Number(dp) || 0,
+      dp: parseAmount(dp),
       items: validItems.map((it) => ({
         namaProduk: it.namaProduk,
         jumlah: parseNumber(it.jumlah),
-        harga: Math.round(parseNumber(it.harga) * currency.kurs),
+        harga: roundMoney(parseNumber(it.harga) * currency.kurs),
         ...(currency.foreign ? { hargaAsing: parseNumber(it.harga) } : {}),
         ...(parseNumber(it.hargaAsli) > 0
           ? {
-              hargaAsli: Math.round(parseNumber(it.hargaAsli) * currency.kurs),
+              hargaAsli: roundMoney(parseNumber(it.hargaAsli) * currency.kurs),
               ...(currency.foreign ? { hargaAsliAsing: parseNumber(it.hargaAsli) } : {}),
             }
           : {}),
@@ -316,13 +330,21 @@ export default function TambahPesananScreen() {
     const namaJastip = userProfile.namaJastip || 'Jastip by Juli';
     const itemsList = validItems.map((it) => `${it.namaProduk}, ${it.jumlah}`).join(', ');
     const message =
-      `Hi! ini pesan konfirmasi dari ${namaJastip}. Kami sudah catat pesananmu ya. ` +
-      `Pesananmu ada ${validItems.length} items dengan total pembayaran IDR ` +
-      `${totalTagihan.toLocaleString('id-ID')}. ` +
-      `Item pesananmu : ${itemsList}.` +
+      t(
+        'Hi! ini pesan konfirmasi dari {jastip}. Kami sudah catat pesananmu ya. Pesananmu ada {n} items dengan total pembayaran {total}. Item pesananmu : {items}.',
+        {
+          jastip: namaJastip,
+          n: validItems.length,
+          total: formatMoney(totalTagihan),
+          items: itemsList,
+        }
+      ) +
       (Number(dp) > 0
-        ? ` DP yang sudah dibayar IDR ${Number(dp).toLocaleString('id-ID')}, ` +
-          `sisa pembayaran IDR ${Math.max(0, totalTagihan - Number(dp)).toLocaleString('id-ID')}.`
+        ? ' ' +
+          t('DP yang sudah dibayar {dp}, sisa pembayaran {rest}.', {
+            dp: formatMoney(parseAmount(dp)),
+            rest: formatMoney(Math.max(0, totalTagihan - parseAmount(dp))),
+          })
         : '');
     const phoneDigits = `62${whatsapp.replace(/\D/g, '')}`;
     const waUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
@@ -343,10 +365,12 @@ export default function TambahPesananScreen() {
   if (!event) {
     return (
       <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
-        <Text className="font-inter-bold text-[16px] text-neutral-900">Event tidak ditemukan</Text>
+        <Text className="font-inter-bold text-[16px] text-neutral-900">
+          {t('Event tidak ditemukan')}
+        </Text>
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Text className="font-inter-semibold text-[14px] text-orange-500">
-            Kembali ke Dashboard
+            {t('Kembali ke Dashboard')}
           </Text>
         </Pressable>
       </View>
@@ -366,11 +390,13 @@ export default function TambahPesananScreen() {
             hitSlop={8}
             className="flex-row items-center gap-[5px]">
             <CaretCircleLeftIcon width={24} height={24} />
-            <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">Tambah pesanan</Text>
+            <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">
+              {t('Tambah pesanan')}
+            </Text>
           </Pressable>
 
           <View className="gap-[1px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Nomor order</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('Nomor order')}</Text>
             <Text className="font-inter-bold text-[14px] italic text-neutral-800">
               {nextOrderNumber}
             </Text>
@@ -380,11 +406,12 @@ export default function TambahPesananScreen() {
           <View className="gap-[10px]">
             <View className="gap-[4px]">
               <Text className="font-inter-bold text-[14px] text-neutral-800">
-                Copy-paste form pesanan
+                {t('Copy-paste form pesanan')}
               </Text>
               <Text className="font-inter text-[11px] text-neutral-600">
-                Copy paste chat pesanan dari whatsapp disini dan terapkan untuk secara otomatis
-                mengisi form pesanan.
+                {t(
+                  'Copy paste chat pesanan dari whatsapp disini dan terapkan untuk secara otomatis mengisi form pesanan.'
+                )}
               </Text>
             </View>
             <Pressable
@@ -394,9 +421,11 @@ export default function TambahPesananScreen() {
               }}
               accessibilityRole="button"
               className="w-[166px] items-center justify-center rounded-[8px] border border-neutral-800 bg-neutral-50 p-[10px]">
-              <Text className="font-inter text-[12px] text-neutral-800">Contoh form pesanan</Text>
+              <Text className="font-inter text-[12px] text-neutral-800">
+                {t('Contoh form pesanan')}
+              </Text>
             </Pressable>
-            <Text className="font-inter text-[12px] text-neutral-800">Order form</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('Order form')}</Text>
             {/* The height lives on this wrapper, not the Input: the shared
                 Input's own `sm:h-9` wins over a height class on screens
                 640px and wider, which squashed this box to one line (36px)
@@ -405,7 +434,7 @@ export default function TambahPesananScreen() {
               <Input
                 value={orderFormText}
                 onChangeText={handleChangeOrderForm}
-                placeholder="Copy Paste text order form disini."
+                placeholder={t('Copy Paste text order form disini.')}
                 placeholderTextColor="#9ca3af"
                 multiline
                 textAlignVertical="top"
@@ -427,14 +456,18 @@ export default function TambahPesananScreen() {
                   'font-inter text-[12px]',
                   canApplyOrderForm ? 'text-orange-500' : 'text-orange-300'
                 )}>
-                Terapkan
+                {t('Terapkan')}
               </Text>
             </Pressable>
             {autoFilled ? (
               <Text className="font-inter text-[10px] text-neutral-500">
                 {autoFilled.length > 0
-                  ? `Terisi otomatis: ${autoFilled.join(', ')}. Cek lagi, lalu isi Harga dan Fee Jastip.`
-                  : 'Belum ada data yang dikenali. Lihat "Contoh form pesanan" untuk format yang bisa dibaca.'}
+                  ? t('Terisi otomatis: {fields}. Cek lagi, lalu isi Harga dan Fee Jastip.', {
+                      fields: autoFilled.join(', '),
+                    })
+                  : t(
+                      'Belum ada data yang dikenali. Lihat "Contoh form pesanan" untuk format yang bisa dibaca.'
+                    )}
               </Text>
             ) : null}
           </View>
@@ -443,30 +476,30 @@ export default function TambahPesananScreen() {
 
           <View className="gap-[6px]">
             <Text className="font-inter text-[12px] text-neutral-800">
-              Atau isi manual form dibawah ini:
+              {t('Atau isi manual form dibawah ini:')}
             </Text>
             <Text className="font-inter-bold text-[14px] text-neutral-800">
-              Form pesanan manual
+              {t('Form pesanan manual')}
             </Text>
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Nama</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('Nama')}</Text>
             <Input
               value={nama}
               onChangeText={setNama}
-              placeholder="Nama"
+              placeholder={t('Nama')}
               placeholderTextColor="#9ca3af"
               className="h-auto rounded-[8px] border-neutral-400 bg-white p-[10px] text-[12px] text-neutral-800 shadow-none"
             />
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Alamat</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('Alamat')}</Text>
             <Input
               value={alamat}
               onChangeText={setAlamat}
-              placeholder="Alamat"
+              placeholder={t('Alamat')}
               placeholderTextColor="#9ca3af"
               multiline
               textAlignVertical="top"
@@ -475,7 +508,7 @@ export default function TambahPesananScreen() {
           </View>
 
           <View className="gap-[4px]">
-            <Text className="font-inter text-[12px] text-neutral-800">No. Whatsapp</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('No. Whatsapp')}</Text>
             <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
               <Text className="font-inter text-[12px] text-neutral-800">+62</Text>
               <Input
@@ -490,12 +523,14 @@ export default function TambahPesananScreen() {
           </View>
 
           <View className="gap-[10px]">
-            <Text className="font-inter text-[12px] text-neutral-800">Metode pengiriman</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">
+              {t('Metode pengiriman')}
+            </Text>
             <View className="flex-row gap-[10px]">
               {(
                 [
-                  ['instant', 'Instant'],
-                  ['ekspedisi', 'Via Expedisi'],
+                  ['instant', t('Instant')],
+                  ['ekspedisi', t('Via Expedisi')],
                 ] as const
               ).map(([value, label]) => {
                 const selected = metodePengiriman === value;
@@ -521,32 +556,34 @@ export default function TambahPesananScreen() {
           </View>
 
           <View className="gap-[16px]">
-            <Text className="font-inter-bold text-[14px] text-neutral-800">List pesanan</Text>
+            <Text className="font-inter-bold text-[14px] text-neutral-800">
+              {t('List pesanan')}
+            </Text>
 
             {totals.totalPembelanjaan > 0 ? (
               <>
                 <View className="flex-row justify-between">
                   <View className="gap-[2px]">
                     <Text className="font-inter text-[12px] text-neutral-800">
-                      Total pembelanjaan
+                      {t('Total pembelanjaan')}
                     </Text>
                     <Text className="font-inter-bold text-[14px] text-neutral-800">
-                      {formatIDR(totals.totalPembelanjaan)}
+                      {formatMoney(totals.totalPembelanjaan)}
                     </Text>
                   </View>
                   <View className="gap-[2px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Profit</Text>
+                    <Text className="font-inter text-[12px] text-neutral-800">{t('Profit')}</Text>
                     <Text className="font-inter-bold text-[14px] text-neutral-800">
-                      {formatIDR(totals.profit + totals.markup)}
+                      {formatMoney(totals.profit + totals.markup)}
                     </Text>
                   </View>
                 </View>
                 <View className="gap-[2px]">
                   <Text className="font-inter text-[12px] text-neutral-800">
-                    Total tagihan ke pelanggan
+                    {t('Total tagihan ke pelanggan')}
                   </Text>
                   <Text className="font-inter-bold text-[14px] text-neutral-800">
-                    {formatIDR(totalTagihan)}
+                    {formatMoney(totalTagihan)}
                   </Text>
                 </View>
                 <View className="h-px bg-neutral-300" />
@@ -561,19 +598,21 @@ export default function TambahPesananScreen() {
                     prices side by side, then the jastip fee. */}
                 <View className="flex-row items-start gap-[4px]">
                   <View className="flex-1 gap-[4px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Nama produk</Text>
+                    <Text className="font-inter text-[12px] text-neutral-800">
+                      {t('Nama produk')}
+                    </Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={item.namaProduk}
                         onChangeText={(v) => updateItem(item.key, { namaProduk: v })}
-                        placeholder="Nama produk"
+                        placeholder={t('Nama produk')}
                         placeholderTextColor="#9ca3af"
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
                   </View>
                   <View className="w-[56px] gap-[4px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Jumlah</Text>
+                    <Text className="font-inter text-[12px] text-neutral-800">{t('Jumlah')}</Text>
                     <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                       <Input
                         value={item.jumlah}
@@ -581,7 +620,7 @@ export default function TambahPesananScreen() {
                         placeholder="0"
                         placeholderTextColor="#9ca3af"
                         keyboardType="numeric"
-                        accessibilityLabel="Jumlah"
+                        accessibilityLabel={t('Jumlah')}
                         className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                       />
                     </View>
@@ -594,7 +633,9 @@ export default function TambahPesananScreen() {
                         records only: it takes no part in any total and is
                         never shown to the customer. */}
                     <View className="flex-1 gap-[4px]">
-                      <Text className="font-inter text-[12px] text-neutral-800">Harga asli</Text>
+                      <Text className="font-inter text-[12px] text-neutral-800">
+                        {t('Harga asli')}
+                      </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                         <Text className="font-inter text-[12px] text-neutral-400">
                           {currency.code}
@@ -605,14 +646,14 @@ export default function TambahPesananScreen() {
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga asli"
+                          accessibilityLabel={t('Harga asli')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                     <View className="flex-1 gap-[4px]">
                       <Text className="font-inter text-[12px] text-neutral-800">
-                        Harga ke pelanggan
+                        {t('Harga ke pelanggan')}
                       </Text>
                       <View className="flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                         <Text className="font-inter text-[12px] text-neutral-400">
@@ -624,20 +665,22 @@ export default function TambahPesananScreen() {
                           placeholder="0"
                           placeholderTextColor="#9ca3af"
                           keyboardType="numeric"
-                          accessibilityLabel="Harga ke pelanggan"
+                          accessibilityLabel={t('Harga ke pelanggan')}
                           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
                         />
                       </View>
                     </View>
                   </View>
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke
-                    profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh
-                    dikosongkan.
+                    {t(
+                      'Harga asli hanya catatan untukmu. Selisihnya dengan harga ke pelanggan masuk ke profit, tidak mengubah tagihan, dan tidak tampil ke pelanggan. Boleh dikosongkan.'
+                    )}
                   </Text>
 
                   <View className="gap-[4px]">
-                    <Text className="font-inter text-[12px] text-neutral-800">Fee Jastip</Text>
+                    <Text className="font-inter text-[12px] text-neutral-800">
+                      {t('Fee Jastip')}
+                    </Text>
                     <View className="flex-row gap-[4px]">
                       <Pressable
                         ref={(el) => {
@@ -651,7 +694,9 @@ export default function TambahPesananScreen() {
                             : 'border-neutral-400'
                         )}>
                         <Text className="font-inter text-[12px] text-neutral-800">
-                          {item.feeType === 'percent' ? 'Pakai %' : 'Pakai IDR'}
+                          {item.feeType === 'percent'
+                            ? t('Pakai %')
+                            : t('Pakai {currency}', { currency: currencyLabel() })}
                         </Text>
                         <View
                           style={{
@@ -664,7 +709,9 @@ export default function TambahPesananScreen() {
                       </Pressable>
                       <View className="flex-1 flex-row items-center gap-[4px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
                         {item.feeType === 'flat' ? (
-                          <Text className="font-inter text-[12px] text-neutral-800">IDR</Text>
+                          <Text className="font-inter text-[12px] text-neutral-800">
+                            {currencyLabel()}
+                          </Text>
                         ) : null}
                         <Input
                           value={item.feeValue}
@@ -683,12 +730,15 @@ export default function TambahPesananScreen() {
                 </View>
 
                 {/* Internasional event: what the typed price comes to in
-                    Rupiah, which is what gets saved and billed. */}
+                    the shop's currency, which is what gets saved and billed. */}
                 {currency.foreign && parseNumber(item.harga) > 0 ? (
                   <Text className="font-inter text-[10px] text-neutral-700">
-                    {formatForeign(parseNumber(item.harga), currency.code)} ≈{' '}
-                    {formatIDR(Math.round(parseNumber(item.harga) * currency.kurs))} per barang
-                    (kurs 1 {currency.code} = {formatIDR(currency.kurs)})
+                    {t('{foreign} ≈ {price} per barang (kurs 1 {code} = {rate})', {
+                      foreign: formatForeign(parseNumber(item.harga), currency.code),
+                      price: formatMoney(roundMoney(parseNumber(item.harga) * currency.kurs)),
+                      code: currency.code,
+                      rate: formatMoney(currency.kurs),
+                    })}
                   </Text>
                 ) : null}
 
@@ -698,10 +748,12 @@ export default function TambahPesananScreen() {
                   <Pressable
                     onPress={() => removeItem(item.key)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Hapus produk ${item.namaProduk || index + 1}`}
+                    accessibilityLabel={t('Hapus produk {name}', {
+                      name: item.namaProduk || index + 1,
+                    })}
                     className="flex-row items-center gap-[4px] self-start rounded-[8px] border border-neutral-800 bg-neutral-50 p-[10px]">
                     <TrashIcon width={16} height={16} />
-                    <Text className="font-inter text-[12px] text-neutral-800">Hapus</Text>
+                    <Text className="font-inter text-[12px] text-neutral-800">{t('Hapus')}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -710,32 +762,37 @@ export default function TambahPesananScreen() {
             <Pressable
               onPress={() => setItems((prev) => [...prev, blankItem()])}
               className="items-center rounded-[8px] border border-orange-400 bg-orange-50 px-[10px] py-[10px]">
-              <Text className="font-inter text-[12px] text-orange-500">+Tambah</Text>
+              <Text className="font-inter text-[12px] text-orange-500">{t('+Tambah')}</Text>
             </Pressable>
           </View>
 
           {/* Optional: leave empty when the customer hasn't paid anything.
               An order saved with a DP starts as "Belum lunas". */}
           <View className="gap-[4px]">
-            <Text className="font-inter text-[12px] text-neutral-800">DP (opsional)</Text>
+            <Text className="font-inter text-[12px] text-neutral-800">{t('DP (opsional)')}</Text>
             <View className="min-h-[37px] flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white px-[10px]">
-              <Text className="font-inter text-[12px] text-neutral-400">IDR</Text>
+              <Text className="font-inter text-[12px] text-neutral-400">{currencyLabel()}</Text>
               <Input
-                value={dp ? Number(dp).toLocaleString('id-ID') : ''}
-                onChangeText={(value) => setDp(value.replace(/\D/g, '').slice(0, 12))}
+                value={formatAmountInput(dp)}
+                onChangeText={(value) => setDp(cleanAmountInput(value).slice(0, 12))}
                 placeholder="0"
                 placeholderTextColor="#9ca3af"
-                keyboardType="number-pad"
+                keyboardType={amountKeyboard()}
                 accessibilityLabel="DP"
                 className="h-auto min-h-[35px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
               />
             </View>
             <Text className="font-inter text-[10px] text-neutral-700">
               {Number(dp) > totalTagihan && totalTagihan > 0
-                ? `DP lebih besar dari total tagihan. Kelebihan ${formatIDR(Number(dp) - totalTagihan)} perlu dikembalikan ke pelanggan.`
+                ? t(
+                    'DP lebih besar dari total tagihan. Kelebihan {amount} perlu dikembalikan ke pelanggan.',
+                    { amount: formatMoney(Number(dp) - totalTagihan) }
+                  )
                 : Number(dp) > 0
-                  ? `Sisa pembayaran ${formatIDR(Math.max(0, totalTagihan - Number(dp)))}. Pesanan akan berstatus Belum lunas.`
-                  : 'Isi jika pelanggan sudah membayar uang muka. Boleh dikosongkan.'}
+                  ? t('Sisa pembayaran {amount}. Pesanan akan berstatus Belum lunas.', {
+                      amount: formatMoney(Math.max(0, totalTagihan - Number(dp))),
+                    })
+                  : t('Isi jika pelanggan sudah membayar uang muka. Boleh dikosongkan.')}
             </Text>
           </View>
 
@@ -753,7 +810,7 @@ export default function TambahPesananScreen() {
                 'font-inter-semibold text-[14px]',
                 isValid ? 'text-orange-50' : 'text-orange-300'
               )}>
-              Konfirmasi dan kirim total pembayaran
+              {t('Konfirmasi dan kirim total pembayaran')}
             </Text>
           </Pressable>
         </ScrollView>
@@ -786,7 +843,9 @@ export default function TambahPesananScreen() {
                     setDropdownAnchor(null);
                   }}
                   className={cn('px-[12px] py-[10px]', index > 0 && 'border-t border-neutral-300')}>
-                  <Text className="font-inter text-[12px] text-neutral-800">{label}</Text>
+                  <Text className="font-inter text-[12px] text-neutral-800">
+                    {t(label, { currency: currencyLabel() })}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -825,31 +884,33 @@ export default function TambahPesananScreen() {
                 <Pressable
                   onPress={closeContoh}
                   accessibilityRole="button"
-                  accessibilityLabel="Tutup"
+                  accessibilityLabel={t('Tutup')}
                   hitSlop={8}
                   className="self-end p-[2px]">
                   <XCircleOrangeIcon width={19.5} height={19.5} />
                 </Pressable>
                 <View className="w-full gap-[4px]">
                   <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">
-                    Contoh rekomendasi order form
+                    {t('Contoh rekomendasi order form')}
                   </Text>
                   <Text className="font-inter text-[12px] text-neutral-600">
-                    Kamu bisa modifikasi form pesanan dibawah ini tapi pastikan form pesanan
-                    memiliki komponen data Nama, Alamat, No.Whatsapp, dan List pesanan seperti
-                    dibawah ini agar data bisa tersalin secara otomatis dan tepat ke form di
-                    aplikasi Justipers.
+                    {t(
+                      'Kamu bisa modifikasi form pesanan dibawah ini tapi pastikan form pesanan memiliki komponen data Nama, Alamat, No.Whatsapp, dan List pesanan seperti dibawah ini agar data bisa tersalin secara otomatis dan tepat ke form di aplikasi Justipers.'
+                    )}
                   </Text>
                 </View>
                 <View className="w-full">
                   <Text className="font-inter text-[14px] text-[#5d5d5d]">
-                    <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">Contoh</Text>:
+                    <Text className="font-inter-bold text-[14px] text-[#5d5d5d]">
+                      {t('Contoh')}
+                    </Text>
+                    :
                   </Text>
                   <Text selectable className="mt-[14px] font-inter text-[12px] text-[#5d5d5d]">
-                    {CONTOH_GREETING}
+                    {contoh.greeting}
                   </Text>
                   <View className="mt-[12px]">
-                    {CONTOH_ROWS.map(([label, value]) => (
+                    {contoh.rows.map(([label, value]) => (
                       <Text
                         key={label}
                         selectable
@@ -865,7 +926,7 @@ export default function TambahPesananScreen() {
                   accessibilityRole="button"
                   className="mt-[14px] w-[187px] items-center justify-center rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                   <Text className="text-center font-inter text-[12px] text-orange-500">
-                    {contohCopied ? '✓ Contoh tersalin' : 'Salin contoh form order'}
+                    {contohCopied ? t('✓ Contoh tersalin') : t('Salin contoh form order')}
                   </Text>
                 </Pressable>
               </Pressable>

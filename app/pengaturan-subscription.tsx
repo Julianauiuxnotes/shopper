@@ -2,6 +2,7 @@ import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.sv
 import { AddMemberSheet, TeamSection } from '@/components/team-section';
 import { BuyTokenSheet, TokenSection } from '@/components/token-section';
 import { Text } from '@/components/ui/text';
+import { useT } from '@/lib/i18n';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -12,6 +13,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 // whole screen on phones too.
 export default function PengaturanSubscriptionScreen() {
   const router = useRouter();
+  const t = useT();
   const [sheet, setSheet] = React.useState<'tokens' | 'member' | null>(null);
 
   return (
@@ -29,7 +31,7 @@ export default function PengaturanSubscriptionScreen() {
             className="flex-row items-center gap-[5px]">
             <CaretCircleLeftIcon width={24} height={24} />
             <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">
-              Pengaturan Subscription
+              {t('Pengaturan Subscription')}
             </Text>
           </Pressable>
 

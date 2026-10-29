@@ -1,4 +1,5 @@
 import { Text } from '@/components/ui/text';
+import { useT } from '@/lib/i18n';
 import * as React from 'react';
 import { Modal, Pressable, View } from 'react-native';
 
@@ -23,11 +24,12 @@ function ConfirmDialog({
   title,
   message,
   confirmLabel,
-  cancelLabel = 'Batal',
+  cancelLabel,
   tone = 'danger',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const t = useT();
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onCancel}>
       <View className="flex-1 items-center justify-center bg-black/50 p-[20px]">
@@ -42,7 +44,7 @@ function ConfirmDialog({
               accessibilityRole="button"
               className="flex-1 items-center justify-center rounded-[8px] border border-neutral-800 bg-white p-[10px]">
               <Text className="font-inter-semibold text-[12px] text-neutral-800">
-                {cancelLabel}
+                {cancelLabel ?? t('Batal')}
               </Text>
             </Pressable>
             <Pressable

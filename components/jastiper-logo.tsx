@@ -1,4 +1,5 @@
 import { Text } from '@/components/ui/text';
+import { useT } from '@/lib/i18n';
 import { useSettings } from '@/lib/settings-store';
 import * as React from 'react';
 import { Image, View } from 'react-native';
@@ -9,6 +10,7 @@ import { Image, View } from 'react-native';
 // grey "Logo Jastiper" placeholder box when none has been uploaded.
 function JastiperLogo() {
   const { logoJastip } = useSettings();
+  const t = useT();
 
   if (logoJastip) {
     return (
@@ -16,14 +18,14 @@ function JastiperLogo() {
         source={{ uri: logoJastip }}
         resizeMode="contain"
         style={{ width: 101, height: 47 }}
-        accessibilityLabel="Logo jastiper"
+        accessibilityLabel={t('Logo jastiper')}
       />
     );
   }
 
   return (
     <View className="h-[47px] w-[101px] items-center justify-center bg-neutral-300 p-[10px]">
-      <Text className="font-inter text-[10px] text-neutral-800">Logo Jastiper</Text>
+      <Text className="font-inter text-[10px] text-neutral-800">{t('Logo Jastiper')}</Text>
     </View>
   );
 }

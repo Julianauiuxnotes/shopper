@@ -20,7 +20,10 @@ import {
   type PaymentStatus,
   useEvents,
 } from '@/lib/events-store';
-import { formatDate, formatDateRange, formatIDR } from '@/lib/format';
+import { formatDate, formatDateRange } from '@/lib/format';
+import { countryName } from '@/lib/countries';
+import { useT } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { buildOrderFormLink } from '@/lib/order-form-link';
 import { useSettings } from '@/lib/settings-store';
 import * as Clipboard from 'expo-clipboard';
@@ -55,6 +58,7 @@ export default function EventDetailScreen() {
     order.orderNumber.toLowerCase().includes(needle) ||
     order.items.some((item) => item.namaProduk.toLowerCase().includes(needle));
   const { shop, isAdmin, charges, prices, publishEvent, refundEvent } = useAuth();
+  const t = useT();
   const [confirmingPublish, setConfirmingPublish] = React.useState(false);
   const [tokenBusy, setTokenBusy] = React.useState(false);
   // Result of publishing or deleting, shown under the order-form box.
@@ -177,7 +181,9 @@ export default function EventDetailScreen() {
       await publishEvent(event.id);
     } catch (error) {
       setTokenNotice(
-        error instanceof AuthError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar lagi.'
+        error instanceof AuthError
+          ? error.message
+          : t('Terjadi kesalahan. Coba lagi sebentar lagi.')
       );
     } finally {
       setTokenBusy(false);
@@ -197,8 +203,8 @@ export default function EventDetailScreen() {
         setTokenBusy(false);
         setTokenNotice(
           error instanceof AuthError
-            ? `${error.message} Event belum dihapus.`
-            : 'Terjadi kesalahan. Event belum dihapus.'
+            ? `${error.message} ${t('Event belum dihapus.')}`
+            : t('Terjadi kesalahan. Event belum dihapus.')
         );
         return;
       }
@@ -224,14 +230,14 @@ export default function EventDetailScreen() {
   async function handleDownloadReport() {
     if (!event) return;
     if (!canExportReport) {
-      setReportNotice('Download laporan baru tersedia di versi web.');
+      setReportNotice(t('Download laporan baru tersedia di versi web.'));
       return;
     }
     try {
-      await downloadEventReport(event);
-      setReportNotice('Laporan Excel sudah diunduh.');
+      await downloadEventReport(event, countryName(shop?.country ?? 'ID'));
+      setReportNotice(t('Laporan Excel sudah diunduh.'));
     } catch {
-      setReportNotice('Laporan gagal dibuat. Coba lagi.');
+      setReportNotice(t('Laporan gagal dibuat. Coba lagi.'));
     }
   }
 
@@ -240,15 +246,16 @@ export default function EventDetailScreen() {
   // the event's details, then the link. *...* is WhatsApp's bold.
   function buildShareMessage() {
     if (!event) return '';
-    const opening = publikasiOpening.trim() || `Yuk order di ${event.namaAcara}!`;
+    const opening =
+      publikasiOpening.trim() || t('Yuk order di {event}!', { event: event.namaAcara });
     return [
       opening,
       '',
-      `*Nama acara*: ${event.namaAcara}`,
-      `*Tanggal acara:* ${formatDateRange(event.tanggalDari, event.tanggalSampai)}`,
-      `*Lokasi:* ${event.lokasi}`,
+      `*${t('Nama acara')}*: ${event.namaAcara}`,
+      `*${t('Tanggal acara:')}* ${formatDateRange(event.tanggalDari, event.tanggalSampai)}`,
+      `*${t('Lokasi:')}* ${event.lokasi}`,
       '',
-      '*Klik link dibawah ini untuk pemesanan:*',
+      `*${t('Klik link dibawah ini untuk pemesanan:')}*`,
       shareLink,
     ].join('\n');
   }
@@ -274,10 +281,12 @@ export default function EventDetailScreen() {
   if (!event) {
     return (
       <View className="flex-1 items-center justify-center gap-[8px] bg-white px-[20px]">
-        <Text className="font-inter-bold text-[16px] text-neutral-900">Event tidak ditemukan</Text>
+        <Text className="font-inter-bold text-[16px] text-neutral-900">
+          {t('Event tidak ditemukan')}
+        </Text>
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Text className="font-inter-semibold text-[14px] text-orange-500">
-            Kembali ke Dashboard
+            {t('Kembali ke Dashboard')}
           </Text>
         </Pressable>
       </View>
@@ -294,9 +303,13 @@ export default function EventDetailScreen() {
           {event.namaAcara}
         </Text>
         <MoreMenu
-          label="Menu event"
+          label={t('Menu event')}
           items={[
-            { label: 'Hapus event', destructive: true, onPress: () => setConfirmingDelete(true) },
+            {
+              label: t('Hapus event'),
+              destructive: true,
+              onPress: () => setConfirmingDelete(true),
+            },
           ]}
         />
       </View>
@@ -305,7 +318,7 @@ export default function EventDetailScreen() {
         className="flex-1"
         contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[18px]">
         <View className="gap-[4px]">
-          <Text className="font-inter text-[12px] text-black">Kode Event</Text>
+          <Text className="font-inter text-[12px] text-black">{t('Kode Event')}</Text>
           <Text className="font-inter-semibold text-[14px] text-black">{event.kodeEvent}</Text>
         </View>
 
@@ -314,22 +327,22 @@ export default function EventDetailScreen() {
         {published ? (
           <View className="gap-[10px] rounded-[10px] bg-orange-500 p-[10px]">
             <Text className="font-inter-semibold text-[10px] text-neutral-50">
-              Bagikan form order jastip
+              {t('Bagikan form order jastip')}
             </Text>
             <View className="flex-row items-center gap-[10px]">
               <Pressable
                 onPress={handleCopyLink}
                 accessibilityRole="button"
-                accessibilityLabel="Salin link form order"
+                accessibilityLabel={t('Salin link form order')}
                 className="flex-1 rounded-[7px] bg-white p-[4px]">
                 <Text numberOfLines={1} className="font-inter text-[10px] text-[#5d5d5d]">
-                  {linkCopied ? '✓ Link tersalin' : shareLink || 'Menyiapkan link...'}
+                  {linkCopied ? t('✓ Link tersalin') : shareLink || t('Menyiapkan link...')}
                 </Text>
               </Pressable>
               <Pressable
                 onPress={handleShare}
                 accessibilityRole="button"
-                accessibilityLabel="Bagikan link form order"
+                accessibilityLabel={t('Bagikan link form order')}
                 hitSlop={8}>
                 <ShareIcon width={25} height={25} />
               </Pressable>
@@ -339,13 +352,16 @@ export default function EventDetailScreen() {
           <View className="gap-[8px] rounded-[10px] border border-orange-300 bg-orange-50 p-[10px]">
             <View className="gap-[4px]">
               <Text className="font-inter-semibold text-[10px] text-orange-600">
-                Form order untuk customer
+                {t('Form order untuk customer')}
               </Text>
               <Text className="font-inter text-[10px] text-neutral-700">
-                Publikasikan form order supaya customer bisa memesan lewat link.{' '}
+                {t('Publikasikan form order supaya customer bisa memesan lewat link.')}{' '}
                 {prices.publishEvent === 0
-                  ? 'Gratis selama masa beta.'
-                  : `Biaya ${prices.publishEvent} token, sekali per event. Saldo: ${shop?.tokenBalance ?? 0} token.`}
+                  ? t('Gratis selama masa beta.')
+                  : t('Biaya {n} token, sekali per event. Saldo: {balance} token.', {
+                      n: prices.publishEvent,
+                      balance: shop?.tokenBalance ?? 0,
+                    })}
               </Text>
             </View>
             {isAdmin ? (
@@ -356,13 +372,15 @@ export default function EventDetailScreen() {
                 className="items-center rounded-[8px] bg-orange-500 px-[10px] py-[8px]">
                 <Text className="font-inter-semibold text-[12px] text-white">
                   {tokenBusy
-                    ? 'Memproses...'
-                    : `Publikasikan form order · ${costLabel(prices.publishEvent)}`}
+                    ? t('Memproses...')
+                    : t('Publikasikan form order · {cost}', {
+                        cost: costLabel(prices.publishEvent),
+                      })}
                 </Text>
               </Pressable>
             ) : (
               <Text className="font-inter text-[10px] text-neutral-700">
-                Minta admin toko untuk mempublikasikan form order.
+                {t('Minta admin toko untuk mempublikasikan form order.')}
               </Text>
             )}
           </View>
@@ -422,13 +440,13 @@ export default function EventDetailScreen() {
             />
           ) : null}
           <TabButton
-            label="Laporan"
+            label={t('Laporan')}
             Icon={ChartDonutIcon}
             active={tab === 'laporan'}
             onPress={() => switchTab('laporan')}
           />
           <TabButton
-            label="List pesanan"
+            label={t('List pesanan')}
             Icon={ListPlusIcon}
             active={tab === 'pesanan'}
             onPress={() => switchTab('pesanan')}
@@ -442,51 +460,53 @@ export default function EventDetailScreen() {
               <View className="gap-[24px] rounded-[12px] bg-neutral-200 p-[20px]">
                 <View className="gap-[12px]">
                   <View className="flex-row items-center justify-between">
-                    <Text className="font-inter-bold text-[14px] text-neutral-900">Keuangan</Text>
+                    <Text className="font-inter-bold text-[14px] text-neutral-900">
+                      {t('Keuangan')}
+                    </Text>
                     <MoreMenu
-                      label="Menu laporan"
+                      label={t('Menu laporan')}
                       items={[
                         {
-                          label: 'Edit event detail',
+                          label: t('Edit event detail'),
                           onPress: () =>
                             router.push({
                               pathname: '/buka-event-jastip',
                               params: { editId: event.id },
                             }),
                         },
-                        { label: 'Download laporan Excel', onPress: handleDownloadReport },
+                        { label: t('Download laporan Excel'), onPress: handleDownloadReport },
                       ]}
                     />
                   </View>
                   <View className="flex-row gap-[12px]">
-                    <Stat label="Jastip budget" value={formatIDR(event.budget ?? 0)} />
-                    <Stat label="Pengeluaran" value={formatIDR(expenseTotal)} />
+                    <Stat label={t('Jastip budget')} value={formatMoney(event.budget ?? 0)} />
+                    <Stat label={t('Pengeluaran')} value={formatMoney(expenseTotal)} />
                   </View>
                   <View className="flex-row flex-wrap gap-x-[48px] gap-y-[12px]">
-                    <Stat label="Pesanan" value={String(event.totalOrder)} />
-                    <Stat label="Revenue" value={formatIDR(event.revenue)} />
-                    <Stat label="Profit" value={formatIDR(getEventProfit(event))} />
+                    <Stat label={t('Pesanan')} value={String(event.totalOrder)} />
+                    <Stat label={t('Revenue')} value={formatMoney(event.revenue)} />
+                    <Stat label={t('Profit')} value={formatMoney(getEventProfit(event))} />
                   </View>
                 </View>
                 <View className="gap-[12px]">
                   <Text className="font-inter-bold text-[14px] text-neutral-900">
-                    Status pembayaran
+                    {t('Status pembayaran')}
                   </Text>
                   <View className="flex-row flex-wrap gap-x-[32px] gap-y-[12px]">
                     <Stat
-                      label="Lunas"
+                      label={t('Lunas')}
                       value={String(lunasOrders.length)}
-                      note={formatIDR(lunasTotal)}
+                      note={formatMoney(lunasTotal)}
                     />
                     <Stat
-                      label="Belum lunas"
+                      label={t('Belum lunas')}
                       value={String(sebagianOrders.length)}
-                      note={`Sisa ${formatIDR(sebagianSisa)}`}
+                      note={`Sisa ${formatMoney(sebagianSisa)}`}
                     />
                     <Stat
-                      label="Belum Dibayar"
+                      label={t('Belum Dibayar')}
                       value={String(belumOrders.length)}
-                      note={formatIDR(belumTotal)}
+                      note={formatMoney(belumTotal)}
                     />
                   </View>
                 </View>
@@ -499,11 +519,11 @@ export default function EventDetailScreen() {
               {/* Figma node 222:950. */}
               <View className="gap-[10px]">
                 <Text className="font-inter-semibold text-[16px] text-neutral-800">
-                  Pengeluaran
+                  {t('Pengeluaran')}
                 </Text>
                 {expenses.length === 0 ? (
                   <Text className="font-inter text-[10px] italic text-neutral-800">
-                    Belum ada pengeluaran
+                    {t('Belum ada pengeluaran')}
                   </Text>
                 ) : (
                   expenses.map((expense) => (
@@ -521,14 +541,14 @@ export default function EventDetailScreen() {
                         ) : null}
                       </View>
                       <Text className="font-inter-semibold text-[12px] text-neutral-900">
-                        {formatIDR(expense.jumlah)}
+                        {formatMoney(expense.jumlah)}
                       </Text>
                       <Pressable
                         onPress={() => setExpenseToDelete(expense)}
                         accessibilityRole="button"
-                        accessibilityLabel={`Hapus pengeluaran ${expense.nama}`}
+                        accessibilityLabel={t('Hapus pengeluaran {name}', { name: expense.nama })}
                         hitSlop={8}>
-                        <Text className="font-inter text-[12px] text-red-500">Hapus</Text>
+                        <Text className="font-inter text-[12px] text-red-500">{t('Hapus')}</Text>
                       </Pressable>
                     </View>
                   ))
@@ -538,7 +558,7 @@ export default function EventDetailScreen() {
                   accessibilityRole="button"
                   className="self-start rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
                   <Text className="font-inter text-[12px] text-orange-500">
-                    +Tambah pengeluaran
+                    {t('+Tambah pengeluaran')}
                   </Text>
                 </Pressable>
               </View>
@@ -548,7 +568,7 @@ export default function EventDetailScreen() {
               <Link href={{ pathname: '/tambah-pesanan', params: { eventId: event.id } }} asChild>
                 <Pressable className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
                   <Text className="font-inter-semibold text-[14px] text-orange-50">
-                    + Tambah pesanan
+                    {t('+ Tambah pesanan')}
                   </Text>
                 </Pressable>
               </Link>
@@ -559,9 +579,9 @@ export default function EventDetailScreen() {
                 <Input
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Cari pesanan dengan nama atau barang"
+                  placeholder={t('Cari pesanan dengan nama atau barang')}
                   placeholderTextColor="#d1d5db"
-                  accessibilityLabel="Cari pesanan"
+                  accessibilityLabel={t('Cari pesanan')}
                   autoCapitalize="none"
                   autoCorrect={false}
                   className="h-auto min-h-[37px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
@@ -607,7 +627,7 @@ export default function EventDetailScreen() {
                 {PAID_FILTERS.map(([value, label]) => (
                   <FilterChip
                     key={value}
-                    label={label}
+                    label={t(label)}
                     active={paidFilter === value}
                     onPress={() => switchPaidFilter(value)}
                   />
@@ -644,9 +664,11 @@ export default function EventDetailScreen() {
       />
       <ConfirmDialog
         visible={expenseToDelete !== null}
-        title="Hapus pengeluaran?"
-        message={`Pengeluaran "${expenseToDelete?.nama ?? ''}" akan dihapus dan tidak bisa dikembalikan.`}
-        confirmLabel="Hapus"
+        title={t('Hapus pengeluaran?')}
+        message={t('Pengeluaran "{name}" akan dihapus dan tidak bisa dikembalikan.', {
+          name: expenseToDelete?.nama ?? '',
+        })}
+        confirmLabel={t('Hapus')}
         onConfirm={() => {
           if (expenseToDelete) deleteExpense(event.id, expenseToDelete.id);
           setExpenseToDelete(null);
@@ -655,34 +677,43 @@ export default function EventDetailScreen() {
       />
       <ConfirmDialog
         visible={confirmingDelete}
-        title="Hapus event?"
+        title={t('Hapus event?')}
         message={[
           event.orders.length > 0
-            ? `Event "${event.namaAcara}" dan ${event.orders.length} pesanan di dalamnya akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`
-            : `Event "${event.namaAcara}" akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.`,
+            ? t(
+                'Event "{event}" dan {n} pesanan di dalamnya akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.',
+                { event: event.namaAcara, n: event.orders.length }
+              )
+            : t(
+                'Event "{event}" akan dihapus dari semua perangkat toko ini dan tidak bisa dikembalikan.',
+                { event: event.namaAcara }
+              ),
           refundable
-            ? 'Token buka event akan dikembalikan ke saldo toko.'
+            ? t('Token buka event akan dikembalikan ke saldo toko.')
             : !charges.openedPaid.includes(event.id)
               ? null
               : event.orders.length > 0
-                ? 'Token tidak dikembalikan karena event ini sudah punya pesanan.'
-                : 'Token tidak dikembalikan karena event ini sudah dimulai.',
+                ? t('Token tidak dikembalikan karena event ini sudah punya pesanan.')
+                : t('Token tidak dikembalikan karena event ini sudah dimulai.'),
         ]
           .filter(Boolean)
           .join('\n\n')}
-        confirmLabel="Hapus"
+        confirmLabel={t('Hapus')}
         onConfirm={handleDeleteEvent}
         onCancel={() => setConfirmingDelete(false)}
       />
       <ConfirmDialog
         visible={confirmingPublish}
-        title="Publikasikan form order?"
+        title={t('Publikasikan form order?')}
         message={
           prices.publishEvent === 0
-            ? 'Gratis selama masa beta. Setelah itu link form order bisa dibagikan ke customer.'
-            : `${prices.publishEvent} token akan dipakai dari saldo toko (saldo sekarang ${shop?.tokenBalance ?? 0} token). Setelah itu link form order bisa dibagikan ke customer, dan membagikannya lagi tidak dikenai biaya.`
+            ? t('Gratis selama masa beta. Setelah itu link form order bisa dibagikan ke customer.')
+            : t(
+                '{n} token akan dipakai dari saldo toko (saldo sekarang {balance} token). Setelah itu link form order bisa dibagikan ke customer, dan membagikannya lagi tidak dikenai biaya.',
+                { n: prices.publishEvent, balance: shop?.tokenBalance ?? 0 }
+              )
         }
-        confirmLabel="Publikasikan"
+        confirmLabel={t('Publikasikan')}
         tone="primary"
         onConfirm={handlePublish}
         onCancel={() => setConfirmingPublish(false)}
@@ -785,7 +816,7 @@ function FilterChip({
   );
 }
 
-// The List pesanan chips, in the order they appear.
+// The List pesanan chips, in the order they appear. Labels go through t().
 const PAID_FILTERS: Array<[PaymentStatus, string]> = [
   ['belum', 'Belum dibayar'],
   ['belumLunas', 'Belum lunas'],
@@ -813,11 +844,12 @@ function OrderList({
   /** A search is active, so an empty list means "no match", not "no orders". */
   searching: boolean;
 }) {
+  const t = useT();
   return (
     <View className="gap-[8px]">
       {orders.length === 0 ? (
         <Text className="font-inter text-[10px] italic text-neutral-800">
-          {searching ? 'Tidak ada pesanan yang cocok' : 'Belum ada pesanan'}
+          {searching ? t('Tidak ada pesanan yang cocok') : t('Belum ada pesanan')}
         </Text>
       ) : (
         <View className="gap-[8px]">
@@ -831,15 +863,18 @@ function OrderList({
                   <Text className="font-inter-semibold text-[12px] text-neutral-800">
                     {order.orderNumber} · {order.nama}
                     {order.sumber === 'customer' && order.totalPembayaran === 0
-                      ? ' · dari form customer, isi harga'
+                      ? t(' · dari form customer, isi harga')
                       : ''}
                   </Text>
                   <Text className="font-inter text-[10px] text-neutral-600">
-                    {order.items.length} barang · {formatIDR(order.totalPembayaran)}
+                    {t('{n} barang', { n: order.items.length })} ·{' '}
+                    {formatMoney(order.totalPembayaran)}
                   </Text>
                   {getKelebihanBayar(order) > 0 ? (
                     <Text className="font-inter-semibold text-[10px] text-red-600">
-                      Kelebihan bayar: kembalikan {formatIDR(getKelebihanBayar(order))}
+                      {t('Kelebihan bayar: kembalikan {amount}', {
+                        amount: formatMoney(getKelebihanBayar(order)),
+                      })}
                     </Text>
                   ) : null}
                 </View>

@@ -34,11 +34,11 @@ const LABELS: Array<[Section, RegExp]> = [
   ['jumlah', /^(jumlah|jml|qty|quantity|banyaknya)( (barang|produk|item|pesanan))?$/],
   [
     'items',
-    /^((list|daftar|detail|rincian) )?(nama )?(pesanan|orderan|order|barang|produk|item|items|titipan|belanjaan)( (saya|nya|yang dipesan|jastip))?$/,
+    /^((list|daftar|detail|rincian) )?(nama )?(pesanan|orderan|order|barang|produk|item|items|titipan|belanjaan)( (saya|nya|yang dipesan|jastip|list))?$/,
   ],
   [
     'whatsapp',
-    /^(no|nomor|nomer|number)? ?(wa|whatsapp|whatsap|hp|handphone|telp|telepon|telpon|tlp|phone|kontak)( ?(wa|whatsapp|hp|aktif|penerima|yang bisa dihubungi))*$/,
+    /^(no|nomor|nomer|number)? ?(wa|whatsapp|whatsap|hp|handphone|telp|telepon|telpon|tlp|phone|kontak)( ?(wa|whatsapp|hp|aktif|penerima|yang bisa dihubungi|no|number))*$/,
   ],
   ['alamat', /^(alamat|address)( (lengkap|pengiriman|penerima|rumah|kirim|tujuan))*$/],
   [
@@ -137,9 +137,13 @@ export function parseOrderForm(text: string): ParsedOrderForm {
   let section: Section | null = null;
 
   function addItems(rawValue: string) {
-    // The example form's own hint, "[Nama produk (Jumlah)] contoh →",
+    // The example form's own hint, "[Nama produk (Jumlah)] contoh →"
+    // ("[Product name (Quantity)] example →" in English),
     // when a customer fills the list in after it instead of replacing it.
-    const value = rawValue.replace(/^\s*\[[^\]]*\]\s*(?:contoh\s*)?(?:→|->|=>|:)?\s*/i, '');
+    const value = rawValue.replace(
+      /^\s*\[[^\]]*\]\s*(?:(?:contoh|example)\s*)?(?:→|->|=>|:)?\s*/i,
+      ''
+    );
     // "List pesanan: Nivea x2, Lip cream x1" — several products after the
     // label, split on commas; a comma inside one of those names just
     // yields two rows to tidy up by hand.
