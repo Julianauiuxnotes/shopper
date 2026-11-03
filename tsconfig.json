@@ -8,5 +8,7 @@
       "@/*": ["*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"],
+  // Supabase Edge Functions run on Deno, with their own types.
+  "exclude": ["node_modules", "supabase/functions"]
 }

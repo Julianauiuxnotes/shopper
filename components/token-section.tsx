@@ -8,10 +8,12 @@ import { useT } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Linking, Platform, Pressable, View } from 'react-native';
 
 // Bundles of Justipers tokens; bigger bundles cost less per token. Only
 // bundles are sold: a single token's payment would lose too much to fees.
+// Display only: the price actually charged comes from the server's
+// shopper_token_bundles (supabase/migrations/0013), so keep the two equal.
 // Shops in Indonesia pay in IDR (1 token = IDR 4,000). Shops anywhere
 // else pay in USD, about USD 1 a token (decided 2026-10-29); the shop's
 // country is the owner's, from sign-up.
@@ -209,14 +211,39 @@ function TokenSection({ onBuyTokens }: { onBuyTokens: () => void }) {
   );
 }
 
-// "Beli token": the bundles. Online payment isn't connected yet, so the
-// sheet shows the prices and says so; tokens are added by hand meanwhile.
+// From this bundle up, Midtrans also offers bank transfer (virtual
+// account); smaller ones are QRIS and e-wallets only. Same rule as
+// supabase/functions/midtrans-create.
+const BANK_TRANSFER_FROM_TOKENS = 25;
+
+// "Beli token": pick a bundle, then pay on Midtrans's checkout page. The
+// tokens arrive when Midtrans confirms the payment; see
+// app/pengaturan-subscription.tsx for the way back. USD shops can't pay
+// online yet (Midtrans charges in rupiah).
 function BuyTokenSheet({ onClose }: { onClose: () => void }) {
-  const { shop } = useAuth();
+  const { shop, buyTokens } = useAuth();
   const currency = tokenCurrency(shop?.country);
   const bundles = TOKEN_BUNDLES[currency];
   const [choice, setChoice] = React.useState(bundles[1].tokens);
+  const [paying, setPaying] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const t = useT();
+  const canPay = currency === 'IDR';
+  const chosen = bundles.find((b) => b.tokens === choice) ?? bundles[0];
+
+  async function pay() {
+    setPaying(true);
+    setError(null);
+    try {
+      const url = await buyTokens(choice);
+      // Same tab on web: Midtrans brings the user back to the app.
+      if (Platform.OS === 'web') window.location.assign(url);
+      else await Linking.openURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('Terjadi kesalahan. Coba lagi sebentar lagi.'));
+      setPaying(false);
+    }
+  }
 
   return (
     <BottomSheet onClose={onClose} sheetClassName="bg-orange-100">
@@ -267,19 +294,42 @@ function BuyTokenSheet({ onClose }: { onClose: () => void }) {
             })}
           </View>
 
-          <Text className="text-center font-inter text-[12px] text-neutral-700">
-            {t(
-              'Pembayaran online segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah token.'
-            )}
-          </Text>
+          {canPay ? (
+            <Text className="text-center font-inter text-[12px] text-neutral-700">
+              {choice >= BANK_TRANSFER_FROM_TOKENS
+                ? t('Bayar dengan QRIS, GoPay, ShopeePay, atau transfer bank.')
+                : t('Bayar dengan QRIS, GoPay, atau ShopeePay.')}
+            </Text>
+          ) : (
+            <Text className="text-center font-inter text-[12px] text-neutral-700">
+              {t(
+                'Pembayaran online dalam USD segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah token.'
+              )}
+            </Text>
+          )}
+          {error ? (
+            <Text className="text-center font-inter text-[12px] text-red-600">{error}</Text>
+          ) : null}
 
           <Pressable
-            disabled
+            onPress={pay}
+            disabled={!canPay || paying}
             accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            className="w-full items-center justify-center rounded-[12px] bg-orange-200 px-[10px] py-[16px]">
-            <Text className="font-inter-semibold text-[14px] text-orange-300">
-              {t('Bayar (segera hadir)')}
+            accessibilityState={{ disabled: !canPay || paying }}
+            className={cn(
+              'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+              canPay && !paying ? 'bg-orange-500' : 'bg-orange-200'
+            )}>
+            <Text
+              className={cn(
+                'font-inter-semibold text-[14px]',
+                canPay && !paying ? 'text-white' : 'text-orange-300'
+              )}>
+              {!canPay
+                ? t('Bayar (segera hadir)')
+                : paying
+                  ? t('Memproses...')
+                  : t('Bayar {price}', { price: formatPrice(chosen.price, currency) })}
             </Text>
           </Pressable>
         </View>

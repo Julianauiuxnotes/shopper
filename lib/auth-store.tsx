@@ -4,6 +4,7 @@ import { AppState, Platform } from 'react-native';
 import { SUPABASE_KEY, SUPABASE_URL } from './backend';
 import { newId, useEvents } from './events-store';
 import { t } from './i18n';
+import { publicBaseUrl } from './link-codec';
 import { currencyForCountry, setHomeCurrency } from './money';
 import { useSettings } from './settings-store';
 import { storage } from './storage';
@@ -141,7 +142,20 @@ type AuthContextValue = {
   removeMember: (userId: string) => Promise<void>;
   /** The shop's latest token movements, newest first. */
   loadTokenHistory: () => Promise<TokenEntry[]>;
+  /**
+   * Admins only. Starts paying for a bundle of this many tokens and
+   * returns Midtrans's checkout URL to send the user to. The tokens are
+   * added on the server once Midtrans confirms the payment
+   * (supabase/functions/midtrans-notify).
+   */
+  buyTokens: (tokens: number) => Promise<string>;
+  /** A started purchase's state (supabase/migrations/0013), or null if unknown. */
+  tokenPaymentStatus: (orderId: string) => Promise<TokenPaymentStatus | null>;
+  /** Reloads the shop (balance, members, …) from the server. */
+  refreshShop: () => Promise<void>;
 };
+
+export type TokenPaymentStatus = 'pending' | 'paid' | 'expired' | 'failed';
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
@@ -654,6 +668,27 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           createdAt: r.created_at,
         }));
       },
+      buyTokens: async (tokens) => {
+        const { data, error } = await supabase.functions.invoke('midtrans-create', {
+          // Midtrans sends the user back here after paying.
+          body: { tokens, returnUrl: `${publicBaseUrl()}/pengaturan-subscription` },
+        });
+        if (error || typeof data?.redirectUrl !== 'string') {
+          throw new AuthError(t('Pembayaran belum bisa dimulai. Coba lagi sebentar lagi.'));
+        }
+        return data.redirectUrl as string;
+      },
+      tokenPaymentStatus: async (orderId) => {
+        const row = check(
+          await supabase
+            .from('shop_token_payments')
+            .select('status')
+            .eq('order_id', orderId)
+            .maybeSingle()
+        );
+        return (row?.status as TokenPaymentStatus | undefined) ?? null;
+      },
+      refreshShop: refresh,
     }),
     [sessionRead, notice, session, state, signUp, signIn, signOut, updateShop, call, refresh]
   );

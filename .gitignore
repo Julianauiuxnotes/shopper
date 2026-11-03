@@ -39,3 +39,7 @@ yarn-error.*
 
 expo-env.d.ts
 # @end expo-cli
+# Secrets: never commit keys (Midtrans server key lives in Supabase secrets).
+*api_key*.txt
+*.key
+.env*.local

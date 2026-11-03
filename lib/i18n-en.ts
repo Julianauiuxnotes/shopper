@@ -553,6 +553,21 @@ export const en: Record<string, string | [string, string]> = {
   'Pembayaran online segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah token.':
     'Online payment is coming soon. For now, contact the Justipers team to add tokens.',
   'Bayar (segera hadir)': 'Pay (coming soon)',
+  'Bayar {price}': 'Pay {price}',
+  'Bayar dengan QRIS, GoPay, atau ShopeePay.': 'Pay with QRIS, GoPay or ShopeePay.',
+  'Bayar dengan QRIS, GoPay, ShopeePay, atau transfer bank.':
+    'Pay with QRIS, GoPay, ShopeePay or bank transfer.',
+  'Pembayaran online dalam USD segera hadir. Untuk sementara, hubungi tim Justipers untuk menambah token.':
+    'Online payment in USD is coming soon. Until then, contact the Justipers team to add tokens.',
+  'Pembayaran belum bisa dimulai. Coba lagi sebentar lagi.':
+    "The payment couldn't be started. Please try again shortly.",
+  'Pembayaran berhasil. Token sudah masuk ke saldo toko.':
+    'Payment received. The tokens have been added to your shop balance.',
+  'Pembayaran tidak selesai. Token tidak ditambahkan.':
+    "The payment wasn't completed. No tokens were added.",
+  'Pembayaran tidak ditemukan.': 'Payment not found.',
+  'Menunggu konfirmasi pembayaran... Token masuk otomatis setelah pembayaran diterima.':
+    'Waiting for payment confirmation... Tokens are added automatically once the payment is received.',
 
   // Subscription: members
   Owner: 'Owner',

@@ -1,0 +1,13 @@
+# Only the Edge Function settings are kept here; the database schema
+# lives in migrations/ and is applied by hand in the SQL Editor.
+project_id = "wdwpadrujmawtszekwcf"
+
+# midtrans-create checks the caller's session itself (the user's access
+# token), so the gateway's own JWT check is off for both functions.
+[functions.midtrans-create]
+verify_jwt = false
+
+# Midtrans calls this without a Supabase session; it checks Midtrans's
+# signature instead.
+[functions.midtrans-notify]
+verify_jwt = false
