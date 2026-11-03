@@ -49,7 +49,7 @@ export const num = (n: number) => Math.max(0, Math.round(n)).toString(36);
 // Where the public receipt page lives. On web it's this same site (so it
 // works from localhost and from Cloudflare alike); a native build has
 // no origin of its own, so it points at the deployed web app.
-const DEPLOYED_WEB_URL = 'https://justipers.shopper-appjastiper.workers.dev';
+const DEPLOYED_WEB_URL = 'https://app.justipers.com';
 
 export function publicBaseUrl() {
   return typeof window !== 'undefined' && window.location?.origin
