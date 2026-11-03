@@ -422,6 +422,8 @@ export const en: Record<string, string | [string, string]> = {
   'Cetak pesanan ke:': 'Print order to:',
   'Nama customer': 'Customer name',
   'Total pesanan': 'Total items',
+  '{n} tidak tersedia': '{n} not available',
+  'Tidak ditagih': 'Not charged',
   '*Harga sudah termasuk jastip fee': '*Prices include the service fee',
   Cetak: 'Print',
   'Total tagihan yang harus dibayar': 'Total to pay',

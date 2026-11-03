@@ -58,8 +58,10 @@ export type ReceiptSnapshot = {
   ok: 'awal' | 'saatPengiriman' | 'gratis' | null;
   /** Ongkir billed upfront, IDR (0 unless ok === 'awal') */
   og: number;
-  /** Items: [nama produk, jumlah, per-unit price incl. jastip fee] */
-  it: Array<[string, number, number]>;
+  /** Items: [nama produk, jumlah, per-unit price incl. jastip fee,
+   * tidak tersedia]. The 4th is absent on links from before format 5,
+   * which left Tidak tersedia items out altogether. */
+  it: Array<[string, number, number, boolean?]>;
   /** Total tagihan, in `cu` */
   tt: number;
   /** The shop's currency (lib/money.ts) every amount here is in. Absent on
@@ -89,15 +91,20 @@ export function buildReceiptSnapshot(
     dp: order.dp ?? 0,
     ok: order.pembayaranOngkir ?? null,
     og: order.pembayaranOngkir === 'awal' ? (order.ongkir ?? 0) : 0,
-    // Products marked Tidak tersedia aren't billed, so they're left off.
-    it: order.items
-      .filter((item) => !item.tidakTersedia)
-      .map((item) => {
-        const { fee } = computeItemTotals(item);
-        // Same "price already includes the jastip fee" per-unit figure as
-        // app/cetak-penanda.tsx.
-        return [item.namaProduk, item.jumlah, roundMoney(item.harga + fee / item.jumlah)];
-      }),
+    // Products marked Tidak tersedia stay on the receipt, marked as such,
+    // so the customer sees why they aren't billed (getTotalTagihan
+    // already leaves them out of the total).
+    it: order.items.map((item) => {
+      const { fee } = computeItemTotals(item);
+      // Same "price already includes the jastip fee" per-unit figure as
+      // app/cetak-penanda.tsx.
+      return [
+        item.namaProduk,
+        item.jumlah,
+        roundMoney(item.harga + fee / item.jumlah),
+        !!item.tidakTersedia,
+      ];
+    }),
     tt: getTotalTagihan(order),
     cu: getHomeCurrency(),
   };
@@ -116,12 +123,14 @@ export function buildReceiptSnapshot(
 //   date from . date to . nomor order . nama customer . alamat .
 //   flags (lunas*4 + belum-lunas*8 + ongkir option index) . ongkir billed .
 //   total . [format 3 and 4: DP paid] . [format 4: currency] .
-//   then per item: nama produk . jumlah . price per unit
+//   then per item: nama produk . jumlah . price per unit .
+//   [format 5: tidak tersedia, 1 or 0]
 //
 // Format "3" adds the DP after the total. Format "4" adds the currency
 // after that, and gives amounts in its smallest unit (cents for MYR, SGD
-// and USD, since only whole numbers fit). "2" and "3" links already sent
-// to customers still open, as IDR.
+// and USD, since only whole numbers fit). Format "5" adds the Tidak
+// tersedia flag to each item; earlier formats left those items out.
+// "2" and "3" links already sent to customers still open, as IDR.
 const ONGKIR_CODES = [null, 'awal', 'saatPengiriman', 'gratis'] as const;
 const HEADER_FIELDS = 12;
 
@@ -147,24 +156,28 @@ export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
     amount(snapshot.tt),
     amount(snapshot.dp ?? 0),
     currency,
-    ...snapshot.it.flatMap(([nama, jumlah, harga]) => [
+    ...snapshot.it.flatMap(([nama, jumlah, harga, tidakTersedia]) => [
       escapeText(nama),
       num(jumlah),
       amount(harga),
+      tidakTersedia ? '1' : '0',
     ]),
   ];
-  return `4.${fields.join('.')}`;
+  return `5.${fields.join('.')}`;
 }
 
 function decodeV2(encoded: string): ReceiptSnapshot | null {
   const f = encoded.split('.').slice(1);
-  // Format 3 carries one more header field than 2 (the DP), format 4 two
-  // more (the DP and the currency).
+  // Format 3 carries one more header field than 2 (the DP), formats 4
+  // and 5 two more (the DP and the currency). Format 5 items have a 4th
+  // field (Tidak tersedia).
   const format = encoded[0];
-  const header = HEADER_FIELDS + (format === '4' ? 2 : format === '3' ? 1 : 0);
-  if (f.length < header || (f.length - header) % 3 !== 0) return null;
-  if (format === '4' && !isHomeCurrency(f[13])) return null;
-  const currency: HomeCurrency = format === '4' ? (f[13] as HomeCurrency) : 'IDR';
+  const withCurrency = format === '4' || format === '5';
+  const header = HEADER_FIELDS + (withCurrency ? 2 : format === '3' ? 1 : 0);
+  const perItem = format === '5' ? 4 : 3;
+  if (f.length < header || (f.length - header) % perItem !== 0) return null;
+  if (withCurrency && !isHomeCurrency(f[13])) return null;
+  const currency: HomeCurrency = withCurrency ? (f[13] as HomeCurrency) : 'IDR';
   const scale = 10 ** decimalsOf(currency);
   const int = (text: string) => parseInt(text, 36);
   const numbers = [f[2], f[4], f[5], f[9]].map(int);
@@ -176,11 +189,11 @@ function decodeV2(encoded: string): ReceiptSnapshot | null {
   if (Number.isNaN(dp)) return null;
 
   const it: ReceiptSnapshot['it'] = [];
-  for (let i = header; i < f.length; i += 3) {
+  for (let i = header; i < f.length; i += perItem) {
     const jumlah = int(f[i + 1]);
     const harga = int(f[i + 2]) / scale;
     if (Number.isNaN(jumlah) || Number.isNaN(harga)) return null;
-    it.push([unescapeText(f[i]), jumlah, harga]);
+    it.push([unescapeText(f[i]), jumlah, harga, perItem === 4 && f[i + 3] === '1']);
   }
 
   return {
@@ -233,7 +246,7 @@ function decodeV1(encoded: string): ReceiptSnapshot | null {
 /** Returns null for anything that isn't a well-formed receipt link. */
 export function decodeReceiptSnapshot(encoded: string): ReceiptSnapshot | null {
   try {
-    return /^[234]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
+    return /^[2345]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
   } catch {
     return null;
   }

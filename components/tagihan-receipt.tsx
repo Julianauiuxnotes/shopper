@@ -1,6 +1,7 @@
 import CheckSquareIcon from '@/assets/images/figma/icon-check-square.svg';
 import BrandLogo from '@/assets/images/figma/justipers-logo.svg';
 import { Text } from '@/components/ui/text';
+import { cn } from '@/lib/utils';
 import { formatPrintTimestamp } from '@/lib/format';
 import { useT } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
@@ -45,6 +46,8 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
   // block is left off the receipt when none is ticked.
   const ongkirOption = ONGKIR_OPTIONS.find((o) => o.value === snapshot.ok);
   const ongkirLabel = ongkirOption ? t(ongkirOption.label) : null;
+  // Products the jastiper couldn't get: listed, struck through, not billed.
+  const unavailableCount = snapshot.it.filter((item) => item[3]).length;
 
   return (
     <View className="w-full max-w-[390px] bg-white pb-[24px]">
@@ -70,7 +73,12 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
           </InfoRow>
           <InfoRow label={t('Nama customer')}>{snapshot.cn}</InfoRow>
           <InfoRow label={t('Alamat')}>{snapshot.al}</InfoRow>
-          <InfoRow label={t('Total pesanan')}>{t('{n} items', { n: snapshot.it.length })}</InfoRow>
+          <InfoRow label={t('Total pesanan')}>
+            {t('{n} items', { n: snapshot.it.length - unavailableCount })}
+            {unavailableCount > 0
+              ? ` (${t('{n} tidak tersedia', { n: unavailableCount })})`
+              : null}
+          </InfoRow>
           <InfoRow label={t('Status pembayaran')}>
             <Text className="font-inter-bold text-[12px] text-neutral-800">
               {snapshot.lu ? t('Lunas') : snapshot.bl ? t('Belum lunas') : t('Belum bayar')}
@@ -103,20 +111,47 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
           ) : null}
 
           <Text className="font-inter-bold text-[14px] text-[#1e1e1e]">{t('List pesanan')}</Text>
-          {snapshot.it.map(([namaProduk, jumlah, perUnitInclFee], index) => (
+          {snapshot.it.map(([namaProduk, jumlah, perUnitInclFee, tidakTersedia], index) => (
             <React.Fragment key={index}>
               <View className="gap-[8px]">
                 <View className="flex-row items-center gap-[5px]">
-                  <CheckSquareIcon width={12} height={12} />
-                  <Text className="flex-1 font-inter text-[10px] text-neutral-800">
+                  {tidakTersedia ? null : <CheckSquareIcon width={12} height={12} />}
+                  <Text
+                    className={cn(
+                      'flex-1 font-inter text-[10px]',
+                      tidakTersedia ? 'text-neutral-500 line-through' : 'text-neutral-800'
+                    )}>
                     {namaProduk}
                   </Text>
+                  {/* Same badge as the jastiper's order detail. */}
+                  {tidakTersedia ? (
+                    <View className="rounded-[4px] bg-red-100 px-[6px] py-[2px]">
+                      <Text className="font-inter-semibold text-[10px] text-red-600">
+                        {t('Tidak tersedia')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <View className="flex-row gap-[8px]">
-                  <Text className="font-inter text-[10px] text-neutral-800">{jumlah}x</Text>
-                  <Text className="font-inter text-[10px] text-neutral-800">
+                  <Text
+                    className={cn(
+                      'font-inter text-[10px]',
+                      tidakTersedia ? 'text-neutral-500 line-through' : 'text-neutral-800'
+                    )}>
+                    {jumlah}x
+                  </Text>
+                  <Text
+                    className={cn(
+                      'font-inter text-[10px]',
+                      tidakTersedia ? 'text-neutral-500 line-through' : 'text-neutral-800'
+                    )}>
                     {money(perUnitInclFee)}*
                   </Text>
+                  {tidakTersedia ? (
+                    <Text className="font-inter text-[10px] text-red-600">
+                      {t('Tidak ditagih')}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
               <View className="w-full border-t border-neutral-400" />
