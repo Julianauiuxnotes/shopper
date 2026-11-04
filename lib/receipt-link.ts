@@ -33,6 +33,11 @@ export type ReceiptSnapshot = {
   nj: string;
   /** Jastiper's phone, local digits ('' = none) */
   tj: string;
+  /** Jastiper's address ('' = none). Absent on links before format 6. */
+  aj?: string;
+  /** Where to transfer: [bank, nomor rekening, nama pemilik], up to 3.
+   * Absent on links before format 6. */
+  rk?: Array<[string, string, string]>;
   /** Printed-at time, ms since epoch */
   t: number;
   /** Nama acara */
@@ -72,13 +77,20 @@ export type ReceiptSnapshot = {
 export function buildReceiptSnapshot(
   event: JastipEvent,
   order: Order,
-  jastiper: { namaJastip: string; telepon: string },
+  jastiper: {
+    namaJastip: string;
+    telepon: string;
+    alamat?: string;
+    rekening?: Array<{ bank: string; nomor: string; nama: string }>;
+  },
   printedAt: Date
 ): ReceiptSnapshot {
   return {
     v: 1,
     nj: jastiper.namaJastip,
     tj: jastiper.telepon,
+    aj: jastiper.alamat ?? '',
+    rk: (jastiper.rekening ?? []).map((r) => [r.bank, r.nomor, r.nama]),
     t: printedAt.getTime(),
     ea: event.namaAcara,
     ed: formatDateRange(event.tanggalDari, event.tanggalSampai),
@@ -122,14 +134,18 @@ export function buildReceiptSnapshot(
 //   nama jastip . telepon . printed-at (minutes) . nama acara .
 //   date from . date to . nomor order . nama customer . alamat .
 //   flags (lunas*4 + belum-lunas*8 + ongkir option index) . ongkir billed .
-//   total . [format 3 and 4: DP paid] . [format 4: currency] .
+//   total . [format 3+: DP paid] . [format 4+: currency] .
+//   [format 6: alamat jastip . number of bank accounts . then per
+//   account: bank . nomor . nama] .
 //   then per item: nama produk . jumlah . price per unit .
-//   [format 5: tidak tersedia, 1 or 0]
+//   [format 5+: tidak tersedia, 1 or 0]
 //
 // Format "3" adds the DP after the total. Format "4" adds the currency
 // after that, and gives amounts in its smallest unit (cents for MYR, SGD
 // and USD, since only whole numbers fit). Format "5" adds the Tidak
 // tersedia flag to each item; earlier formats left those items out.
+// Format "6" adds the jastiper's address and bank accounts after the
+// currency.
 // "2" and "3" links already sent to customers still open, as IDR.
 const ONGKIR_CODES = [null, 'awal', 'saatPengiriman', 'gratis'] as const;
 const HEADER_FIELDS = 12;
@@ -156,6 +172,13 @@ export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
     amount(snapshot.tt),
     amount(snapshot.dp ?? 0),
     currency,
+    escapeText(snapshot.aj ?? ''),
+    num((snapshot.rk ?? []).length),
+    ...(snapshot.rk ?? []).flatMap(([bank, nomor, nama]) => [
+      escapeText(bank),
+      escapeText(nomor),
+      escapeText(nama),
+    ]),
     ...snapshot.it.flatMap(([nama, jumlah, harga, tidakTersedia]) => [
       escapeText(nama),
       num(jumlah),
@@ -163,18 +186,33 @@ export function encodeReceiptSnapshot(snapshot: ReceiptSnapshot) {
       tidakTersedia ? '1' : '0',
     ]),
   ];
-  return `5.${fields.join('.')}`;
+  return `6.${fields.join('.')}`;
 }
 
 function decodeV2(encoded: string): ReceiptSnapshot | null {
   const f = encoded.split('.').slice(1);
   // Format 3 carries one more header field than 2 (the DP), formats 4
-  // and 5 two more (the DP and the currency). Format 5 items have a 4th
-  // field (Tidak tersedia).
+  // to 6 two more (the DP and the currency); format 6 then the address
+  // and bank accounts. Format 5 and 6 items have a 4th field (Tidak
+  // tersedia).
   const format = encoded[0];
-  const withCurrency = format === '4' || format === '5';
-  const header = HEADER_FIELDS + (withCurrency ? 2 : format === '3' ? 1 : 0);
-  const perItem = format === '5' ? 4 : 3;
+  const withCurrency = format >= '4';
+  let header = HEADER_FIELDS + (withCurrency ? 2 : format === '3' ? 1 : 0);
+  const rk: NonNullable<ReceiptSnapshot['rk']> = [];
+  let aj = '';
+  if (format === '6') {
+    if (f.length < header + 2) return null;
+    aj = unescapeText(f[header]);
+    const accounts = parseInt(f[header + 1], 36);
+    if (Number.isNaN(accounts) || accounts > 3) return null;
+    if (f.length < header + 2 + accounts * 3) return null;
+    for (let i = 0; i < accounts; i++) {
+      const at = header + 2 + i * 3;
+      rk.push([unescapeText(f[at]), unescapeText(f[at + 1]), unescapeText(f[at + 2])]);
+    }
+    header += 2 + accounts * 3;
+  }
+  const perItem = format >= '5' ? 4 : 3;
   if (f.length < header || (f.length - header) % perItem !== 0) return null;
   if (withCurrency && !isHomeCurrency(f[13])) return null;
   const currency: HomeCurrency = withCurrency ? (f[13] as HomeCurrency) : 'IDR';
@@ -200,6 +238,8 @@ function decodeV2(encoded: string): ReceiptSnapshot | null {
     v: 1,
     nj: unescapeText(f[0]),
     tj: unescapeText(f[1]),
+    aj,
+    rk,
     t: minutes * 60000,
     ea: unescapeText(f[3]),
     ed: formatDateRange(fromDayNumber(from), fromDayNumber(to)),
@@ -246,7 +286,7 @@ function decodeV1(encoded: string): ReceiptSnapshot | null {
 /** Returns null for anything that isn't a well-formed receipt link. */
 export function decodeReceiptSnapshot(encoded: string): ReceiptSnapshot | null {
   try {
-    return /^[2345]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
+    return /^[2-6]\./.test(encoded) ? decodeV2(encoded) : decodeV1(encoded);
   } catch {
     return null;
   }

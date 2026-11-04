@@ -43,3 +43,6 @@ expo-env.d.ts
 *api_key*.txt
 *.key
 .env*.local
+
+# Supabase CLI working files.
+supabase/.temp/

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { BankAccount } from './auth-store';
 import { createOrderInbox, type OrderInbox } from './order-inbox';
 import { storage } from './storage';
 
@@ -22,6 +23,10 @@ type UserProfile = {
   // a fixed prefix in the UI). Optional: set in Pengaturan, not asked at
   // Sign Up, and missing from profiles saved before this field existed.
   telepon?: string;
+  // The jastiper's address and bank accounts (lib/auth-store.tsx's Shop),
+  // both optional, printed on the customer's bill.
+  alamat?: string;
+  rekening?: BankAccount[];
 };
 
 type SettingsContextValue = {

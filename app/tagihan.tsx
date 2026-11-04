@@ -7,6 +7,7 @@ import { useT } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import { buildReceiptLink, buildReceiptSnapshot } from '@/lib/receipt-link';
 import { useSettings } from '@/lib/settings-store';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
@@ -25,6 +26,7 @@ export default function TagihanScreen() {
   const order = eventId && orderId ? getOrder(eventId, orderId) : undefined;
   const printedAt = React.useMemo(() => new Date(), []);
   const [linkCopied, setLinkCopied] = React.useState(false);
+  useAutoReset(linkCopied, () => setLinkCopied(false));
 
   if (!event || !order) {
     return (
@@ -60,6 +62,8 @@ export default function TagihanScreen() {
     {
       namaJastip: userProfile.namaJastip || 'Jastip by Juli',
       telepon: userProfile.telepon ?? '',
+      alamat: userProfile.alamat ?? '',
+      rekening: userProfile.rekening ?? [],
     },
     printedAt
   );

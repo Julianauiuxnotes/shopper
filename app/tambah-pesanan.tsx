@@ -19,6 +19,7 @@ import {
   roundMoney,
 } from '@/lib/money';
 import { cn } from '@/lib/utils';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import {
@@ -169,6 +170,7 @@ export default function TambahPesananScreen() {
     }).start(() => setShowContoh(false));
   }
   const [contohCopied, setContohCopied] = React.useState(false);
+  useAutoReset(contohCopied, () => setContohCopied(false));
 
   async function handleSalinContoh() {
     if (Platform.OS === 'web') {

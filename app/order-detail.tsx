@@ -35,6 +35,7 @@ import {
   roundMoney,
 } from '@/lib/money';
 import { cn } from '@/lib/utils';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as React from 'react';
@@ -154,6 +155,7 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
   const t = useT();
   const [order, setOrder] = React.useState(savedOrder);
   const [justSaved, setJustSaved] = React.useState(false);
+  useAutoReset(justSaved, () => setJustSaved(false));
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
   const [confirmingLunas, setConfirmingLunas] = React.useState(false);

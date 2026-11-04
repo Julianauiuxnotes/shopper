@@ -20,6 +20,8 @@ export const en: Record<string, string | [string, string]> = {
   Lanjut: 'Continue',
   Next: 'Next',
   Ubah: 'Change',
+  Lihat: 'View',
+  Edit: 'Edit',
   Gagal: 'Failed',
   Berhasil: 'Done',
   Gratis: 'Free',
@@ -422,6 +424,8 @@ export const en: Record<string, string | [string, string]> = {
   'Cetak pesanan ke:': 'Print order to:',
   'Nama customer': 'Customer name',
   'Total pesanan': 'Total items',
+  'Transfer pembayaran ke': 'Transfer payment to',
+  'a.n. {nama}': 'Account name: {nama}',
   '{n} tidak tersedia': '{n} not available',
   'Tidak ditagih': 'Not charged',
   '*Harga sudah termasuk jastip fee': '*Prices include the service fee',
@@ -485,8 +489,53 @@ export const en: Record<string, string | [string, string]> = {
   'Ditampilkan di tagihan customer, di bawah nama jastip.':
     'Shown on customer bills, under the business name.',
   'Ganti password': 'Change password',
-  'Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.':
-    'Only the shop owner can change the business name and phone number.',
+  'Nama jastip, nomor telepon, dan alamat hanya bisa diubah oleh pemilik toko.':
+    'Only the shop owner can change the business name, phone number and address.',
+  'Alamat Jastip': 'Business address',
+  '(opsional)': '(optional)',
+  'Contoh: Jl. Mawar No. 1, Jakarta Selatan': 'e.g. 1 Orchard Road, Singapore',
+  'Ditampilkan di tagihan customer, di bawah nomor telepon.':
+    "Shown on the customer's bill, under the phone number.",
+  'Rekening Bank': 'Bank accounts',
+  'Ditampilkan di tagihan customer yang belum lunas, supaya customer tahu ke mana harus transfer. Maksimal {n} rekening.':
+    "Shown on bills that aren't fully paid, so customers know where to transfer. Up to {n} accounts.",
+  'Rekening {n}': 'Account {n}',
+  'Nama bank (contoh: BCA, Mandiri, BRI)': 'Bank name',
+  'No. Rekening': 'Account number',
+  'Nama pemilik rekening': 'Account holder name',
+  'Lengkapi nama bank, nomor rekening, dan nama pemilik.':
+    'Fill in the bank name, account number and account holder.',
+  'Nomor rekening terlalu pendek.': 'The account number is too short.',
+  '+ Tambah rekening': '+ Add bank account',
+  'Kebijakan privasi rekening': 'Bank account privacy policy',
+  'Kebijakan Privasi Rekening Bank': 'Bank Account Privacy Policy',
+  'Untuk apa data ini dipakai': 'What this data is used for',
+  'Nama bank, nomor rekening, dan nama pemilik rekening hanya dipakai untuk dicetak di tagihan yang kamu kirim ke customer, supaya customer tahu ke mana harus transfer.':
+    'The bank name, account number and account holder name are only used to print on the bills you send customers, so they know where to transfer.',
+  'Tidak dipakai untuk hal lain': 'Not used for anything else',
+  'Justipers tidak memakai data rekeningmu untuk tujuan lain apa pun, tidak menjual atau membagikannya ke pihak lain, dan tidak pernah menarik, menerima, atau memindahkan uang dari rekening ini. Pembayaran customer langsung masuk ke rekeningmu.':
+    "Justipers doesn't use your bank account details for any other purpose, doesn't sell or share them with anyone, and never withdraws, receives or moves money from this account. Customers pay straight into your account.",
+  'Opsional, keputusanmu sendiri': 'Optional, your own decision',
+  'Mengisi rekening bukan langkah wajib di Justipers. Semua fitur tetap bisa dipakai tanpa rekening. Karena mencantumkan rekening adalah pilihanmu sendiri, Justipers tidak bertanggung jawab atas akibat dari keputusanmu mencantumkan dan membagikan rekening melalui tagihan, misalnya bila tagihan diteruskan ke orang lain.':
+    "Adding a bank account isn't required in Justipers; every feature works without one. Because including it is your own choice, Justipers isn't responsible for the consequences of your decision to include and share the account through bills, for example if a bill is forwarded to someone else.",
+  'Cara Justipers melindungi data ini': 'How Justipers protects this data',
+  'Hanya pemilik toko yang bisa menambah, mengubah, atau menghapus rekening, dan setiap perubahan harus dikonfirmasi dengan password.':
+    'Only the shop owner can add, change or remove bank accounts, and every change must be confirmed with the password.',
+  'Data disimpan terenkripsi di server Justipers dan hanya bisa dibaca oleh anggota tokomu.':
+    "The data is stored encrypted on Justipers's servers and can only be read by your shop's members.",
+  'Kamu bisa menghapus rekening kapan saja di Pengaturan Publikasi. Data rekening ikut terhapus bila akunmu dihapus.':
+    'You can remove bank accounts at any time in Publishing Settings. They are deleted along with your account.',
+  'Tagihan yang sudah dikirim tetap menampilkan rekening yang berlaku saat tagihan dibuat.':
+    'Bills already sent keep showing the account that applied when the bill was made.',
+  'Saya sudah membaca dan menyetujui kebijakan ini.': 'I have read and agree to this policy.',
+  'Setuju dan lanjutkan': 'Agree and continue',
+  'Konfirmasi password': 'Confirm password',
+  'Demi keamanan, masukkan password Justipers kamu untuk menyimpan perubahan rekening.':
+    'For your security, enter your Justipers password to save changes to your bank accounts.',
+  'Konfirmasi dan simpan': 'Confirm and save',
+  'Password salah.': 'Wrong password.',
+  'Rekening belum tersimpan. Coba lagi sebentar lagi.':
+    "The bank accounts weren't saved. Please try again shortly.",
   'Bahasa / Language': 'Language / Bahasa',
   'Berlaku untuk aplikasi di perangkat ini.': 'Applies to the app on this device.',
   'Ganti Password': 'Change Password',
@@ -497,6 +546,22 @@ export const en: Record<string, string | [string, string]> = {
 
   // Sharing settings
   'Nomor WhatsApp Admin': 'Admin WhatsApp number',
+  'Nomor Whatsapp Admin untuk publikasi': 'Admin WhatsApp number for publishing',
+  'Pengaturan Publikasi Form Order': 'Order form publishing settings',
+  'Pengaturan Publikasi No.rekening': 'Bank account publishing settings',
+  'Atur rekening bank yang dicetak di tagihan customer, supaya customer tahu ke mana harus transfer. Opsional, maksimal {n} rekening.':
+    "Set the bank accounts printed on customers' bills, so they know where to transfer. Optional, up to {n} accounts.",
+  'Belum ada rekening.': 'No bank accounts yet.',
+  'Pilih bank': 'Choose bank',
+  'Cari bank': 'Search banks',
+  Bank: 'Bank',
+  'E-wallet': 'E-wallet',
+  Lainnya: 'Other',
+  'Lainnya (tulis sendiri)': 'Other (type it in)',
+  'Tulis nama bank': 'Type the bank name',
+  'Rekening hanya bisa diubah oleh pemilik toko.': 'Only the shop owner can change bank accounts.',
+  'Atur kalimat pembuka pesan WhatsApp yang dikirim saat kamu membagikan form order event jastip, lalu lihat preview tampilannya sebelum disimpan.':
+    "Set the opening sentence of the WhatsApp message sent when you share a shopping event's order form, and check the preview before saving.",
   'Nomor ini akan digunakan untuk mengirim publikasi event jastip dan konfirmasi pesanan ke pelanggan.':
     'This number is used to send shopping event announcements and order confirmations to customers.',
   'Format kalimat pembuka publikasi event jastip': 'Opening line for shopping event announcements',

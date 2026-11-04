@@ -31,10 +31,21 @@ import { resetSyncState } from './sync';
 
 export type Role = 'owner' | 'admin' | 'member';
 
+/** Where customers transfer payment; printed on their bill. */
+export type BankAccount = { bank: string; nomor: string; nama: string };
+
+/** At most this many bank accounts per shop (also enforced in 0014). */
+export const MAX_BANK_ACCOUNTS = 3;
+
 export type Shop = {
   id: string;
   name: string;
   telepon: string;
+  /** The jastiper's address, optional ('' = none). */
+  alamat: string;
+  bankAccounts: BankAccount[];
+  /** When the owner accepted the bank-account privacy notice; null = never. */
+  bankConsentAt: string | null;
   adminWhatsapp: string;
   publikasiOpening: string;
   tokenBalance: number;
@@ -125,7 +136,15 @@ type AuthContextValue = {
   signIn: (email: string, password: string, remember: boolean, takeOver?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   /** Owner only. Saves shop settings to the server and the local store. */
-  updateShop: (patch: Partial<Omit<Shop, 'id' | 'tokenBalance'>>) => Promise<void>;
+  updateShop: (
+    patch: Partial<Omit<Shop, 'id' | 'tokenBalance' | 'bankAccounts' | 'bankConsentAt'>>
+  ) => Promise<void>;
+  /**
+   * Owner only. Replaces the shop's bank accounts, after checking the
+   * owner's password again on the server (supabase/functions/
+   * shop-bank-accounts). `consent`: the privacy notice was just accepted.
+   */
+  saveBankAccounts: (accounts: BankAccount[], password: string, consent: boolean) => Promise<void>;
   updateMyName: (nama: string) => Promise<void>;
   changePassword: (password: string) => Promise<void>;
   /** Admins only. Spends prices.openEvent for the event that will have this id; must succeed before the event is created. */
@@ -275,7 +294,9 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
   const shops = check(
     await supabase
       .from('shops')
-      .select('id, name, telepon, admin_whatsapp, publikasi_opening, token_balance, country')
+      .select(
+        'id, name, telepon, alamat, bank_accounts, bank_accounts_consent_at, admin_whatsapp, publikasi_opening, token_balance, country'
+      )
       .limit(1)
   );
   const row = shops?.[0];
@@ -298,6 +319,9 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
       id: row.id,
       name: row.name,
       telepon: row.telepon,
+      alamat: row.alamat ?? '',
+      bankAccounts: toBankAccounts(row.bank_accounts),
+      bankConsentAt: row.bank_accounts_consent_at ?? null,
       adminWhatsapp: row.admin_whatsapp,
       publikasiOpening: row.publikasi_opening,
       tokenBalance: row.token_balance ?? 0,
@@ -324,6 +348,14 @@ async function loadShopState(userId: string): Promise<ShopState | null> {
       memberSlot: price('member_slot', LIST_PRICES.memberSlot),
     },
   };
+}
+
+function toBankAccounts(value: unknown): BankAccount[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+    .map((a) => ({ bank: String(a.bank ?? ''), nomor: String(a.nomor ?? ''), nama: String(a.nama ?? '') }))
+    .slice(0, MAX_BANK_ACCOUNTS);
 }
 
 function toRole(value: unknown): Role {
@@ -358,6 +390,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       // because other screens still share this type.
       password: '',
       telepon: next.shop.telepon,
+      alamat: next.shop.alamat,
+      rekening: next.shop.bankAccounts,
     });
     s.setAdminWhatsapp(next.shop.adminWhatsapp);
     s.setPublikasiOpening(next.shop.publikasiOpening);
@@ -595,9 +629,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateShop = React.useCallback<AuthContextValue['updateShop']>(
     async (patch) => {
       if (!state) throw new AuthError(t('Kamu belum login.'));
-      const columns: Record<string, string> = {};
+      const columns: Record<string, unknown> = {};
       if (patch.name !== undefined) columns.name = patch.name;
       if (patch.telepon !== undefined) columns.telepon = patch.telepon;
+      if (patch.alamat !== undefined) columns.alamat = patch.alamat;
       if (patch.adminWhatsapp !== undefined) columns.admin_whatsapp = patch.adminWhatsapp;
       if (patch.publikasiOpening !== undefined) columns.publikasi_opening = patch.publikasiOpening;
       check(await supabase.from('shops').update(columns).eq('id', state.shop.id).select('id'));
@@ -689,6 +724,19 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         return (row?.status as TokenPaymentStatus | undefined) ?? null;
       },
       refreshShop: refresh,
+      saveBankAccounts: async (accounts, password, consent) => {
+        const { error } = await supabase.functions.invoke('shop-bank-accounts', {
+          body: { accounts, password, consent },
+        });
+        if (error) {
+          const detail = await (error as { context?: Response }).context
+            ?.json()
+            .catch(() => null);
+          if (detail?.error === 'wrong_password') throw new AuthError(t('Password salah.'));
+          throw new AuthError(t('Rekening belum tersimpan. Coba lagi sebentar lagi.'));
+        }
+        await refresh();
+      },
     }),
     [sessionRead, notice, session, state, signUp, signIn, signOut, updateShop, call, refresh]
   );

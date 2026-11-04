@@ -3,6 +3,7 @@ import AlignLeftLine from '@/assets/images/figma/icon-align-left-line.svg';
 import AlignLeftLineShort from '@/assets/images/figma/icon-align-left-line-short.svg';
 import BasketIcon from '@/assets/images/figma/icon-basket.svg';
 import MagnifyingGlassIcon from '@/assets/images/figma/icon-magnifying-glass.svg';
+import CaretDownWhiteIcon from '@/assets/images/figma/icon-caret-down-white.svg';
 import XCircleIcon from '@/assets/images/figma/icon-x-circle.svg';
 import { LanguageDialog } from '@/components/language-dialog';
 import { type TutorialTarget, TutorialOverlay } from '@/components/tutorial-overlay';
@@ -19,7 +20,7 @@ import { storage } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
-import { Image, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, ScrollView, View } from 'react-native';
 
 const CARD_SHADOW = { boxShadow: '0px 2px 5.1px rgba(0, 0, 0, 0.25)' };
 const CARD_FILL = {
@@ -61,6 +62,20 @@ export default function DashboardScreen() {
   const { shop, beta, signOut, userId } = useAuth();
   const t = useT();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  // The drawer's "Pengaturan" group starts folded each time it opens.
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  // 0 = folded, 1 = open. Drives the group's height, fade and the caret.
+  // JS-driven: height can't use the native driver, and web has none.
+  const settingsProgress = React.useRef(new Animated.Value(0)).current;
+  const [settingsHeight, setSettingsHeight] = React.useState(0);
+  React.useEffect(() => {
+    Animated.timing(settingsProgress, {
+      toValue: settingsOpen ? 1 : 0,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [settingsOpen, settingsProgress]);
   const [languageOpen, setLanguageOpen] = React.useState(false);
   const [tutorialOpen, setTutorialOpen] = React.useState(false);
   // The parts of this screen the tutorial points at.
@@ -403,7 +418,12 @@ export default function DashboardScreen() {
       </View>
 
       {menuOpen ? (
-        <SideDrawer onClose={() => setMenuOpen(false)}>
+        <SideDrawer
+          onClose={() => {
+            setMenuOpen(false);
+            setSettingsOpen(false);
+            settingsProgress.setValue(0);
+          }}>
           {(close) => (
             <View className="flex-1 items-end justify-between">
               <View className="w-full gap-[4px]">
@@ -413,29 +433,71 @@ export default function DashboardScreen() {
                   </Pressable>
                 </View>
 
+                {/* The three settings pages, folded under one item. */}
                 <Pressable
-                  onPress={() => close(() => router.push('/settings'))}
-                  className="w-full items-start px-[10px] py-[10px]">
+                  onPress={() => setSettingsOpen((open) => !open)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: settingsOpen }}
+                  aria-expanded={settingsOpen}
+                  className="w-full flex-row items-center gap-[8px] px-[10px] py-[10px]">
                   <Text className="font-inter-semibold text-[16px] text-white">
-                    {t('Pengaturan Akun')}
+                    {t('Pengaturan')}
                   </Text>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        {
+                          rotate: settingsProgress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '180deg'],
+                          }),
+                        },
+                      ],
+                    }}>
+                    <CaretDownWhiteIcon width={16} height={16} />
+                  </Animated.View>
                 </Pressable>
 
-                <Pressable
-                  onPress={() => close(() => router.push('/pengaturan-subscription'))}
-                  className="w-full items-start px-[10px] py-[10px]">
-                  <Text className="font-inter-semibold text-[16px] text-white">
-                    {t('Pengaturan Subscription')}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => close(() => router.push('/pengaturan-publikasi'))}
-                  className="w-full items-start px-[10px] py-[10px]">
-                  <Text className="font-inter-semibold text-[16px] text-white">
-                    {t('Pengaturan Publikasi')}
-                  </Text>
-                </Pressable>
+                {/* Always rendered, so its height is known; slides open by
+                    animating the clipping container's height. */}
+                <Animated.View
+                  pointerEvents={settingsOpen ? 'auto' : 'none'}
+                  accessibilityElementsHidden={!settingsOpen}
+                  importantForAccessibility={settingsOpen ? 'auto' : 'no-hide-descendants'}
+                  aria-hidden={!settingsOpen}
+                  style={{
+                    width: '100%',
+                    overflow: 'hidden',
+                    height: settingsProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, settingsHeight],
+                    }),
+                    opacity: settingsProgress,
+                  }}>
+                  {/* flexShrink 0: keeps its natural height while the
+                      container is folded, so the measurement is right. */}
+                  <View
+                    className="w-full"
+                    style={{ flexShrink: 0 }}
+                    onLayout={(e) => setSettingsHeight(e.nativeEvent.layout.height)}>
+                    {(
+                      [
+                        ['/settings', 'Pengaturan Akun'],
+                        ['/pengaturan-subscription', 'Pengaturan Subscription'],
+                        ['/pengaturan-publikasi', 'Pengaturan Publikasi'],
+                      ] as const
+                    ).map(([href, label]) => (
+                      <Pressable
+                        key={href}
+                        onPress={() => close(() => router.push(href))}
+                        className="w-full items-start py-[8px] pl-[26px] pr-[10px]">
+                        <Text className="font-inter-semibold text-[14px] text-white">
+                          {t(label)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </Animated.View>
 
                 {/* Not in Figma: the tutorial again, once the drawer has
                     closed. */}

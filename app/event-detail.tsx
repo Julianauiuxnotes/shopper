@@ -26,6 +26,7 @@ import { useT } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import { buildOrderFormLink } from '@/lib/order-form-link';
 import { useSettings } from '@/lib/settings-store';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import * as Clipboard from 'expo-clipboard';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -148,6 +149,7 @@ export default function EventDetailScreen() {
         })
       : '';
   const [linkCopied, setLinkCopied] = React.useState(false);
+  useAutoReset(linkCopied, () => setLinkCopied(false));
   const lunasOrders = event?.orders.filter((o) => o.statusPembayaran === 'lunas') ?? [];
   const sebagianOrders = event?.orders.filter((o) => o.statusPembayaran === 'belumLunas') ?? [];
   const belumOrders = event?.orders.filter((o) => o.statusPembayaran === 'belum') ?? [];
@@ -220,7 +222,6 @@ export default function EventDetailScreen() {
     try {
       await Clipboard.setStringAsync(shareLink);
       setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2500);
     } catch {
       // clipboard blocked — the share icon still works.
     }
@@ -271,7 +272,6 @@ export default function EventDetailScreen() {
       try {
         await Clipboard.setStringAsync(message);
         setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2500);
       } catch {
         // clipboard blocked too — nothing more to try.
       }

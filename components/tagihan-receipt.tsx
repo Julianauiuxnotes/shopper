@@ -58,6 +58,11 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
           {snapshot.tj ? (
             <Text className="font-inter text-[12px] text-neutral-800">+62{snapshot.tj}</Text>
           ) : null}
+          {snapshot.aj ? (
+            <Text className="px-[16px] text-center font-inter text-[12px] text-neutral-800">
+              {snapshot.aj}
+            </Text>
+          ) : null}
           <Text className="font-inter text-[12px] text-neutral-800">
             {t('Waktu cetak')} : {formatPrintTimestamp(new Date(snapshot.t))}
           </Text>
@@ -195,6 +200,25 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
               <Text className="font-inter text-[12px] text-neutral-800">
                 {money((snapshot.dp ?? 0) - snapshot.tt)}
               </Text>
+            </View>
+          ) : null}
+          {/* Where to pay, until the bill is settled. Selectable, so the
+              customer can copy the account number on the public page. */}
+          {!snapshot.lu && (snapshot.rk ?? []).length > 0 ? (
+            <View className="gap-[6px] rounded-[8px] border border-neutral-300 p-[10px]">
+              <Text className="font-inter-bold text-[10px] text-neutral-800">
+                {t('Transfer pembayaran ke')}
+              </Text>
+              {(snapshot.rk ?? []).map(([bank, nomor, nama], index) => (
+                <View key={index} className="gap-[2px]">
+                  <Text selectable className="font-inter-semibold text-[12px] text-neutral-800">
+                    {bank} · {nomor}
+                  </Text>
+                  <Text selectable className="font-inter text-[10px] text-neutral-600">
+                    {t('a.n. {nama}', { nama })}
+                  </Text>
+                </View>
+              ))}
             </View>
           ) : null}
           <Text className="font-inter text-[10px] text-[#1e1e1e]">

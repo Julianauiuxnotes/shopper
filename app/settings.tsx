@@ -6,6 +6,7 @@ import { AuthError, useAuth } from '@/lib/auth-store';
 import { useT } from '@/lib/i18n';
 import { useSettings } from '@/lib/settings-store';
 import { cn } from '@/lib/utils';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -28,6 +29,8 @@ const LOGO_MAX_INPUT_BYTES = 10 * 1024 * 1024;
 // A complex PNG can stay above the 200 KB target even at the smallest
 // size; this is the hard ceiling (see the AsyncStorage note above).
 const LOGO_MAX_STORED_BYTES = 500 * 1024;
+
+const ALAMAT_MAX = 300;
 
 // No Figma design exists for this screen yet — built using the same
 // visual language already established across the app (input pattern
@@ -120,7 +123,9 @@ export default function SettingsScreen() {
   const [namaJastipDraft, setNamaJastipDraft] = React.useState(userProfile.namaJastip);
   const [emailDraft, setEmailDraft] = React.useState(userProfile.email);
   const [teleponDraft, setTeleponDraft] = React.useState(userProfile.telepon ?? '');
+  const [alamatDraft, setAlamatDraft] = React.useState(userProfile.alamat ?? '');
   const [justSaved, setJustSaved] = React.useState(false);
+  useAutoReset(justSaved, () => setJustSaved(false));
 
   // `useState(userProfile.nama)` above only reads its initial value once,
   // at this component's first render — if that happens before the
@@ -135,7 +140,15 @@ export default function SettingsScreen() {
     setNamaJastipDraft(userProfile.namaJastip);
     setEmailDraft(userProfile.email);
     setTeleponDraft(userProfile.telepon ?? '');
-  }, [ready, userProfile.nama, userProfile.namaJastip, userProfile.email, userProfile.telepon]);
+    setAlamatDraft(userProfile.alamat ?? '');
+  }, [
+    ready,
+    userProfile.nama,
+    userProfile.namaJastip,
+    userProfile.email,
+    userProfile.telepon,
+    userProfile.alamat,
+  ]);
 
   const isValid =
     namaDraft.trim().length > 0 &&
@@ -146,18 +159,26 @@ export default function SettingsScreen() {
     namaDraft !== userProfile.nama ||
     namaJastipDraft !== userProfile.namaJastip ||
     emailDraft !== userProfile.email ||
-    teleponDraft !== (userProfile.telepon ?? '');
+    teleponDraft !== (userProfile.telepon ?? '') ||
+    alamatDraft !== (userProfile.alamat ?? '');
 
   // Saves to the server; lib/auth-store.tsx then refreshes the local
   // store from it. Needs a connection until offline saving arrives with
-  // step 2 of the sync plan.
+  // step 2 of the sync plan. (Bank accounts are on Pengaturan
+  // Publikasi now.)
   async function handleSave() {
     if (!isValid || saving) return;
     setSaving(true);
     setSaveError(null);
     try {
       if (namaDraft.trim() !== userProfile.nama) await updateMyName(namaDraft.trim());
-      if (isOwner) await updateShop({ name: namaJastipDraft.trim(), telepon: teleponDraft });
+      if (isOwner) {
+        await updateShop({
+          name: namaJastipDraft.trim(),
+          telepon: teleponDraft,
+          alamat: alamatDraft.trim(),
+        });
+      }
       setJustSaved(true);
     } catch (error) {
       setSaveError(
@@ -178,195 +199,226 @@ export default function SettingsScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[20px]"
-        keyboardShouldPersistTaps="handled">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          className="flex-row items-center gap-[5px]">
-          <CaretCircleLeftIcon width={24} height={24} />
-          <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">{t('Pengaturan')}</Text>
-        </Pressable>
+    <>
+      <KeyboardAvoidingView
+        className="flex-1 bg-white"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[20px]"
+          keyboardShouldPersistTaps="handled">
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            className="flex-row items-center gap-[5px]">
+            <CaretCircleLeftIcon width={24} height={24} />
+            <Text className="font-inter-bold text-[16px] text-[#5d5d5d]">{t('Pengaturan')}</Text>
+          </Pressable>
 
-        <View className="gap-[16px]">
-          <Text className="font-inter-bold text-[14px] text-neutral-800">{t('Data Akun')}</Text>
+          <View className="gap-[16px]">
+            <Text className="font-inter-bold text-[14px] text-neutral-800">{t('Data Akun')}</Text>
 
-          <View className="gap-[8px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Logo Jastip')}</Text>
-            <View className="flex-row items-center gap-[12px]">
-              {/* Square, like the logo itself. */}
-              <View className="h-[70px] w-[70px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
-                {logoJastip ? (
-                  <Image
-                    source={{ uri: logoJastip }}
-                    resizeMode="contain"
-                    style={{ width: 70, height: 70 }}
-                    accessibilityLabel={t('Logo jastip')}
-                  />
-                ) : (
-                  <Text className="font-inter text-[10px] text-neutral-500">
-                    {t('Belum ada logo')}
-                  </Text>
-                )}
-              </View>
-              <View className="items-start gap-[8px]">
-                <Pressable
-                  onPress={handlePickLogo}
-                  accessibilityRole="button"
-                  className="rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
-                  <Text className="font-inter text-[12px] text-orange-500">
-                    {logoJastip ? t('Ganti logo') : t('Unggah logo')}
-                  </Text>
-                </Pressable>
-                {logoJastip ? (
+            <View className="gap-[8px]">
+              <Text className="font-inter-bold text-[12px] text-neutral-800">
+                {t('Logo Jastip')}
+              </Text>
+              <View className="flex-row items-center gap-[12px]">
+                {/* Square, like the logo itself. */}
+                <View className="h-[70px] w-[70px] items-center justify-center overflow-hidden rounded-[8px] border border-dashed border-neutral-400 bg-neutral-50">
+                  {logoJastip ? (
+                    <Image
+                      source={{ uri: logoJastip }}
+                      resizeMode="contain"
+                      style={{ width: 70, height: 70 }}
+                      accessibilityLabel={t('Logo jastip')}
+                    />
+                  ) : (
+                    <Text className="font-inter text-[10px] text-neutral-500">
+                      {t('Belum ada logo')}
+                    </Text>
+                  )}
+                </View>
+                <View className="items-start gap-[8px]">
                   <Pressable
-                    onPress={() => {
-                      setLogoError(null);
-                      setLogoJastip(null);
-                    }}
+                    onPress={handlePickLogo}
                     accessibilityRole="button"
-                    hitSlop={8}>
-                    <Text className="font-inter-semibold text-[12px] text-red-500 underline">
-                      {t('Hapus logo')}
+                    className="rounded-[8px] border border-orange-400 bg-orange-50 p-[10px]">
+                    <Text className="font-inter text-[12px] text-orange-500">
+                      {logoJastip ? t('Ganti logo') : t('Unggah logo')}
                     </Text>
                   </Pressable>
-                ) : null}
+                  {logoJastip ? (
+                    <Pressable
+                      onPress={() => {
+                        setLogoError(null);
+                        setLogoJastip(null);
+                      }}
+                      accessibilityRole="button"
+                      hitSlop={8}>
+                      <Text className="font-inter-semibold text-[12px] text-red-500 underline">
+                        {t('Hapus logo')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+              <Text className="font-inter text-[10px] text-neutral-500">
+                {t(
+                  'PNG atau JPG, persegi (rasio 1:1). Minimal {min} x {min} px, maksimal {max} x {max} px. Gambar yang lebih besar dikecilkan otomatis. Logo tampil di dashboard dan di cetakan.',
+                  { min: LOGO_MIN_WIDTH, max: LOGO_MAX_SIDE }
+                )}
+              </Text>
+              {logoError ? (
+                <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>
+              ) : null}
+            </View>
+
+            <View className="gap-[4px]">
+              <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Nama')}</Text>
+              <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                <Input
+                  value={namaDraft}
+                  onChangeText={withDirtyReset(setNamaDraft)}
+                  placeholder={t('Nama Lengkap')}
+                  placeholderTextColor="#9ca3af"
+                  className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                />
               </View>
             </View>
-            <Text className="font-inter text-[10px] text-neutral-500">
-              {t(
-                'PNG atau JPG, persegi (rasio 1:1). Minimal {min} x {min} px, maksimal {max} x {max} px. Gambar yang lebih besar dikecilkan otomatis. Logo tampil di dashboard dan di cetakan.',
-                { min: LOGO_MIN_WIDTH, max: LOGO_MAX_SIDE }
-              )}
-            </Text>
-            {logoError ? (
-              <Text className="font-inter text-[10px] text-red-500">{logoError}</Text>
-            ) : null}
-          </View>
 
-          <View className="gap-[4px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Nama')}</Text>
-            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-              <Input
-                value={namaDraft}
-                onChangeText={withDirtyReset(setNamaDraft)}
-                placeholder={t('Nama Lengkap')}
-                placeholderTextColor="#9ca3af"
-                className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-              />
+            <View className="gap-[4px]">
+              <Text className="font-inter-bold text-[12px] text-neutral-800">
+                {t('Nama Jastip')}
+              </Text>
+              <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                <Input
+                  value={namaJastipDraft}
+                  onChangeText={withDirtyReset(setNamaJastipDraft)}
+                  editable={isOwner}
+                  placeholder={t('Nama Jastip')}
+                  placeholderTextColor="#9ca3af"
+                  className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                />
+              </View>
+            </View>
+
+            <View className="gap-[4px]">
+              <Text className="font-inter-bold text-[12px] text-neutral-800">Email</Text>
+              <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+                <Input
+                  value={emailDraft}
+                  onChangeText={withDirtyReset(setEmailDraft)}
+                  // The login email; changing it needs an email-confirmation
+                  // flow that doesn't exist yet.
+                  editable={false}
+                  placeholder="Email"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+                />
+              </View>
             </View>
           </View>
 
-          <View className="gap-[4px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Nama Jastip')}</Text>
-            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-              <Input
-                value={namaJastipDraft}
-                onChangeText={withDirtyReset(setNamaJastipDraft)}
-                editable={isOwner}
-                placeholder={t('Nama Jastip')}
-                placeholderTextColor="#9ca3af"
-                className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-              />
-            </View>
-          </View>
-
-          <View className="gap-[4px]">
-            <Text className="font-inter-bold text-[12px] text-neutral-800">Email</Text>
-            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-              <Input
-                value={emailDraft}
-                onChangeText={withDirtyReset(setEmailDraft)}
-                // The login email; changing it needs an email-confirmation
-                // flow that doesn't exist yet.
-                editable={false}
-                placeholder="Email"
-                placeholderTextColor="#9ca3af"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                className="h-auto border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Optional (not part of isValid). Shown on the tagihan receipt
+          {/* Optional (not part of isValid). Shown on the tagihan receipt
             under the jastiper's name. Same "+62" prefix pattern as
             Pengaturan Publikasi's admin WhatsApp field. */}
-        <View className="gap-[4px]">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">
-            {t('No. Telepon Jastip')}
-          </Text>
-          <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-            <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
-            <Input
-              value={teleponDraft}
-              editable={isOwner}
-              onChangeText={withDirtyReset((value: string) =>
-                setTeleponDraft(value.replace(/\D/g, '').replace(/^0+/, ''))
-              )}
-              placeholder="81234567890"
-              placeholderTextColor="#9ca3af"
-              keyboardType="phone-pad"
-              className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
-            />
+          <View className="gap-[4px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">
+              {t('No. Telepon Jastip')}
+            </Text>
+            <View className="flex-row items-center gap-[10px] rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-400">+62</Text>
+              <Input
+                value={teleponDraft}
+                editable={isOwner}
+                onChangeText={withDirtyReset((value: string) =>
+                  setTeleponDraft(value.replace(/\D/g, '').replace(/^0+/, ''))
+                )}
+                placeholder="81234567890"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+                className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+              />
+            </View>
+            <Text className="font-inter text-[10px] text-neutral-500">
+              {t('Ditampilkan di tagihan customer, di bawah nama jastip.')}
+            </Text>
           </View>
-          <Text className="font-inter text-[10px] text-neutral-500">
-            {t('Ditampilkan di tagihan customer, di bawah nama jastip.')}
-          </Text>
-        </View>
 
-        <View className="gap-[4px]">
-          <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Password')}</Text>
-          <View className="flex-row items-center justify-between rounded-[8px] border border-neutral-400 bg-white p-[10px]">
-            <Text className="font-inter text-[12px] text-neutral-800">{'•'.repeat(8)}</Text>
-            <Link href="/ganti-password" asChild>
-              <Pressable hitSlop={8}>
-                <Text className="font-inter-semibold text-[12px] text-orange-500 underline">
-                  {t('Ganti password')}
-                </Text>
-              </Pressable>
-            </Link>
+          {/* Optional, like the phone number above: printed under it on the
+            tagihan receipt. */}
+          <View className="gap-[4px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">
+              {t('Alamat Jastip')}{' '}
+              <Text className="font-inter text-[12px] text-neutral-500">{t('(opsional)')}</Text>
+            </Text>
+            <View className="rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Input
+                value={alamatDraft}
+                editable={isOwner}
+                onChangeText={withDirtyReset((value: string) =>
+                  setAlamatDraft(value.slice(0, ALAMAT_MAX))
+                )}
+                placeholder={t('Contoh: Jl. Mawar No. 1, Jakarta Selatan')}
+                placeholderTextColor="#9ca3af"
+                multiline
+                className="h-auto min-h-[40px] border-0 bg-transparent p-0 text-[12px] text-neutral-800 shadow-none"
+              />
+            </View>
+            <Text className="font-inter text-[10px] text-neutral-500">
+              {t('Ditampilkan di tagihan customer, di bawah nomor telepon.')}
+            </Text>
           </View>
-        </View>
 
-        <Pressable
-          onPress={handleSave}
-          disabled={!isValid || saving}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !isValid || saving, busy: saving }}
-          className={cn(
-            'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
-            isValid ? 'bg-orange-500' : 'bg-orange-200'
-          )}>
-          <Text
+          <View className="gap-[4px]">
+            <Text className="font-inter-bold text-[12px] text-neutral-800">{t('Password')}</Text>
+            <View className="flex-row items-center justify-between rounded-[8px] border border-neutral-400 bg-white p-[10px]">
+              <Text className="font-inter text-[12px] text-neutral-800">{'•'.repeat(8)}</Text>
+              <Link href="/ganti-password" asChild>
+                <Pressable hitSlop={8}>
+                  <Text className="font-inter-semibold text-[12px] text-orange-500 underline">
+                    {t('Ganti password')}
+                  </Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleSave}
+            disabled={!isValid || saving}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isValid || saving, busy: saving }}
             className={cn(
-              'font-inter-semibold text-[14px]',
-              isValid ? 'text-orange-50' : 'text-orange-300'
+              'w-full items-center justify-center rounded-[12px] px-[10px] py-[16px]',
+              isValid ? 'bg-orange-500' : 'bg-orange-200'
             )}>
-            {saving ? t('Menyimpan...') : t('Simpan')}
-          </Text>
-        </Pressable>
+            <Text
+              className={cn(
+                'font-inter-semibold text-[14px]',
+                isValid ? 'text-orange-50' : 'text-orange-300'
+              )}>
+              {saving ? t('Menyimpan...') : t('Simpan')}
+            </Text>
+          </Pressable>
 
-        {justSaved && !isDirty ? (
-          <Text className="text-center font-inter text-[12px] text-orange-500">
-            {t('✓ Tersimpan')}
-          </Text>
-        ) : null}
-        {saveError ? (
-          <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
-        ) : null}
-        {!isOwner ? (
-          <Text className="text-center font-inter text-[10px] text-neutral-500">
-            {t('Nama jastip dan nomor telepon hanya bisa diubah oleh pemilik toko.')}
-          </Text>
-        ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {justSaved && !isDirty ? (
+            <Text className="text-center font-inter text-[12px] text-orange-500">
+              {t('✓ Tersimpan')}
+            </Text>
+          ) : null}
+          {saveError ? (
+            <Text className="text-center font-inter text-[12px] text-red-500">{saveError}</Text>
+          ) : null}
+          {!isOwner ? (
+            <Text className="text-center font-inter text-[10px] text-neutral-500">
+              {t('Nama jastip, nomor telepon, dan alamat hanya bisa diubah oleh pemilik toko.')}
+            </Text>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
