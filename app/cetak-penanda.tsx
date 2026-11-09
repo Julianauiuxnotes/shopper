@@ -10,7 +10,6 @@ import { formatMoney } from '@/lib/money';
 import { penandaBlocks } from '@/lib/penanda-image';
 import {
   canMakeReceiptImage,
-  printReceiptImage,
   renderReceiptPng,
   isAndroidBrowser,
   saveReceiptImage,
@@ -20,7 +19,7 @@ import { useAutoReset } from '@/lib/use-auto-reset';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
-import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 // Figma section "Cetak penanda" (node 176:726, 3 sample frames "1/3",
 // "2/3", "3/3") — reached by tapping an already-bought item's "Cetak
@@ -44,14 +43,10 @@ import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 // signed-up business name via the same `userProfile.namaJastip`
 // fallback pattern used for the WhatsApp messages elsewhere in the app.
 //
-// Figma's own frames don't show a print-trigger button (the page IS the
-// printable content, same as a browser print preview) — but every other
-// single-purpose screen in this app gets a matching action button, so a
-// "Cetak" button was added at the bottom: `window.print()` on web is a
-// real, fully working browser feature (not a stub); native printing
-// would need `expo-print` plus real printer pairing, well beyond this
-// screen's own scope, so it's a TODO stub there for now, same precedent
-// as "Cetak penanda" itself was before this screen existed.
+// The action at the bottom is "Simpan foto receipt": the receipt saved as
+// a 58 mm thermal image (lib/receipt-image.ts) to print from the
+// printer's own app. There is no in-browser "Cetak": a phone browser
+// can't reach a Bluetooth thermal printer.
 export default function CetakPenandaScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
@@ -154,18 +149,6 @@ export default function CetakPenandaScreen() {
 
   const currentIndex = order.items.findIndex((it) => it.id === itemId);
   const totalItems = order.items.length;
-
-  // On web, prints the same 58 mm receipt image as "Simpan foto receipt"
-  // (lib/receipt-image.ts); falls back to printing the page if the image
-  // isn't ready.
-  function handleCetak() {
-    if (Platform.OS === 'web') {
-      if (png) printReceiptImage(png);
-      else window.print();
-      return;
-    }
-    Alert.alert('Segera hadir', 'Fitur cetak penanda belum tersedia di perangkat ini.');
-  }
 
   return (
     <View className="flex-1 bg-white">
@@ -308,21 +291,16 @@ export default function CetakPenandaScreen() {
           <BrandLogo width={63.56} height={22} />
         </View>
 
-        <Pressable
-          onPress={handleCetak}
-          className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
-          <Text className="font-inter-semibold text-[14px] text-white">{t('Cetak')}</Text>
-        </Pressable>
         <View className="w-full gap-[8px]">
           <Pressable
             onPress={handleSimpanFoto}
             disabled={canMakeReceiptImage && !png}
             accessibilityRole="button"
             className={cn(
-              'w-full items-center justify-center rounded-[12px] border border-orange-500 bg-white px-[10px] py-[16px]',
+              'w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]',
               canMakeReceiptImage && !png && 'opacity-50'
             )}>
-            <Text className="font-inter-semibold text-[14px] text-orange-500">
+            <Text className="font-inter-semibold text-[14px] text-white">
               {photoNotice === 'saved' || photoNotice === 'downloaded' ? t('✓ Foto receipt tersimpan') : t('Simpan foto receipt')}
             </Text>
           </Pressable>

@@ -13,7 +13,6 @@ import {
 } from '@/lib/receipt-link';
 import {
   canMakeReceiptImage,
-  printReceiptImage,
   renderReceiptPng,
   isAndroidBrowser,
   saveReceiptImage,
@@ -185,14 +184,6 @@ export default function TagihanScreen() {
     }
   }
 
-  function handleCetak() {
-    if (!canMakeReceiptImage) {
-      setPhotoNotice('webOnly');
-      return;
-    }
-    if (png) printReceiptImage(png);
-  }
-
   async function handleSimpanFoto() {
     if (!canMakeReceiptImage) {
       setPhotoNotice('webOnly');
@@ -250,26 +241,16 @@ export default function TagihanScreen() {
               : t('Menyiapkan link tagihan…')}
           </Text>
 
-          {/* 58 mm thermal printer: print here, or save the image for the
-              printer's own app (iPhone Safari can't reach the printer). */}
+          {/* 58 mm thermal printer: save the bill as an image and print it
+              from the printer's own app. */}
           <View className="mt-[14px] h-px w-full bg-neutral-300" />
-          <View className="mt-[14px] flex-row gap-[10px]">
-            <Pressable
-              onPress={handleCetak}
-              disabled={imageBusy}
-              accessibilityRole="button"
-              className={cn(
-                'flex-1 items-center justify-center rounded-[12px] border border-neutral-800 bg-white px-[10px] py-[14px]',
-                imageBusy && 'opacity-50'
-              )}>
-              <Text className="font-inter-semibold text-[14px] text-neutral-800">{t('Cetak')}</Text>
-            </Pressable>
+          <View className="mt-[14px]">
             <Pressable
               onPress={handleSimpanFoto}
               disabled={imageBusy}
               accessibilityRole="button"
               className={cn(
-                'flex-1 items-center justify-center rounded-[12px] border border-neutral-800 bg-white px-[10px] py-[14px]',
+                'w-full items-center justify-center rounded-[12px] border border-neutral-800 bg-white px-[10px] py-[14px]',
                 imageBusy && 'opacity-50'
               )}>
               <Text className="font-inter-semibold text-[14px] text-neutral-800">
@@ -279,12 +260,12 @@ export default function TagihanScreen() {
           </View>
           <Text className="text-center font-inter text-[10px] text-neutral-500">
             {photoNotice === 'webOnly'
-              ? t('Cetak dan simpan foto baru tersedia di versi web.')
+              ? t('Simpan foto tagihan baru tersedia di versi web.')
               : photoNotice === 'failed'
                 ? t('Foto tagihan gagal dibuat. Coba lagi.')
                 : photoNotice === 'downloaded'
                   ? t('Foto tersimpan di folder Download. Buka dari Galeri (album Download) atau dari aplikasi printer.')
-                : t('Ukuran struk printer thermal 58 mm.')}
+                : t('Simpan sebagai gambar untuk dicetak lewat aplikasi printer thermal.')}
           </Text>
         </View>
       </ScrollView>

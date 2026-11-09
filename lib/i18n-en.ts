@@ -308,9 +308,8 @@ export const en: Record<string, string | [string, string]> = {
   'Tagihan belum bisa dimuat. Periksa koneksi internet, lalu muat ulang halaman ini.':
     "The bill couldn't be loaded. Check your internet connection, then reload this page.",
   'Simpan foto tagihan': 'Save bill photo',
-  'Cetak dan simpan foto baru tersedia di versi web.': 'Printing and saving the photo are only available on the web version for now.',
+  'Simpan foto tagihan baru tersedia di versi web.': 'Saving the bill photo is only available on the web version for now.',
   'Foto tagihan gagal dibuat. Coba lagi.': 'The bill photo could not be created. Try again.',
-  'Ukuran struk printer thermal 58 mm.': 'Sized for 58 mm thermal printer paper.',
   'Foto tersimpan di folder Download. Buka dari Galeri (album Download) atau dari aplikasi printer.':
     'Saved to your Download folder. Open it from the Gallery (Download album) or from your printer app.',
   'Nomor order': 'Order number',

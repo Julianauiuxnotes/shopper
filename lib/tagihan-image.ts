@@ -6,7 +6,7 @@ import type { ReceiptSnapshot } from './receipt-link';
 import type { ReceiptBlock } from './receipt-image';
 
 // The customer's bill (components/tagihan-receipt.tsx) as 58 mm receipt
-// blocks, for "Simpan foto tagihan" and "Cetak" on app/tagihan.tsx
+// blocks, for "Simpan foto tagihan" on app/tagihan.tsx
 // (lib/receipt-image.ts). Same content and order as the on-screen bill.
 export function tagihanBlocks(s: ReceiptSnapshot, logo: string | null): ReceiptBlock[] {
   const money = (amount: number) => formatMoney(amount, s.cu ?? 'IDR');

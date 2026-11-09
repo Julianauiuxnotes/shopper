@@ -4,11 +4,9 @@ import { LOGO_SVG, wrap } from './shipping-label';
 // Receipts for 58 mm thermal paper, drawn onto a canvas as a PNG.
 //
 // Used by Cetak penanda (lib/penanda-image.ts) and Cetak tagihan
-// (lib/tagihan-image.ts) for two things:
-//   * "Simpan foto": save the PNG (iPhone: share sheet → Save Image, or
-//     straight to the printer's own app). iPhone Safari can't reach a
-//     Bluetooth thermal printer, so this is how those jastipers print.
-//   * "Cetak": print that same PNG on a 58 mm page (printReceiptImage).
+// (lib/tagihan-image.ts) for "Simpan foto": save the PNG, then print it
+// from the thermal printer's own app (a phone browser can't reach a
+// Bluetooth thermal printer).
 //
 // 58 mm paper has a 48 mm print area = 384 dots at 203 dpi. The layout
 // is 384 points wide (one point = one printer dot), drawn at 2x so it
@@ -288,49 +286,4 @@ export async function saveReceiptImage(
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   return 'downloaded';
-}
-
-/**
- * Prints the PNG on a 58 mm page: the receipt fills the 48 mm print area
- * with 5 mm margins, and the page is exactly as long as the receipt. Done
- * in a hidden frame so the app's own screen isn't printed.
- */
-export function printReceiptImage(blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-  document.body.appendChild(frame);
-  const cleanup = () =>
-    setTimeout(() => {
-      frame.remove();
-      URL.revokeObjectURL(url);
-    }, 60_000);
-
-  const image = new Image();
-  image.onload = () => {
-    const heightMm = Math.ceil((48 * image.naturalHeight) / image.naturalWidth) + 4;
-    const doc = frame.contentDocument;
-    const win = frame.contentWindow;
-    if (!doc || !win) return cleanup();
-    doc.open();
-    doc.write(
-      `<!doctype html><html><head><title>Receipt</title><style>` +
-        `@page{size:58mm ${heightMm}mm;margin:0}` +
-        `html,body{margin:0;padding:0;background:#fff}` +
-        `img{display:block;width:48mm;margin:2mm 5mm 0}` +
-        `</style></head><body><img src="${url}"></body></html>`
-    );
-    doc.close();
-    const go = () => {
-      win.focus();
-      win.print();
-      cleanup();
-    };
-    const img = doc.querySelector('img');
-    if (img && !img.complete) img.onload = go;
-    else go();
-  };
-  image.onerror = cleanup;
-  image.src = url;
 }

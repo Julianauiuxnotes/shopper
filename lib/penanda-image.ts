@@ -1,7 +1,7 @@
 import type { ReceiptBlock } from './receipt-image';
 
 // Cetak penanda (app/cetak-penanda.tsx) as 58 mm receipt blocks, for
-// "Simpan foto receipt" and "Cetak" (lib/receipt-image.ts).
+// "Simpan foto receipt" (lib/receipt-image.ts).
 
 export type PenandaReceipt = {
   /** Uploaded logo (data URL), or null to leave it out */
