@@ -248,12 +248,21 @@ export async function renderReceiptPng(blocks: ReceiptBlock[]): Promise<Blob> {
   return blob;
 }
 
+/** Android browsers: their share sheet has no "save to gallery" option. */
+export function isAndroidBrowser() {
+  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+}
+
 /**
- * Saves the PNG. Where the browser can share files (iPhone/iPad Safari,
- * Android Chrome) this opens the share sheet — "Save Image" puts it in
- * Photos, or it can go straight to the printer app. Elsewhere it downloads.
- * Must be called straight from the tap, with the PNG already rendered:
- * Safari only allows the share sheet during a user gesture.
+ * Saves the PNG.
+ * - iPhone/iPad: opens the share sheet, where "Save Image" puts it in
+ *   Photos (or it can go straight to the printer app). Must be called
+ *   straight from the tap, with the PNG already rendered: Safari only
+ *   allows the share sheet during a user gesture.
+ * - Android and computers: downloads the file. Android's share sheet only
+ *   lists apps (WhatsApp, Drive, Photos "upload"…), with no way to save,
+ *   while a download lands in the Download folder, which the gallery
+ *   shows as its "Download" album and printer apps can pick from.
  */
 export async function saveReceiptImage(
   blob: Blob,
@@ -261,7 +270,7 @@ export async function saveReceiptImage(
 ): Promise<'shared' | 'downloaded' | 'cancelled'> {
   const file = new File([blob], fileName, { type: 'image/png' });
   const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
-  if (nav.share && nav.canShare?.({ files: [file] })) {
+  if (!isAndroidBrowser() && nav.share && nav.canShare?.({ files: [file] })) {
     try {
       await nav.share({ files: [file] });
       return 'shared';

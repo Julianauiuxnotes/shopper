@@ -12,6 +12,7 @@ import {
   canMakeReceiptImage,
   printReceiptImage,
   renderReceiptPng,
+  isAndroidBrowser,
   saveReceiptImage,
 } from '@/lib/receipt-image';
 import { useSettings } from '@/lib/settings-store';
@@ -132,7 +133,8 @@ export default function CetakPenandaScreen() {
       png,
       `${t('Receipt')} ${order.orderNumber} ${safeName} ${index + 1}-${order.items.length}.png`
     );
-    if (result !== 'cancelled') setPhotoNotice('saved');
+    if (result === 'downloaded' && isAndroidBrowser()) setPhotoNotice('downloaded');
+    else if (result !== 'cancelled') setPhotoNotice('saved');
   }
 
   if (!event || !order) {
@@ -321,14 +323,16 @@ export default function CetakPenandaScreen() {
               canMakeReceiptImage && !png && 'opacity-50'
             )}>
             <Text className="font-inter-semibold text-[14px] text-orange-500">
-              {photoNotice === 'saved' ? t('✓ Foto receipt tersimpan') : t('Simpan foto receipt')}
+              {photoNotice === 'saved' || photoNotice === 'downloaded' ? t('✓ Foto receipt tersimpan') : t('Simpan foto receipt')}
             </Text>
           </Pressable>
-          {photoNotice === 'webOnly' || photoNotice === 'failed' ? (
+          {photoNotice === 'webOnly' || photoNotice === 'failed' || photoNotice === 'downloaded' ? (
             <Text className="text-center font-inter text-[12px] text-neutral-600">
               {photoNotice === 'webOnly'
                 ? t('Simpan foto receipt baru tersedia di versi web.')
-                : t('Foto receipt gagal dibuat. Coba lagi.')}
+                : photoNotice === 'downloaded'
+                  ? t('Foto tersimpan di folder Download. Buka dari Galeri (album Download) atau dari aplikasi printer.')
+                  : t('Foto receipt gagal dibuat. Coba lagi.')}
             </Text>
           ) : (
             <Text className="text-center font-inter text-[11px] text-neutral-500">

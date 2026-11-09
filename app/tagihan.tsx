@@ -15,6 +15,7 @@ import {
   canMakeReceiptImage,
   printReceiptImage,
   renderReceiptPng,
+  isAndroidBrowser,
   saveReceiptImage,
 } from '@/lib/receipt-image';
 import { useSettings } from '@/lib/settings-store';
@@ -200,7 +201,8 @@ export default function TagihanScreen() {
     if (!png) return;
     const safeName = bill.cn.replace(/[^\w\- ]+/g, '').trim();
     const result = await saveReceiptImage(png, `${t('Tagihan')} ${bill.on} ${safeName}.png`);
-    if (result !== 'cancelled') setPhotoNotice('saved');
+    if (result === 'downloaded' && isAndroidBrowser()) setPhotoNotice('downloaded');
+    else if (result !== 'cancelled') setPhotoNotice('saved');
   }
 
   const imageBusy = canMakeReceiptImage && !png;
@@ -271,7 +273,7 @@ export default function TagihanScreen() {
                 imageBusy && 'opacity-50'
               )}>
               <Text className="font-inter-semibold text-[14px] text-neutral-800">
-                {photoNotice === 'saved' ? t('✓ Tersimpan') : t('Simpan foto tagihan')}
+                {photoNotice === 'saved' || photoNotice === 'downloaded' ? t('✓ Tersimpan') : t('Simpan foto tagihan')}
               </Text>
             </Pressable>
           </View>
@@ -280,6 +282,8 @@ export default function TagihanScreen() {
               ? t('Cetak dan simpan foto baru tersedia di versi web.')
               : photoNotice === 'failed'
                 ? t('Foto tagihan gagal dibuat. Coba lagi.')
+                : photoNotice === 'downloaded'
+                  ? t('Foto tersimpan di folder Download. Buka dari Galeri (album Download) atau dari aplikasi printer.')
                 : t('Ukuran struk printer thermal 58 mm.')}
           </Text>
         </View>
