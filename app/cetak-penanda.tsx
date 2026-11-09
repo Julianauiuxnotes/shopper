@@ -5,9 +5,17 @@ import { JastiperLogo } from '@/components/jastiper-logo';
 import { Text } from '@/components/ui/text';
 import { computeItemTotals, useEvents } from '@/lib/events-store';
 import { formatDateRange, formatPrintTimestamp } from '@/lib/format';
-import { useT } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
+import { penandaBlocks } from '@/lib/penanda-image';
+import {
+  canMakeReceiptImage,
+  printReceiptImage,
+  renderReceiptPng,
+  saveReceiptImage,
+} from '@/lib/receipt-image';
 import { useSettings } from '@/lib/settings-store';
+import { useAutoReset } from '@/lib/use-auto-reset';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
@@ -46,8 +54,8 @@ import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 export default function CetakPenandaScreen() {
   const router = useRouter();
   const { getEvent, getOrder } = useEvents();
-  const { userProfile } = useSettings();
-  const t = useT();
+  const { userProfile, logoJastip } = useSettings();
+  const { t, language } = useLanguage();
   const { eventId, orderId, itemId } = useLocalSearchParams<{
     eventId?: string;
     orderId?: string;
@@ -59,6 +67,73 @@ export default function CetakPenandaScreen() {
   // Captured once per visit, not live-ticking — this is a print
   // timestamp ("when was this printed"), not a clock.
   const printedAt = React.useMemo(() => new Date(), []);
+
+  // "Simpan foto receipt": the PNG is drawn as soon as the screen opens,
+  // so the tap can open the share sheet straight away (Safari only allows
+  // it during the tap itself). See lib/penanda-image.ts.
+  const [png, setPng] = React.useState<Blob | null>(null);
+  const [photoNotice, setPhotoNotice] = React.useState('');
+  useAutoReset(photoNotice === 'saved', () => setPhotoNotice(''));
+  const index = order ? order.items.findIndex((it) => it.id === itemId) : -1;
+  React.useEffect(() => {
+    if (!event || !order || !canMakeReceiptImage) return;
+    let alive = true;
+    const status =
+      order.statusPembayaran === 'lunas'
+        ? t('Lunas')
+        : order.statusPembayaran === 'belumLunas'
+          ? t('Belum lunas')
+          : t('Belum bayar');
+    renderReceiptPng(
+      penandaBlocks({
+      logo: logoJastip,
+      namaJastip: userProfile.namaJastip || 'Jastip by Juli',
+      waktuCetakLabel: t('Waktu cetak'),
+      waktuCetak: formatPrintTimestamp(printedAt),
+      cetakKeLabel: t('Cetak pesanan ke:'),
+      cetakKe: `${index + 1}/${order.items.length}`,
+      rows: [
+        [t('Nama acara'), event.namaAcara],
+        [t('Tanggal acara'), formatDateRange(event.tanggalDari, event.tanggalSampai)],
+        [t('Nomor order'), order.orderNumber, true],
+        [t('Nama customer'), order.nama],
+        [t('Alamat'), order.alamat],
+        [t('Total pesanan'), t('{n} items', { n: order.items.length })],
+        [t('Status pembayaran'), status, true],
+      ],
+      listLabel: t('List pesanan'),
+      items: order.items.map((item, i) => {
+        const { fee } = computeItemTotals(item);
+        return {
+          nama: item.namaProduk,
+          detail: `${item.jumlah}x ${formatMoney(item.harga + fee / item.jumlah)}*`,
+          checked: i <= index,
+        };
+      }),
+      footnote: t('*Harga sudah termasuk jastip fee'),
+      })
+    )
+      .then((blob) => alive && setPng(blob))
+      .catch(() => alive && setPhotoNotice('failed'));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event, order, index, logoJastip, userProfile.namaJastip, language]);
+
+  async function handleSimpanFoto() {
+    if (!canMakeReceiptImage) {
+      setPhotoNotice('webOnly');
+      return;
+    }
+    if (!png || !order) return;
+    const safeName = order.nama.replace(/[^\w\- ]+/g, '').trim();
+    const result = await saveReceiptImage(
+      png,
+      `${t('Receipt')} ${order.orderNumber} ${safeName} ${index + 1}-${order.items.length}.png`
+    );
+    if (result !== 'cancelled') setPhotoNotice('saved');
+  }
 
   if (!event || !order) {
     return (
@@ -78,9 +153,13 @@ export default function CetakPenandaScreen() {
   const currentIndex = order.items.findIndex((it) => it.id === itemId);
   const totalItems = order.items.length;
 
+  // On web, prints the same 58 mm receipt image as "Simpan foto receipt"
+  // (lib/receipt-image.ts); falls back to printing the page if the image
+  // isn't ready.
   function handleCetak() {
     if (Platform.OS === 'web') {
-      window.print();
+      if (png) printReceiptImage(png);
+      else window.print();
       return;
     }
     Alert.alert('Segera hadir', 'Fitur cetak penanda belum tersedia di perangkat ini.');
@@ -232,6 +311,31 @@ export default function CetakPenandaScreen() {
           className="w-full items-center justify-center rounded-[12px] bg-orange-500 px-[10px] py-[16px]">
           <Text className="font-inter-semibold text-[14px] text-white">{t('Cetak')}</Text>
         </Pressable>
+        <View className="w-full gap-[8px]">
+          <Pressable
+            onPress={handleSimpanFoto}
+            disabled={canMakeReceiptImage && !png}
+            accessibilityRole="button"
+            className={cn(
+              'w-full items-center justify-center rounded-[12px] border border-orange-500 bg-white px-[10px] py-[16px]',
+              canMakeReceiptImage && !png && 'opacity-50'
+            )}>
+            <Text className="font-inter-semibold text-[14px] text-orange-500">
+              {photoNotice === 'saved' ? t('✓ Foto receipt tersimpan') : t('Simpan foto receipt')}
+            </Text>
+          </Pressable>
+          {photoNotice === 'webOnly' || photoNotice === 'failed' ? (
+            <Text className="text-center font-inter text-[12px] text-neutral-600">
+              {photoNotice === 'webOnly'
+                ? t('Simpan foto receipt baru tersedia di versi web.')
+                : t('Foto receipt gagal dibuat. Coba lagi.')}
+            </Text>
+          ) : (
+            <Text className="text-center font-inter text-[11px] text-neutral-500">
+              {t('Simpan sebagai gambar untuk dicetak lewat aplikasi printer thermal.')}
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

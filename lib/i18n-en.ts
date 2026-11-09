@@ -297,6 +297,20 @@ export const en: Record<string, string | [string, string]> = {
 
   // Add order
   'Tambah pesanan': 'Add order',
+  'Simpan foto receipt': 'Save receipt photo',
+  '✓ Foto receipt tersimpan': '✓ Receipt photo saved',
+  'Simpan foto receipt baru tersedia di versi web.': 'Saving the receipt photo is only available on the web version for now.',
+  'Foto receipt gagal dibuat. Coba lagi.': 'The receipt photo could not be created. Try again.',
+  'Simpan sebagai gambar untuk dicetak lewat aplikasi printer thermal.': 'Save it as an image to print from your thermal printer app.',
+  Receipt: 'Receipt',
+  'Menyiapkan link tagihan…': 'Preparing the bill link…',
+  'Memuat tagihan…': 'Loading the bill…',
+  'Tagihan belum bisa dimuat. Periksa koneksi internet, lalu muat ulang halaman ini.':
+    "The bill couldn't be loaded. Check your internet connection, then reload this page.",
+  'Simpan foto tagihan': 'Save bill photo',
+  'Cetak dan simpan foto baru tersedia di versi web.': 'Printing and saving the photo are only available on the web version for now.',
+  'Foto tagihan gagal dibuat. Coba lagi.': 'The bill photo could not be created. Try again.',
+  'Ukuran struk printer thermal 58 mm.': 'Sized for 58 mm thermal printer paper.',
   'Nomor order': 'Order number',
   'Copy-paste form pesanan': 'Paste an order form',
   'Copy paste chat pesanan dari whatsapp disini dan terapkan untuk secara otomatis mengisi form pesanan.':

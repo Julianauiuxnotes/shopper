@@ -1,3 +1,4 @@
+import { rpc } from './backend';
 import { computeItemTotals, getTotalTagihan, type JastipEvent, type Order } from './events-store';
 import { formatDateRange } from './format';
 import { linkLanguageParam } from './i18n';
@@ -16,6 +17,7 @@ import {
   toDayNumber,
   unescapeText,
 } from './link-codec';
+import { supabase } from './supabase';
 
 // A customer's bill frozen at one moment, small enough to travel inside
 // a link. There is no backend yet (orders live only on the jastiper's
@@ -297,3 +299,39 @@ export function buildReceiptLink(snapshot: ReceiptSnapshot) {
   // server, so the customer's name and address stay out of server logs.
   return `${publicBaseUrl()}/r${linkLanguageParam()}#${encodeReceiptSnapshot(snapshot)}`;
 }
+
+// --- Short links ------------------------------------------------------
+//
+// The link above carries the whole bill, so it grows with every item and
+// bank account, and punctuation in names and addresses comes out as
+// "~2c", "~2e"… Chat apps often stop linking it (WhatsApp also reads
+// "~…~" as strikethrough). A short link instead stores that same encoded
+// bill on the server (supabase/migrations/0016_shopper_short_bill_links.sql)
+// and carries only its 10-character id: app.justipers.com/r#k7Qm2xPa3B.
+// The long link stays the fallback when the server can't be reached, and
+// long links already sent keep opening.
+
+const SHORT_ID = /^[A-Za-z0-9]{10}$/;
+
+export function isShortBillId(fragment: string) {
+  return SHORT_ID.test(fragment);
+}
+
+/** Stores the bill and returns its short link. Needs a signed-in shop member. */
+export async function createShortReceiptLink(snapshot: ReceiptSnapshot): Promise<string> {
+  const { data, error } = await supabase.rpc('shopper_create_bill', {
+    p_payload: encodeReceiptSnapshot(snapshot),
+  });
+  if (error || typeof data !== 'string' || !SHORT_ID.test(data)) {
+    throw error ?? new Error('short_link_failed');
+  }
+  return `${publicBaseUrl()}/r${linkLanguageParam()}#${data}`;
+}
+
+/** The bill behind a short id; null when there is none (or it's unreadable). */
+export async function fetchShortReceipt(id: string): Promise<ReceiptSnapshot | null> {
+  if (!SHORT_ID.test(id)) return null;
+  const payload = await rpc<string | null>('shopper_get_bill', { p_id: id });
+  return typeof payload === 'string' ? decodeReceiptSnapshot(payload) : null;
+}
+

@@ -97,14 +97,9 @@ type ConfirmDraft = {
 // can't silently desync them. Also lets the jastiper attach a "Foto
 // struk" (receipt photo, optional, same expo-image-picker pattern as
 // Buka Event Jastip's event photo) before confirming, which also sets
-// `dibeli: true`. Per Figma node 105:5015, once an item is confirmed
-// WITH a photo, its row swaps the pill for the photo thumbnail + a
-// "Cetak penanda" (print marker) button — a TODO stub for now, since no
-// printer integration exists in this app. An item confirmed WITHOUT a
-// photo keeps showing the "Sudah dibeli" pill — always the same plain
-// outline style regardless of `dibeli`, matching every Figma reference
-// pulled for this screen, which never shows it filled in any state —
-// still tappable, to let the jastiper reopen and add a photo later.
+// `dibeli: true`. Once an item is marked Sudah dibeli its row shows
+// "Edit penanda" + "Cetak penanda" (app/cetak-penanda.tsx), with or
+// without a photo; a photo also adds its thumbnail (Figma node 105:5015).
 // "+Tambah" (Figma node
 // 174:429, "Tambah list pesanan") opens a second, separate sheet that
 // adds a brand new item to the order via `addOrderItem` — same
@@ -838,16 +833,13 @@ function OrderDetailContent({ event, order: savedOrder }: { event: JastipEvent; 
                           </Pressable>
                         ) : null}
                       </View>
-                      {item.dibeli && item.fotoStruk ? (
+                      {item.dibeli && !item.tidakTersedia ? (
                         <View className="gap-[6px]">
-                          {/* Once a photo is attached, the "Sudah dibeli"
-                            pill (this branch's own normal entry point
-                            back into the confirm/edit sheet) is replaced
-                            by the thumbnail + Cetak penanda — without
-                            this, there'd be no way left to reopen that
-                            item's details. "Edit" restores that entry
-                            point, reusing the exact same sheet/draft
-                            (openConfirm), not a separate form. */}
+                          {/* Every item marked Sudah dibeli gets Edit
+                            penanda + Cetak penanda, with or without a
+                            receipt photo (the photo is optional; it only
+                            adds the thumbnail on the left). "Edit"
+                            reopens the same mark sheet (openMark). */}
                           <Pressable
                             onPress={() => openMark(item.id)}
                             className="items-center justify-center rounded-[4px] border border-orange-500 px-[10px] py-[4px]">

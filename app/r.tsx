@@ -1,7 +1,12 @@
 import { TagihanReceipt } from '@/components/tagihan-receipt';
 import { Text } from '@/components/ui/text';
 import { parseLinkLanguage, useLinkLanguage } from '@/lib/i18n';
-import { decodeReceiptSnapshot, type ReceiptSnapshot } from '@/lib/receipt-link';
+import {
+  decodeReceiptSnapshot,
+  fetchShortReceipt,
+  isShortBillId,
+  type ReceiptSnapshot,
+} from '@/lib/receipt-link';
 import { useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
 import * as React from 'react';
@@ -23,9 +28,26 @@ export default function PublicReceiptScreen() {
   // fragment, so it can only be read after mount), null = unreadable link.
   const [snapshot, setSnapshot] = React.useState<ReceiptSnapshot | null | undefined>(undefined);
 
+  // A short link (#k7Qm2xPa3B) is looked up on the server; a full link
+  // carries the bill itself. A failed lookup shows the "not found" message.
+  const [loadFailed, setLoadFailed] = React.useState(false);
   React.useEffect(() => {
     const fromHash = Platform.OS === 'web' ? window.location.hash.slice(1) : '';
     const encoded = fromHash || d || '';
+    if (isShortBillId(encoded)) {
+      let alive = true;
+      setSnapshot(undefined);
+      fetchShortReceipt(encoded)
+        .then((found) => alive && setSnapshot(found))
+        .catch(() => {
+          if (!alive) return;
+          setLoadFailed(true);
+          setSnapshot(null);
+        });
+      return () => {
+        alive = false;
+      };
+    }
     setSnapshot(encoded ? decodeReceiptSnapshot(encoded) : null);
   }, [d, l]);
 
@@ -46,14 +68,20 @@ export default function PublicReceiptScreen() {
             {t('Tagihan tidak ditemukan')}
           </Text>
           <Text className="text-center font-inter text-[12px] text-neutral-600">
-            {t('Link tagihan ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.')}
+            {loadFailed
+              ? t('Tagihan belum bisa dimuat. Periksa koneksi internet, lalu muat ulang halaman ini.')
+              : t('Link tagihan ini tidak lengkap atau rusak. Minta jastiper mengirim ulang linknya.')}
           </Text>
         </View>
       ) : snapshot ? (
         <ScrollView contentContainerClassName="items-center pb-[24px]">
           <TagihanReceipt snapshot={snapshot} />
         </ScrollView>
-      ) : null}
+      ) : (
+        <View className="flex-1 items-center justify-center">
+          <Text className="font-inter text-[12px] text-neutral-500">{t('Memuat tagihan…')}</Text>
+        </View>
+      )}
     </View>
   );
 }
