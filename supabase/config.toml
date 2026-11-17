@@ -15,3 +15,7 @@ verify_jwt = false
 # Checks the owner's session and password itself.
 [functions.shop-bank-accounts]
 verify_jwt = false
+
+# Checks the admin's session itself.
+[functions.shop-invite-email]
+verify_jwt = false

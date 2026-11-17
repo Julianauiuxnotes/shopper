@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/text';
 import {
   AuthError,
   MEMBER_LIMIT,
+  type InviteEmailResult,
   type ShopInvite,
   type ShopMember,
   costLabel,
@@ -34,9 +35,18 @@ type PendingAction =
 //   - Only the owner makes someone an admin or takes it away. An admin
 //     can't be removed until that's done, and the owner never can be.
 //
-// Prototype: there is no invitation email. The invited person signs up in
-// Justipers with the invited address and lands in this shop.
-function TeamSection({ onAddMember }: { onAddMember: () => void }) {
+// Inviting emails the person a sign-up link (supabase/functions/
+// shop-invite-email); "Kirim ulang email" on a pending invite sends it
+// again. They sign up in Justipers with the invited address and land in
+// this shop.
+function TeamSection({
+  onAddMember,
+  inviteNotice,
+}: {
+  onAddMember: () => void;
+  /** Set by AddMemberSheet after an invite: how its email went. */
+  inviteNotice?: { email: string; result: InviteEmailResult } | null;
+}) {
   const {
     shop,
     role,
@@ -49,11 +59,32 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
     cancelInvite,
     removeMember,
     setAdmin,
+    sendInviteEmail,
   } = useAuth();
   const t = useT();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState<PendingAction | null>(null);
+  const [emailNotice, setEmailNotice] = React.useState<{
+    email: string;
+    result: InviteEmailResult | 'sending';
+  } | null>(null);
+  React.useEffect(() => {
+    if (inviteNotice) setEmailNotice(inviteNotice);
+  }, [inviteNotice]);
+
+  async function resend(email: string) {
+    if (emailNotice?.result === 'sending') return;
+    setEmailNotice({ email, result: 'sending' });
+    setEmailNotice({ email, result: await sendInviteEmail(email) });
+  }
+
+  function emailNoticeText(result: InviteEmailResult | 'sending') {
+    if (result === 'sending') return t('Mengirim email...');
+    if (result === 'sent') return t('Email undangan terkirim.');
+    if (result === 'too_soon') return t('Email baru saja dikirim. Coba lagi 10 menit lagi.');
+    return t('Email undangan belum terkirim. Coba "Kirim ulang email".');
+  }
 
   if (!shop) return null;
   const isOwner = role === 'owner';
@@ -198,6 +229,30 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
               <Text className="font-inter text-[10px] text-neutral-600">
                 {t('Diundang, belum mendaftar')}
               </Text>
+              {emailNotice?.email === invite.email ? (
+                <Text
+                  className={cn(
+                    'font-inter text-[10px]',
+                    emailNotice.result === 'failed' ? 'text-red-500' : 'text-green-700'
+                  )}>
+                  {emailNoticeText(emailNotice.result)}
+                </Text>
+              ) : null}
+              {isAdmin ? (
+                <Pressable
+                  onPress={() => resend(invite.email)}
+                  disabled={emailNotice?.result === 'sending'}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Kirim ulang email undangan ke {email}', {
+                    email: invite.email,
+                  })}
+                  hitSlop={6}
+                  className="self-start pt-[2px]">
+                  <Text className="font-inter-semibold text-[11px] text-orange-600 underline">
+                    {t('Kirim ulang email')}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             {isAdmin ? (
               <Pressable
@@ -285,7 +340,14 @@ function TeamSection({ onAddMember }: { onAddMember: () => void }) {
 // be moved to another email, so the email is typed twice and the sheet
 // says plainly what happens if it's wrong. Rendered by the page itself,
 // outside its ScrollView, so it covers the whole screen on phones too.
-function AddMemberSheet({ onClose }: { onClose: () => void }) {
+function AddMemberSheet({
+  onClose,
+  onInvited,
+}: {
+  onClose: () => void;
+  /** After the invite: who, and how the invitation email went. */
+  onInvited?: (email: string, result: InviteEmailResult) => void;
+}) {
   const { shop, prices, buyMemberSlot } = useAuth();
   const t = useT();
   const [email, setEmail] = React.useState('');
@@ -306,7 +368,8 @@ function AddMemberSheet({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      await buyMemberSlot(normalized);
+      const result = await buyMemberSlot(normalized);
+      onInvited?.(normalized, result);
       close();
     } catch (e) {
       setError(

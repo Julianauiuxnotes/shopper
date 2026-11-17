@@ -16,9 +16,9 @@ import { resetSyncState } from './sync';
 // supabase/migrations/0002_shopper_accounts_and_shops.sql for the server
 // side and its rules.
 //
-// Still a prototype: there is no invitation email (an invited person just signs up
-// with the invited address), and password reset isn't built, since both
-// need an email service this project doesn't have yet.
+// Invited people are emailed a sign-up link (supabase/functions/
+// shop-invite-email, through Resend) and join the shop by signing up with
+// the invited address. Password reset isn't built yet.
 //
 // Justipers tokens (supabase/migrations/0007_shopper_tokens.sql): the shop's
 // balance, which events have been paid for, and the actions that spend
@@ -56,6 +56,15 @@ export type Shop = {
 
 export type ShopMember = { userId: string; role: Role; nama: string; email: string };
 export type ShopInvite = { id: string; email: string };
+/** How the invitation email went (supabase/functions/shop-invite-email). */
+export type InviteEmailResult = 'sent' | 'too_soon' | 'failed';
+
+async function sendInviteEmail(email: string): Promise<InviteEmailResult> {
+  const { error } = await supabase.functions.invoke('shop-invite-email', { body: { email } });
+  if (!error) return 'sent';
+  const detail = await (error as { context?: Response }).context?.json().catch(() => null);
+  return detail?.error === 'too_soon' ? 'too_soon' : 'failed';
+}
 
 /** Ids of events opened / whose order form was published. `openedPaid`:
  * opened for a price (not free during the beta) and not refunded yet. */
@@ -153,8 +162,10 @@ type AuthContextValue = {
   publishEvent: (eventId: string) => Promise<void>;
   /** Returns the event's "Buka event" token if it still qualifies; true when it did. */
   refundEvent: (eventId: string) => Promise<boolean>;
-  /** Admins only. Spends prices.memberSlot and invites this email. */
-  buyMemberSlot: (email: string) => Promise<void>;
+  /** Admins only. Spends prices.memberSlot, invites this email and emails them the invitation. */
+  buyMemberSlot: (email: string) => Promise<InviteEmailResult>;
+  /** Admins only. Emails a pending invite its invitation again. */
+  sendInviteEmail: (email: string) => Promise<InviteEmailResult>;
   /** Owner only. */
   setAdmin: (userId: string, admin: boolean) => Promise<void>;
   cancelInvite: (inviteId: string) => Promise<void>;
@@ -362,6 +373,26 @@ function toRole(value: unknown): Role {
   return value === 'owner' || value === 'admin' ? value : 'member';
 }
 
+// Without "Tetap masuk" the session should end when the tab closes, not
+// on every page load. On the web, a page load in the same tab (a refresh,
+// or coming back from the Midtrans payment page) keeps this per-tab mark.
+const TAB_MARK = 'justipers-tab-login';
+function markTabLogin(on: boolean) {
+  if (Platform.OS !== 'web') return;
+  try {
+    if (on) window.sessionStorage.setItem(TAB_MARK, '1');
+    else window.sessionStorage.removeItem(TAB_MARK);
+  } catch {}
+}
+function tabStillOpen() {
+  if (Platform.OS !== 'web') return false;
+  try {
+    return window.sessionStorage.getItem(TAB_MARK) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const settings = useSettings();
   const eventsStore = useEvents();
@@ -448,7 +479,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       let current = data.session;
       // "Tetap masuk" was not ticked at the last login: the session ends
       // when the app is closed.
-      if (current && !stores.current.settings.keepLoggedIn) {
+      if (current && !stores.current.settings.keepLoggedIn && !tabStillOpen()) {
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         current = null;
       }
@@ -510,6 +541,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       if (stopped || (await claimSession()) || stopped) return;
       stopped = true;
       stores.current.settings.signOut();
+      markTabLogin(false);
       await storage.set('authShopCache', null);
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
       setNotice(LOGGED_OUT_ELSEWHERE);
@@ -574,6 +606,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       await claimSession();
       setNotice(null);
       stores.current.settings.signIn(true);
+      markTabLogin(true);
       setSession(data.session);
       try {
         await establish(data.session);
@@ -605,6 +638,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setNotice(null);
       stores.current.settings.signIn(remember);
+      markTabLogin(true);
       setSession(data.session);
       try {
         await establish(data.session);
@@ -617,6 +651,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = React.useCallback(async () => {
     stores.current.settings.signOut();
+    markTabLogin(false);
     await storage.set('authShopCache', null);
     // Let another device log in straight away.
     await releaseSession();
@@ -680,7 +715,11 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         await refresh();
         return refunded === true;
       },
-      buyMemberSlot: (email) => call('shopper_buy_member_slot', { p_email: email }),
+      buyMemberSlot: async (email) => {
+        await call('shopper_buy_member_slot', { p_email: email });
+        return sendInviteEmail(email);
+      },
+      sendInviteEmail,
       setAdmin: (userId, admin) => call('shopper_set_admin', { p_user_id: userId, p_admin: admin }),
       cancelInvite: (inviteId) => call('shopper_cancel_invite', { p_invite_id: inviteId }),
       removeMember: (userId) => call('shopper_remove_member', { p_user_id: userId }),

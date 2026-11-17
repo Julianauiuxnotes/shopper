@@ -63,7 +63,7 @@ function loadBrandLogo() {
   return loadImage(url).finally(() => URL.revokeObjectURL(url));
 }
 
-/** Draws the blocks (plus the "Powered by Justipers" footer) and returns a PNG. */
+/** Draws the blocks (plus the "Powered by Justipers / Justipers.com" footer) and returns a PNG. */
 export async function renderReceiptPng(blocks: ReceiptBlock[]): Promise<Blob> {
   if (!canMakeReceiptImage) throw new Error('Only available on web');
   await Promise.all(
@@ -233,7 +233,12 @@ export async function renderReceiptPng(blocks: ReceiptBlock[]): Promise<Blob> {
   const bw = 96;
   const bh = (bw * 45) / 130;
   ctx.drawImage(brand, (WIDTH - bw) / 2, y, bw, bh);
-  y += bh + 24;
+  y += bh + 6;
+  ctx.font = FONT(14);
+  ctx.textAlign = 'center';
+  ctx.fillText('Justipers.com', WIDTH / 2, y);
+  ctx.textAlign = 'left';
+  y += 18 + 24;
 
   const out = document.createElement('canvas');
   out.width = WIDTH * SCALE;

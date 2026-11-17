@@ -2,7 +2,7 @@ import CaretCircleLeftIcon from '@/assets/images/figma/icon-caret-circle-left.sv
 import { AddMemberSheet, TeamSection } from '@/components/team-section';
 import { BuyTokenSheet, TokenSection } from '@/components/token-section';
 import { Text } from '@/components/ui/text';
-import { type TokenPaymentStatus, useAuth } from '@/lib/auth-store';
+import { type InviteEmailResult, type TokenPaymentStatus, useAuth } from '@/lib/auth-store';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +17,10 @@ export default function PengaturanSubscriptionScreen() {
   const router = useRouter();
   const t = useT();
   const [sheet, setSheet] = React.useState<'tokens' | 'member' | null>(null);
+  const [inviteNotice, setInviteNotice] = React.useState<{
+    email: string;
+    result: InviteEmailResult;
+  } | null>(null);
   // Set by Midtrans when it sends the user back after "Beli token".
   const { order_id: orderId } = useLocalSearchParams<{ order_id?: string }>();
 
@@ -30,7 +34,9 @@ export default function PengaturanSubscriptionScreen() {
           contentContainerClassName="gap-[20px] px-[20px] pb-[40px] pt-[20px]"
           keyboardShouldPersistTaps="handled">
           <Pressable
-            onPress={() => router.back()}
+            // Always to the dashboard: after a Midtrans payment the page is
+            // opened fresh, with nothing behind it to go back to.
+            onPress={() => router.dismissTo('/dashboard')}
             hitSlop={8}
             className="flex-row items-center gap-[5px]">
             <CaretCircleLeftIcon width={24} height={24} />
@@ -44,12 +50,15 @@ export default function PengaturanSubscriptionScreen() {
           ) : null}
           <TokenSection onBuyTokens={() => setSheet('tokens')} />
           <View className="h-px w-full bg-neutral-300" />
-          <TeamSection onAddMember={() => setSheet('member')} />
+          <TeamSection onAddMember={() => setSheet('member')} inviteNotice={inviteNotice} />
         </ScrollView>
       </KeyboardAvoidingView>
 
       {sheet === 'tokens' ? <BuyTokenSheet onClose={() => setSheet(null)} /> : null}
-      {sheet === 'member' ? <AddMemberSheet onClose={() => setSheet(null)} /> : null}
+      {sheet === 'member' ? <AddMemberSheet
+          onClose={() => setSheet(null)}
+          onInvited={(email, result) => setInviteNotice({ email, result })}
+        /> : null}
     </>
   );
 }

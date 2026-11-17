@@ -131,7 +131,7 @@ export async function downloadShippingLabel(label: ShippingLabel) {
     rows.reduce((sum, r) => sum + rowHeight(r), 0) + Math.max(0, rows.length - 1) * FIELD_GAP;
   // Each section is followed by a dashed line; the footer sits 16 under
   // the last one.
-  const footerHeight = 16 + 18 + LOGO_HEIGHT;
+  const footerHeight = 16 + 18 + LOGO_HEIGHT + 18;
   const height =
     PADDING_Y +
     sections.reduce((sum, rows) => sum + sectionHeight(rows) + SECTION_GAP * 2, 0) -
@@ -182,6 +182,9 @@ export async function downloadShippingLabel(label: ShippingLabel) {
   ctx.fillText('Powered by:', FOOTER_RIGHT - LOGO_WIDTH / 2, y + 9);
   ctx.textAlign = 'left';
   ctx.drawImage(logo, FOOTER_RIGHT - LOGO_WIDTH, y + 18, LOGO_WIDTH, LOGO_HEIGHT);
+  ctx.textAlign = 'center';
+  ctx.fillText('Justipers.com', FOOTER_RIGHT - LOGO_WIDTH / 2, y + 18 + LOGO_HEIGHT + 10);
+  ctx.textAlign = 'left';
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('could not create the image');

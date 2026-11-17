@@ -289,6 +289,7 @@ export default function CetakPenandaScreen() {
         <View className="items-center gap-[2px]">
           <Text className="font-poppins text-[12px] text-neutral-400">Powered by:</Text>
           <BrandLogo width={63.56} height={22} />
+          <Text className="font-poppins text-[12px] text-neutral-400">Justipers.com</Text>
         </View>
 
         <View className="w-full gap-[8px]">

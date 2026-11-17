@@ -232,6 +232,7 @@ function TagihanReceipt({ snapshot, logo }: TagihanReceiptProps) {
       <View className="items-center">
         <Text className="font-poppins text-[12px] text-neutral-500">Powered by:</Text>
         <BrandLogo width={80.89} height={28} />
+        <Text className="mt-[2px] font-poppins text-[12px] text-neutral-500">Justipers.com</Text>
       </View>
     </View>
   );
