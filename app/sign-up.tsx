@@ -146,14 +146,27 @@ export default function SignUpScreen() {
           <View className="w-full max-w-[271px] gap-[14px]">
             {awaitingConfirmation ? (
               <>
-                <Text className="font-inter-bold text-[16px] text-neutral-50">
+                <Text className="font-inter-bold text-[20px] text-neutral-50">
                   {t('Registrasi berhasil!')}
                 </Text>
-                <Text className="font-inter text-[12px] text-neutral-50">
+                <Text className="font-inter text-[14px] leading-[20px] text-neutral-50">
+                  {/* Split around the address so it can be bold in both
+                      languages, wherever the translation puts it. */}
                   {t(
                     'Kami mengirim link konfirmasi ke {email}. Buka link konfirmasi, lalu login untuk masuk ke Justipers.',
-                    { email: email.trim() }
-                  )}
+                    { email: '\u0000' }
+                  )
+                    .split('\u0000')
+                    .map((part, i) => (
+                      <React.Fragment key={i}>
+                        {i > 0 ? (
+                          <Text className="font-inter-bold text-[14px] leading-[20px] text-neutral-50">
+                            {email.trim()}
+                          </Text>
+                        ) : null}
+                        {part}
+                      </React.Fragment>
+                    ))}
                 </Text>
                 {/* No Login button here: the confirmation link opens the
                     app, where they log in. */}
