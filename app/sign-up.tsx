@@ -56,7 +56,7 @@ export default function SignUpScreen() {
 
   // Creates the account and its shop (lib/auth-store.tsx). An email that
   // a shop has invited joins that shop instead, whatever shop name was
-  // entered here. A new shop starts with 5 free tokens.
+  // entered here. A new shop starts with 3 free tokens.
   async function handleSubmit() {
     if (!isValid || submitting) return;
     setSubmitting(true);
@@ -126,7 +126,7 @@ export default function SignUpScreen() {
                   <Text className="font-inter text-[12px] text-neutral-50">
                     {t('Akun baru dapat')}{' '}
                     <Text className="font-inter-bold text-[12px] text-neutral-50">
-                      {t('5 token gratis')}
+                      {t('3 token gratis')}
                     </Text>{' '}
                     {t('untuk mencoba Justipers.')}
                   </Text>

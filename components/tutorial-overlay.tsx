@@ -23,7 +23,7 @@ const STEPS: { target: TutorialTarget | null; title: string; body: string }[] = 
   {
     target: 'token',
     title: 'Token',
-    body: 'Membuka event dan mempublikasikan form order masing-masing memakai 1 token. Akun baru dapat 5 token gratis. Tap kartu ini untuk melihat riwayat dan membeli token.',
+    body: 'Membuka event dan mempublikasikan form order masing-masing memakai 1 token. Akun baru dapat 3 token gratis. Tap kartu ini untuk melihat riwayat dan membeli token.',
   },
   {
     target: 'summary',

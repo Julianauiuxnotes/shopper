@@ -60,7 +60,7 @@ export const en: Record<string, string | [string, string]> = {
   'Gabung Sekarang!': 'Join now!',
   'Daftar akun baru': 'Create a new account',
   'Akun baru dapat': 'New accounts get',
-  '5 token gratis': '5 free tokens',
+  '3 token gratis': '3 free tokens',
   'untuk mencoba Justipers.': 'to try Justipers.',
   'Kamu diundang ke': "You've been invited to",
   'toko jastip': 'a shop',
@@ -601,8 +601,8 @@ export const en: Record<string, string | [string, string]> = {
   'Justipers membantumu mengelola jastip dari buka event, mencatat pesanan, sampai mengirim tagihan ke pelanggan. Yuk kenalan sebentar.':
     "Justipers app helps you run your personal shopper business, from opening an event and recording orders to sending bills to customers. Here's a quick tour.",
   Token: 'Tokens',
-  'Membuka event dan mempublikasikan form order masing-masing memakai 1 token. Akun baru dapat 5 token gratis. Tap kartu ini untuk melihat riwayat dan membeli token.':
-    'Opening an event and publishing its order form use 1 token each. New accounts get 5 free tokens. Tap this card to see your history and buy tokens.',
+  'Membuka event dan mempublikasikan form order masing-masing memakai 1 token. Akun baru dapat 3 token gratis. Tap kartu ini untuk melihat riwayat dan membeli token.':
+    'Opening an event and publishing its order form use 1 token each. New accounts get 3 free tokens. Tap this card to see your history and buy tokens.',
   'Ringkasan revenue, profit, dan jumlah order dari event bulan ini, serta event yang sedang berlangsung.':
     "A summary of this month's revenue, profit and orders, plus the event happening now.",
   'Mulai dari sini: isi nama acara, tanggal, dan lokasi. Di detail event kamu bisa membagikan link form order, menambah pesanan, mengirim tagihan ke WhatsApp customer, dan mengunduh laporan.':
