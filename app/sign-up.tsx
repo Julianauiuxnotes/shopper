@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { AuthError, useAuth } from '@/lib/auth-store';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
@@ -19,7 +19,14 @@ export default function SignUpScreen() {
   const [nama, setNama] = React.useState('');
   const [namaJastip, setNamaJastip] = React.useState('');
   const [country, setCountry] = React.useState('');
+  // The invitation email links here with ?email= (supabase/functions/
+  // shop-invite-email), so the invited address is already filled in.
+  const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = React.useState('');
+  // After mount: the web page is pre-rendered without the query string.
+  React.useEffect(() => {
+    if (typeof params.email === 'string' && params.email.trim()) setEmail(params.email.trim());
+  }, [params.email]);
   const [password, setPassword] = React.useState('');
   const [verifikasi, setVerifikasi] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
