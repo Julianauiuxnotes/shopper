@@ -21,12 +21,20 @@ export default function SignUpScreen() {
   const [country, setCountry] = React.useState('');
   // The invitation email links here with ?email= (supabase/functions/
   // shop-invite-email), so the invited address is already filled in.
-  const params = useLocalSearchParams<{ email?: string }>();
+  // With ?invite=1 the person joins the shop that invited them, so the
+  // shop name and country aren't asked and the invited email is locked.
+  // "Daftar dengan email lain" leaves that for the normal form.
+  const params = useLocalSearchParams<{ email?: string; invite?: string; shop?: string }>();
   const [email, setEmail] = React.useState('');
+  const [invited, setInvited] = React.useState(false);
+  const invitedShop = typeof params.shop === 'string' ? params.shop.trim().slice(0, 80) : '';
   // After mount: the web page is pre-rendered without the query string.
   React.useEffect(() => {
-    if (typeof params.email === 'string' && params.email.trim()) setEmail(params.email.trim());
-  }, [params.email]);
+    const fromLink = typeof params.email === 'string' ? params.email.trim() : '';
+    if (!fromLink) return;
+    setEmail(fromLink);
+    setInvited(params.invite === '1');
+  }, [params.email, params.invite]);
   const [password, setPassword] = React.useState('');
   const [verifikasi, setVerifikasi] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -39,8 +47,8 @@ export default function SignUpScreen() {
   const passwordMismatch = verifikasi.length > 0 && password !== verifikasi;
   const isValid =
     nama.trim().length > 0 &&
-    namaJastip.trim().length > 0 &&
-    country.length > 0 &&
+    (invited || namaJastip.trim().length > 0) &&
+    (invited || country.length > 0) &&
     email.trim().length > 0 &&
     password.length > 0 &&
     verifikasi.length > 0 &&
@@ -56,8 +64,9 @@ export default function SignUpScreen() {
     try {
       const result = await signUp({
         nama: nama.trim(),
-        namaJastip: namaJastip.trim(),
-        country,
+        // Not asked when invited: the shop that invited them is used.
+        namaJastip: invited ? '' : namaJastip.trim(),
+        country: invited ? '' : country,
         email: email.trim(),
         password,
       });
@@ -105,13 +114,23 @@ export default function SignUpScreen() {
                 {t('Daftar akun baru')}
               </Text>
               <View className="w-full rounded-[8px] border border-neutral-50 px-[10px] py-[8px]">
-                <Text className="font-inter text-[12px] text-neutral-50">
-                  {t('Akun baru dapat')}{' '}
-                  <Text className="font-inter-bold text-[12px] text-neutral-50">
-                    {t('5 token gratis')}
-                  </Text>{' '}
-                  {t('untuk mencoba Justipers.')}
-                </Text>
+                {invited ? (
+                  <Text className="font-inter text-[12px] text-neutral-50">
+                    {t('Kamu diundang ke')}{' '}
+                    <Text className="font-inter-bold text-[12px] text-neutral-50">
+                      {invitedShop || t('toko jastip')}
+                    </Text>
+                    {t('. Setelah daftar, kamu langsung masuk ke toko ini.')}
+                  </Text>
+                ) : (
+                  <Text className="font-inter text-[12px] text-neutral-50">
+                    {t('Akun baru dapat')}{' '}
+                    <Text className="font-inter-bold text-[12px] text-neutral-50">
+                      {t('5 token gratis')}
+                    </Text>{' '}
+                    {t('untuk mencoba Justipers.')}
+                  </Text>
+                )}
               </View>
             </View>
           </View>
@@ -153,20 +172,39 @@ export default function SignUpScreen() {
                     onChangeText={setNama}
                     placeholder={t('Nama Lengkap')}
                   />
-                  <FormField
-                    label={t('Nama Jastip')}
-                    value={namaJastip}
-                    onChangeText={setNamaJastip}
-                    placeholder={t('Nama Jastip')}
-                  />
-                  <CountryPicker value={country} onChange={setCountry} />
+                  {!invited ? (
+                    <>
+                      <FormField
+                        label={t('Nama Jastip')}
+                        value={namaJastip}
+                        onChangeText={setNamaJastip}
+                        placeholder={t('Nama Jastip')}
+                      />
+                      <CountryPicker value={country} onChange={setCountry} />
+                    </>
+                  ) : null}
                   <FormField
                     label="Email"
                     value={email}
                     onChangeText={setEmail}
                     placeholder="Email"
                     keyboardType="email-address"
+                    editable={!invited}
                   />
+                  {invited ? (
+                    <Pressable
+                      onPress={() => {
+                        setInvited(false);
+                        setEmail('');
+                      }}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      className="self-start">
+                      <Text className="font-inter text-[11px] text-neutral-50 underline">
+                        {t('Bukan email kamu? Daftar dengan email lain')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <FormField
                     label={t('Password')}
                     value={password}

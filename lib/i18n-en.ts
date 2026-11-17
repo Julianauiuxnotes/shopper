@@ -62,6 +62,10 @@ export const en: Record<string, string | [string, string]> = {
   'Akun baru dapat': 'New accounts get',
   '5 token gratis': '5 free tokens',
   'untuk mencoba Justipers.': 'to try Justipers.',
+  'Kamu diundang ke': "You've been invited to",
+  'toko jastip': 'a shop',
+  '. Setelah daftar, kamu langsung masuk ke toko ini.': ". Once you sign up, you'll join this shop straight away.",
+  'Bukan email kamu? Daftar dengan email lain': 'Not your email? Sign up with another one',
   'Cek email kamu': 'Check your email',
   'Kami mengirim link konfirmasi ke {email}. Buka link itu, lalu login untuk mulai memakai Justipers.':
     'We sent a confirmation link to {email}. Open it, then log in to start using Justipers.',

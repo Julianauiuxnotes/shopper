@@ -19,6 +19,8 @@ type FormFieldProps = {
    * neutral-800 and only reddens the border — set false to match that. */
   tintErrorText?: boolean;
   keyboardType?: React.ComponentProps<typeof TextInput>['keyboardType'];
+  /** false: shown but locked (Sign Up's invited email). */
+  editable?: boolean;
 };
 
 // Shared by Sign Up (nodes 53:2811/53:2772/53:2738) and Login (nodes
@@ -35,13 +37,15 @@ export function FormField({
   errorMessage,
   tintErrorText = true,
   keyboardType,
+  editable = true,
 }: FormFieldProps) {
   return (
     <View className="w-full gap-1">
       <Text className="font-inter text-[12px] text-neutral-50">{label}</Text>
       <View
         className={cn(
-          'w-full flex-row items-center gap-[10px] rounded-[8px] border bg-white px-[10px] py-[10px]',
+          'w-full flex-row items-center gap-[10px] rounded-[8px] border px-[10px] py-[10px]',
+          editable ? 'bg-white' : 'bg-neutral-100',
           hasError ? 'border-2 border-red-500' : 'border-neutral-400'
         )}>
         <Input
@@ -50,6 +54,7 @@ export function FormField({
           placeholder={placeholder}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
+          editable={editable}
           autoCapitalize="none"
           placeholderTextColor="#9ca3af"
           className={cn(

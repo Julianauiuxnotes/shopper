@@ -20,8 +20,11 @@ const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 function inviteEmail(to: string, shopName: string, inviter: string) {
-  // The sign-up page fills the email in from ?email= (app/sign-up.tsx).
-  const link = `${APP_URL}/sign-up?email=${encodeURIComponent(to)}`;
+  // The sign-up page fills the email in from ?email= and, with ?invite=,
+  // shows the short invited form naming the shop (app/sign-up.tsx).
+  const link =
+    `${APP_URL}/sign-up?invite=1&email=${encodeURIComponent(to)}` +
+    `&shop=${encodeURIComponent(shopName)}`;
   const subject = `${inviter} mengundang kamu ke ${shopName} di Justipers`;
   const text =
     `Hai,\n\n${inviter} mengundang kamu bergabung ke toko jastip "${shopName}" di Justipers.\n\n` +
