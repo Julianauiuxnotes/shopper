@@ -147,21 +147,16 @@ export default function SignUpScreen() {
             {awaitingConfirmation ? (
               <>
                 <Text className="font-inter-bold text-[16px] text-neutral-50">
-                  {t('Cek email kamu')}
+                  {t('Registrasi berhasil!')}
                 </Text>
                 <Text className="font-inter text-[12px] text-neutral-50">
                   {t(
-                    'Kami mengirim link konfirmasi ke {email}. Buka link itu, lalu login untuk mulai memakai Justipers.',
+                    'Kami mengirim link konfirmasi ke {email}. Buka link konfirmasi, lalu login untuk masuk ke Justipers.',
                     { email: email.trim() }
                   )}
                 </Text>
-                <Link href="/login" asChild>
-                  <Pressable className="w-full items-center justify-center rounded-[12px] bg-neutral-50 px-[10px] py-[16px]">
-                    <Text className="font-inter-semibold text-[14px] text-orange-500">
-                      {t('Login')}
-                    </Text>
-                  </Pressable>
-                </Link>
+                {/* No Login button here: the confirmation link opens the
+                    app, where they log in. */}
               </>
             ) : (
               <>
